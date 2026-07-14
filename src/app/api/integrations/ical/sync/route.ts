@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
-import type { AppData, CalendarBlock } from "@/lib/types";
+import type { CalendarBlock, SourceConnection } from "@/lib/types";
+import { validateExternalCalendarUrl } from "@/lib/integrations/ical-security";
 
 function unfoldIcs(raw: string) {
   return raw.replace(/\r?\n[ \t]/g, "");
@@ -24,33 +25,55 @@ export async function POST(request: Request) {
   const cronAuthorized = Boolean(expected && request.headers.get("authorization") === `Bearer ${expected}`);
   const userClient = cronAuthorized ? null : await createClient();
   const user = userClient ? (await userClient.auth.getUser()).data.user : null;
-  if (!cronAuthorized && !user) {
-    return NextResponse.json({ error: "Brak autoryzacji harmonogramu." }, { status: 401 });
-  }
-  const supabase = createServiceClient();
-  if (!supabase) return NextResponse.json({ error: "Supabase service role nie jest skonfigurowane." }, { status: 503 });
-  let organizationId: string | undefined;
+  if (!cronAuthorized && !user) return NextResponse.json({ error: "Brak autoryzacji harmonogramu." }, { status: 401 });
+
+  const service = createServiceClient();
+  if (!service) return NextResponse.json({ error: "Supabase service role nie jest skonfigurowane." }, { status: 503 });
+
+  let organizationIds: string[] = [];
   if (userClient && user) {
     const { data: membership } = await userClient.from("organization_memberships").select("organization_id").eq("user_id", user.id).limit(1).maybeSingle();
-    organizationId = membership?.organization_id;
-    if (!organizationId) return NextResponse.json({ error: "Brak organizacji użytkownika." }, { status: 403 });
+    if (!membership) return NextResponse.json({ error: "Brak organizacji użytkownika." }, { status: 403 });
+    organizationIds = [membership.organization_id];
+  } else {
+    const { data: organizations, error } = await service.from("operational_state_versions").select("organization_id");
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    organizationIds = (organizations ?? []).map((item) => item.organization_id);
   }
-  let snapshotQuery = supabase.from("operational_snapshots").select("organization_id,state");
-  if (organizationId) snapshotQuery = snapshotQuery.eq("organization_id", organizationId);
-  const { data: snapshots, error } = await snapshotQuery;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
   let feeds = 0;
   let blocks = 0;
-  for (const snapshot of snapshots ?? []) {
-    const state = snapshot.state as AppData;
-    for (const connection of state.sourceConnections.filter((item) => item.connectionType === "iCal" && item.importUrl && item.unitId)) {
+  let failures = 0;
+
+  for (const organizationId of organizationIds) {
+    const { data: records, error } = await service
+      .from("operational_records")
+      .select("entity_type,payload")
+      .eq("organization_id", organizationId)
+      .in("entity_type", ["sourceConnections", "blocks"]);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    const connections = (records ?? [])
+      .filter((record) => record.entity_type === "sourceConnections")
+      .map((record) => record.payload as SourceConnection);
+    const importedBlocks: CalendarBlock[] = [];
+
+    for (const connection of connections.filter((item) => item.connectionType === "iCal" && item.importUrl && item.unitId)) {
       feeds += 1;
+      const startedAt = new Date().toISOString();
       try {
-        const response = await fetch(connection.importUrl!, { headers: { "user-agent": "Stawy-OS/1.0" }, cache: "no-store" });
+        const validated = validateExternalCalendarUrl(connection.importUrl!);
+        if (!validated.ok) throw new Error(validated.error);
+        const response = await fetch(validated.url, {
+          headers: { "user-agent": "Stawy-OS/1.0" },
+          cache: "no-store",
+          redirect: "error",
+          signal: AbortSignal.timeout(15_000),
+        });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const events = parseIcsEvents(await response.text());
         const prefix = `ICAL-${connection.id}-`;
-        const imported: CalendarBlock[] = events.map((event) => ({
+        const imported = events.map((event): CalendarBlock => ({
           id: `${prefix}${safeId(event.uid!)}`,
           unitId: connection.unitId!,
           dateFrom: event.start!,
@@ -60,13 +83,27 @@ export async function POST(request: Request) {
           status: "Aktywna",
         }));
         blocks += imported.length;
-        state.blocks = [...state.blocks.filter((item) => !item.id.startsWith(prefix)), ...imported];
+        importedBlocks.push(...imported);
         Object.assign(connection, { status: "Aktywne", lastSyncAt: new Date().toISOString(), coverage: 100, lastError: undefined });
+        await service.from("integration_sync_runs").insert({ organization_id: organizationId, connection_id: connection.id, status: "success", imported_count: imported.length, started_at: startedAt, finished_at: new Date().toISOString() });
       } catch (syncError) {
-        Object.assign(connection, { status: "Błąd", lastError: syncError instanceof Error ? syncError.message : "Nieznany błąd" });
+        failures += 1;
+        const message = syncError instanceof Error ? syncError.message : "Nieznany błąd";
+        Object.assign(connection, { status: "Błąd", lastError: message });
+        await service.from("integration_sync_runs").insert({ organization_id: organizationId, connection_id: connection.id, status: "error", error_message: message, started_at: startedAt, finished_at: new Date().toISOString() });
       }
     }
-    await supabase.from("operational_snapshots").update({ state, updated_at: new Date().toISOString() }).eq("organization_id", snapshot.organization_id);
+
+    if (connections.length) {
+      const { error: commitError } = await service.rpc("apply_ical_sync", {
+        p_organization_id: organizationId,
+        p_connections: connections,
+        p_blocks: importedBlocks,
+        p_summary: { feeds: connections.length, blocks: importedBlocks.length, failures },
+      });
+      if (commitError) return NextResponse.json({ error: commitError.message }, { status: 500 });
+    }
   }
-  return NextResponse.json({ ok: true, feeds, blocks });
+
+  return NextResponse.json({ ok: failures === 0, feeds, blocks, failures });
 }

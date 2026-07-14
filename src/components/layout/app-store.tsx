@@ -30,7 +30,7 @@ import type {
 } from "@/lib/types";
 import { createTasksForBooking } from "@/lib/workflow/rules";
 
-export type SyncMode = "checking" | "cloud" | "local" | "error";
+export type SyncMode = "checking" | "cloud" | "local" | "error" | "conflict";
 
 type AppStore = {
   data: AppData;
@@ -131,6 +131,42 @@ function normalizeData(parsed?: Partial<AppData> | null): AppData {
   };
 }
 
+function emptyCloudData(): AppData {
+  return normalizeData({
+    units: initialData.units,
+    bookings: [],
+    guests: [],
+    consents: [],
+    tasks: [],
+    media: [],
+    blocks: [],
+    rates: [],
+    imports: [],
+    sourceConnections: initialData.sourceConnections.map((connection) => ({
+      ...connection,
+      coverage: 0,
+      lastSyncAt: undefined,
+      importUrl: undefined,
+      exportToken: undefined,
+    })),
+    payments: [],
+    invoices: [],
+    checklistItems: [],
+    issues: [],
+    messages: [],
+    auditLog: [],
+    settings: {
+      organizationName: "Stawy u Sikory",
+      timezone: "Europe/Warsaw",
+      cleaningContactName: "",
+      cleaningPhone: "",
+      defaultCheckIn: "16:00",
+      defaultCheckOut: "11:00",
+      aiApprovalRequired: true,
+    },
+  });
+}
+
 function readLocalData() {
   if (typeof window === "undefined") return normalizeData();
   const raw = window.localStorage.getItem(storageKey) ?? window.localStorage.getItem(oldStorageKey);
@@ -160,12 +196,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [syncMode, setSyncMode] = useState<SyncMode>("checking");
   const [lastSavedAt, setLastSavedAt] = useState<string>();
   const cloudReady = useRef(false);
-  const initialLocal = useRef(data);
+  const stateVersion = useRef(0);
+  const skipNextCloudSave = useRef(false);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       const local = readLocalData();
-      initialLocal.current = local;
       setData(local);
       setHydrated(true);
     }, 0);
@@ -180,15 +216,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         const response = await fetch("/api/state", { cache: "no-store" });
         if (!active) return;
         if (response.ok) {
-          const payload = await response.json() as { data?: Partial<AppData>; updatedAt?: string };
-          if (payload.data) setData(normalizeData(payload.data));
-          else {
-            await fetch("/api/state", {
-              method: "PUT",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({ data: initialLocal.current }),
-            });
-          }
+          const payload = await response.json() as {
+            data?: Partial<AppData> | null;
+            updatedAt?: string;
+            version?: number;
+            quarantinedDemo?: boolean;
+          };
+          stateVersion.current = payload.version ?? 0;
+          skipNextCloudSave.current = true;
+          setData(payload.data ? normalizeData(payload.data) : emptyCloudData());
           cloudReady.current = true;
           setSyncMode("cloud");
           setLastSavedAt(payload.updatedAt);
@@ -207,14 +243,24 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     if (!hydrated) return;
     window.localStorage.setItem(storageKey, JSON.stringify(data));
     if (!cloudReady.current) return;
+    if (skipNextCloudSave.current) {
+      skipNextCloudSave.current = false;
+      return;
+    }
     const timeout = window.setTimeout(async () => {
       try {
         const response = await fetch("/api/state", {
           method: "PUT",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ data }),
+          body: JSON.stringify({ data, expectedVersion: stateVersion.current }),
         });
+        if (response.status === 409) {
+          setSyncMode("conflict");
+          return;
+        }
         if (!response.ok) throw new Error("save failed");
+        const payload = await response.json() as { version?: number };
+        if (typeof payload.version === "number") stateVersion.current = payload.version;
         setSyncMode("cloud");
         setLastSavedAt(new Date().toISOString());
       } catch {

@@ -5,7 +5,7 @@ Produkcyjny fundament systemu operacyjnego Stawów u Sikory: rezerwacje, wspóln
 ## Zaimplementowane
 
 - prawdziwe logowanie Supabase e-mail/hasło, reset hasła, chronione trasy i wylogowanie;
-- synchronizacja danych między urządzeniami przez zabezpieczony snapshot organizacji z lokalnym trybem awaryjnym;
+- synchronizacja danych między urządzeniami przez wersjonowane rekordy organizacji, z ochroną przed nadpisaniem zmian z innego urządzenia;
 - organizacje, członkostwa i RLS izolujące dane właścicieli;
 - tworzenie, edycja, anulowanie, deep-link i historia rezerwacji;
 - kontrola konfliktów, pobyty stykające się tego samego dnia i blokady z kalendarza;
@@ -44,17 +44,25 @@ npm run build
 4. Uzupełnij `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` i `SUPABASE_SERVICE_ROLE_KEY`.
 5. Nigdy nie wystawiaj service role w zmiennej `NEXT_PUBLIC_*`.
 
-Nowy stan z przeglądarki zostanie zapisany w chmurze przy pierwszym zalogowanym uruchomieniu. Przed wdrożeniem warto dodatkowo pobrać backup JSON z ekranu Integracje lub Ustawienia.
+Wbudowane dane demonstracyjne są rozpoznawane i nie mogą zostać automatycznie zapisane do chmury. Legacy snapshot pozostaje kopią awaryjną, a produkcyjny zapis używa `operational_records` oraz wersji organizacji. Przed importem pobierz backup JSON z ekranu Integracje lub Ustawienia.
 
 ## iCal
 
 - `GET /api/calendar/feeds/{signedToken}.ics` eksportuje zajętość jednej jednostki.
 - `POST /api/integrations/ical/sync` pobiera skonfigurowane feedy i zapisuje je jako zewnętrzne blokady.
-- Harmonogram wywołuje synchronizację z nagłówkiem `Authorization: Bearer $CRON_SECRET`.
+- Harmonogram GitHub Actions wywołuje synchronizację z nagłówkiem `Authorization: Bearer $CRON_SECRET`. Wymaga sekretów repozytorium `STAWY_OS_APP_URL` i `STAWY_OS_CRON_SECRET`.
 - W panelu portalu trzeba potwierdzić, czy dana oferta Booking.com ma import i eksport iCal.
 - iCal nie przenosi ceny, danych gościa ani płatności i może odświeżać się z opóźnieniem.
 
-Przykładowy cron Vercel/Supabase powinien uruchamiać synchronizację co 15 minut, ale interfejs zakłada próg nieaktualności czterech godzin ze względu na ograniczenia portali.
+Workflow `.github/workflows/operations-cron.yml` uruchamia synchronizację co 15 minut, ale interfejs zakłada próg nieaktualności czterech godzin ze względu na ograniczenia portali. Ponowienia SMS są uruchamiane dopiero po ustawieniu sekretu `STAWY_OS_SMS_ENABLED=true`.
+
+## Testy integracyjne Supabase
+
+Test tworzy odizolowanego, tymczasowego użytkownika i organizacje, sprawdza Auth, RLS, zapis rekordów oraz konflikt wersji, a następnie usuwa dane testowe:
+
+```bash
+RUN_SUPABASE_INTEGRATION=1 npm run test:integration
+```
 
 ## SMSAPI
 

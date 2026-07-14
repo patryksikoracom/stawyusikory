@@ -107,8 +107,8 @@ function ShellInner({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="mt-auto rounded-2xl border border-[#d6ddc0] bg-[#edf0df] p-3.5">
-          <div className="flex items-center gap-2 text-xs font-black text-[#294e3e]"><span className={`size-2 rounded-full ${syncMode === "cloud" ? "pulse-dot bg-[#4d986b]" : syncMode === "error" ? "bg-[#d45f45]" : "bg-[#d3a638]"}`} />{syncMode === "cloud" ? "Synchronizacja aktywna" : syncMode === "checking" ? "Sprawdzam synchronizację" : syncMode === "error" ? "Błąd synchronizacji" : "Tryb lokalny"}</div>
-          <p className="mt-2 text-[12px] leading-5 text-[#5e6d61]">{syncMode === "cloud" ? `Dane zapisują się między urządzeniami${lastSavedAt ? ` · ${new Date(lastSavedAt).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" })}` : ""}.` : "Dane są zapisane wyłącznie w tej przeglądarce."}</p>
+          <div className="flex items-center gap-2 text-xs font-black text-[#294e3e]"><span className={`size-2 rounded-full ${syncMode === "cloud" ? "pulse-dot bg-[#4d986b]" : syncMode === "error" || syncMode === "conflict" ? "bg-[#d45f45]" : "bg-[#d3a638]"}`} />{syncMode === "cloud" ? "Synchronizacja aktywna" : syncMode === "checking" ? "Sprawdzam synchronizację" : syncMode === "conflict" ? "Konflikt zmian" : syncMode === "error" ? "Błąd synchronizacji" : "Tryb lokalny"}</div>
+          <p className="mt-2 text-[12px] leading-5 text-[#5e6d61]">{syncMode === "cloud" ? `Dane zapisują się między urządzeniami${lastSavedAt ? ` · ${new Date(lastSavedAt).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" })}` : ""}.` : syncMode === "conflict" ? "Dane zmieniły się na innym urządzeniu. Odśwież stronę przed ponowną edycją." : "Dane są zapisane wyłącznie w tej przeglądarce."}</p>
           <Link className="mt-2 inline-flex items-center gap-1 text-xs font-black text-[#174d3b]" href="/imports">Zobacz integracje <Icon className="size-3.5" name="arrow" /></Link>
         </div>
       </aside>

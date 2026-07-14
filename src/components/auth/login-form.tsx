@@ -25,7 +25,7 @@ export function LoginForm() {
 
   async function resetPassword() {
     if (!client || !email) { setMessage("Najpierw wpisz adres e-mail."); return; }
-    const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/login` });
+    const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/auth/callback?next=/reset-password` });
     setMessage(error ? "Nie udało się wysłać wiadomości." : "Link do zmiany hasła został wysłany.");
   }
 

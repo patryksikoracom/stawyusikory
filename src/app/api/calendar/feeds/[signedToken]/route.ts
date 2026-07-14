@@ -52,9 +52,19 @@ export async function GET(_request: Request, context: { params: Promise<{ signed
   if (!supabase) return NextResponse.json({ error: "Eksport iCal nie jest skonfigurowany." }, { status: 503 });
   const { data: token } = await supabase.from("calendar_feed_tokens").select("organization_id, unit_id, active").eq("token", signedToken).maybeSingle();
   if (!token?.active) return NextResponse.json({ error: "Nieprawidłowy lub wyłączony link kalendarza." }, { status: 404 });
-  const { data: snapshot } = await supabase.from("operational_snapshots").select("state").eq("organization_id", token.organization_id).maybeSingle();
-  if (!snapshot?.state) return NextResponse.json({ error: "Brak danych kalendarza." }, { status: 404 });
-  return new NextResponse(renderCalendar(snapshot.state as AppData, token.unit_id), {
+  const { data: records, error } = await supabase
+    .from("operational_records")
+    .select("entity_type,payload")
+    .eq("organization_id", token.organization_id)
+    .in("entity_type", ["units", "bookings", "blocks"]);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!records?.length) return NextResponse.json({ error: "Brak danych kalendarza." }, { status: 404 });
+  const state = {
+    units: records.filter((item) => item.entity_type === "units").map((item) => item.payload),
+    bookings: records.filter((item) => item.entity_type === "bookings").map((item) => item.payload),
+    blocks: records.filter((item) => item.entity_type === "blocks").map((item) => item.payload),
+  } as Pick<AppData, "units" | "bookings" | "blocks">;
+  return new NextResponse(renderCalendar(state as AppData, token.unit_id), {
     headers: { "content-type": "text/calendar; charset=utf-8", "cache-control": "private, max-age=60" },
   });
 }
