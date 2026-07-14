@@ -1,0 +1,9 @@
+{
+  "regions": ["fra1"],
+  "crons": [
+    {
+      "path": "/api/integrations/ical/sync",
+      "schedule": "*/15 * * * *"
+    }
+  ]
+}
