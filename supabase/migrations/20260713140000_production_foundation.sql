@@ -9,6 +9,10 @@ create table if not exists organizations (
   created_at timestamptz not null default now()
 );
 
+insert into organizations (id, name)
+values ('11111111-1111-4111-8111-111111111111', 'Stawy u Sikory')
+on conflict (id) do update set name = excluded.name;
+
 create table if not exists organization_memberships (
   organization_id uuid not null references organizations(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -24,10 +28,14 @@ as $$ select exists (select 1 from organization_memberships where organization_i
 create or replace function public.provision_stawy_owner()
 returns trigger language plpgsql security definer set search_path = public
 as $$
-declare new_org uuid;
+declare stawy_org uuid := '11111111-1111-4111-8111-111111111111';
 begin
-  insert into organizations (name) values ('Stawy u Sikory') returning id into new_org;
-  insert into organization_memberships (organization_id, user_id, role) values (new_org, new.id, 'owner');
+  insert into organizations (id, name)
+    values (stawy_org, 'Stawy u Sikory')
+    on conflict (id) do update set name = excluded.name;
+  insert into organization_memberships (organization_id, user_id, role)
+    values (stawy_org, new.id, 'owner')
+    on conflict (organization_id, user_id) do update set role = excluded.role;
   insert into users_profiles (user_id, role, display_name)
     values (new.id, 'admin', coalesce(new.raw_user_meta_data->>'display_name', split_part(new.email, '@', 1)))
     on conflict (user_id) do nothing;
@@ -39,12 +47,19 @@ create trigger on_auth_user_created_stawy after insert on auth.users
 for each row execute procedure public.provision_stawy_owner();
 
 do $$
-declare user_record record; new_org uuid;
+declare user_record record; stawy_org uuid := '11111111-1111-4111-8111-111111111111';
 begin
+  insert into organizations (id, name)
+    values (stawy_org, 'Stawy u Sikory')
+    on conflict (id) do update set name = excluded.name;
   for user_record in select id, email from auth.users u where not exists (select 1 from organization_memberships m where m.user_id = u.id)
   loop
-    insert into organizations (name) values ('Stawy u Sikory') returning id into new_org;
-    insert into organization_memberships (organization_id, user_id, role) values (new_org, user_record.id, 'owner');
+    insert into organization_memberships (organization_id, user_id, role)
+      values (stawy_org, user_record.id, 'owner')
+      on conflict (organization_id, user_id) do update set role = excluded.role;
+    insert into users_profiles (user_id, role, display_name)
+      values (user_record.id, 'admin', coalesce(split_part(user_record.email, '@', 1), 'Właściciel'))
+      on conflict (user_id) do nothing;
   end loop;
 end $$;
 
@@ -60,6 +75,19 @@ alter table platform_imports add column if not exists organization_id uuid refer
 alter table source_connections add column if not exists organization_id uuid references organizations(id) on delete cascade;
 alter table cost_settings add column if not exists organization_id uuid references organizations(id) on delete cascade;
 alter table channel_settings add column if not exists organization_id uuid references organizations(id) on delete cascade;
+
+update units set organization_id = '11111111-1111-4111-8111-111111111111' where organization_id is null;
+update bookings set organization_id = '11111111-1111-4111-8111-111111111111' where organization_id is null;
+update guests set organization_id = '11111111-1111-4111-8111-111111111111' where organization_id is null;
+update contacts_consents set organization_id = '11111111-1111-4111-8111-111111111111' where organization_id is null;
+update tasks set organization_id = '11111111-1111-4111-8111-111111111111' where organization_id is null;
+update media_assets set organization_id = '11111111-1111-4111-8111-111111111111' where organization_id is null;
+update calendar_blocks set organization_id = '11111111-1111-4111-8111-111111111111' where organization_id is null;
+update rate_rules set organization_id = '11111111-1111-4111-8111-111111111111' where organization_id is null;
+update platform_imports set organization_id = '11111111-1111-4111-8111-111111111111' where organization_id is null;
+update source_connections set organization_id = '11111111-1111-4111-8111-111111111111' where organization_id is null;
+update cost_settings set organization_id = '11111111-1111-4111-8111-111111111111' where organization_id is null;
+update channel_settings set organization_id = '11111111-1111-4111-8111-111111111111' where organization_id is null;
 
 alter table bookings add column if not exists arrival_time time;
 alter table bookings add column if not exists departure_time time;
@@ -203,6 +231,29 @@ drop policy if exists "authenticated write tasks" on tasks;
 drop policy if exists "authenticated read imports" on platform_imports;
 drop policy if exists "authenticated write imports" on platform_imports;
 drop policy if exists "authenticated read source connections" on source_connections;
+drop policy if exists "members read organizations" on organizations;
+drop policy if exists "members read memberships" on organization_memberships;
+drop policy if exists "members manage snapshot" on operational_snapshots;
+drop policy if exists "members manage feed tokens" on calendar_feed_tokens;
+drop policy if exists "members read audit" on audit_events;
+drop policy if exists "members manage sync runs" on integration_sync_runs;
+drop policy if exists "members manage messages" on outbound_messages;
+drop policy if exists "members manage payments" on payment_transactions;
+drop policy if exists "members manage invoices" on invoice_records;
+drop policy if exists "members manage checklists" on task_checklist_items;
+drop policy if exists "members manage issues" on issue_reports;
+drop policy if exists "org units" on units;
+drop policy if exists "org bookings" on bookings;
+drop policy if exists "org guests" on guests;
+drop policy if exists "org consents" on contacts_consents;
+drop policy if exists "org tasks" on tasks;
+drop policy if exists "org media" on media_assets;
+drop policy if exists "org blocks" on calendar_blocks;
+drop policy if exists "org rates" on rate_rules;
+drop policy if exists "org imports" on platform_imports;
+drop policy if exists "org connections" on source_connections;
+drop policy if exists "org costs" on cost_settings;
+drop policy if exists "org channels" on channel_settings;
 
 create policy "members read organizations" on organizations for select to authenticated using (is_org_member(id));
 create policy "members read memberships" on organization_memberships for select to authenticated using (user_id = auth.uid() or is_org_member(organization_id));
