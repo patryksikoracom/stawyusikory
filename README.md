@@ -58,10 +58,10 @@ Workflow `.github/workflows/operations-cron.yml` uruchamia synchronizację co 15
 
 ## Testy integracyjne Supabase
 
-Test tworzy odizolowanego, tymczasowego użytkownika i organizacje, sprawdza Auth, RLS, zapis rekordów oraz konflikt wersji, a następnie usuwa dane testowe:
+Test tworzy odizolowanego, tymczasowego użytkownika i organizacje, sprawdza Auth, RLS, zapis rekordów oraz konflikt wersji, a następnie usuwa dane testowe. Uruchamiaj go wyłącznie przeciwko osobnemu projektowi Supabase przeznaczonemu do testów — nigdy wobec bazy operacyjnej:
 
 ```bash
-RUN_SUPABASE_INTEGRATION=1 npm run test:integration
+RUN_SUPABASE_INTEGRATION=1 SUPABASE_INTEGRATION_TEST_PROJECT=1 npm run test:integration
 ```
 
 ## SMSAPI

@@ -20,8 +20,8 @@ function assert(condition, message) {
 }
 
 const env = loadLocalEnv();
-if (env.RUN_SUPABASE_INTEGRATION !== "1") {
-  console.log("Supabase integration test skipped. Set RUN_SUPABASE_INTEGRATION=1 to run it.");
+if (env.RUN_SUPABASE_INTEGRATION !== "1" || env.SUPABASE_INTEGRATION_TEST_PROJECT !== "1") {
+  console.log("Supabase integration test skipped. Run only against a dedicated test project with RUN_SUPABASE_INTEGRATION=1 and SUPABASE_INTEGRATION_TEST_PROJECT=1.");
   process.exit(0);
 }
 
