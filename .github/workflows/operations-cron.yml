@@ -13,6 +13,8 @@ jobs:
   synchronize:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      SMS_ENABLED: ${{ secrets.STAWY_OS_SMS_ENABLED }}
     steps:
       - name: Synchronize iCal feeds
         env:
@@ -27,7 +29,7 @@ jobs:
             "$APP_URL/api/integrations/ical/sync"
 
       - name: Retry queued SMS messages
-        if: ${{ secrets.STAWY_OS_SMS_ENABLED == 'true' }}
+        if: env.SMS_ENABLED == 'true'
         env:
           APP_URL: ${{ secrets.STAWY_OS_APP_URL }}
           CRON_SECRET: ${{ secrets.STAWY_OS_CRON_SECRET }}
