@@ -18,6 +18,40 @@ export function parseLocalDate(value: string) {
   return new Date(Number(year), Number(month) - 1, Number(day), 12, 0, 0, 0);
 }
 
+type PolishDateOptions = {
+  year?: boolean;
+  month?: "short" | "long";
+  weekday?: "short" | "long";
+};
+
+/** Formats date-only values without shifting them across time zones. */
+export function formatPolishDate(value?: string | Date, options: PolishDateOptions = {}) {
+  if (!value) return "—";
+  const date = typeof value === "string" ? parseLocalDate(value.slice(0, 10)) : value;
+  if (!date || Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("pl-PL", {
+    weekday: options.weekday ?? "short",
+    day: "numeric",
+    month: options.month ?? "short",
+    ...(options.year === false ? {} : { year: "numeric" }),
+  }).format(date);
+}
+
+export function formatPolishDateTime(value?: string | Date) {
+  if (!value) return "—";
+  const date = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("pl-PL", {
+    timeZone: "Europe/Warsaw",
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
 export function formatLocalDate(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");

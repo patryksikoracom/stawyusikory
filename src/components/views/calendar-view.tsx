@@ -7,7 +7,7 @@ import { Badge, Button, Card, Field, inputClass } from "@/components/ui/primitiv
 import { Icon } from "@/components/ui/icons";
 import type { Booking, CalendarBlock, Channel } from "@/lib/types";
 import { calendarBarPlacement, getBookingConflicts, nightsBetween } from "@/lib/workflow/rules";
-import { addLocalDays, formatLocalDate, parseLocalDate, todayInPoland } from "@/lib/date";
+import { addLocalDays, formatLocalDate, formatPolishDate, parseLocalDate, todayInPoland } from "@/lib/date";
 import { DepartureDebriefSheet } from "@/components/departures/departure-debrief-sheet";
 import { NewBookingDialog } from "@/components/bookings/new-booking-dialog";
 
@@ -24,6 +24,8 @@ function iso(date: Date) { return formatLocalDate(date); }
 function addDays(date: Date, days: number) { return toDate(addLocalDays(iso(date), days)); }
 function diffDays(a: Date, b: Date) { return Math.round((a.getTime() - b.getTime()) / dayMs); }
 function unitName(units: { id: string; name: string }[], unitId?: string) { return units.find((unit) => unit.id === unitId)?.name ?? "Domek"; }
+function monthMarker(date: Date) { return new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" }).format(date); }
+function shortMonth(date: Date) { return new Intl.DateTimeFormat("pl-PL", { month: "short" }).format(date).replace(".", ""); }
 
 export function CalendarView() {
   const { data, addBlock, updateBlock, prepareDepartureDebriefs } = useAppStore();
@@ -37,6 +39,12 @@ export function CalendarView() {
   const timelineRef = useRef<HTMLDivElement>(null);
   const [blockForm, setBlockForm] = useState<{ unitId: string; dateFrom: string; dateTo: string; reason: string; blockType: CalendarBlock["blockType"] } | null>(null);
   const dates = useMemo(() => Array.from({ length: daysCount }, (_, index) => addDays(anchor, index)), [anchor, daysCount]);
+  const monthSegments = useMemo(() => dates.reduce<{ date: Date; start: number; span: number }[]>((segments, date, index) => {
+    const previous = segments[segments.length - 1];
+    if (!previous || previous.date.getMonth() !== date.getMonth() || previous.date.getFullYear() !== date.getFullYear()) segments.push({ date, start: index, span: 1 });
+    else previous.span += 1;
+    return segments;
+  }, []), [dates]);
   const end = addDays(anchor, daysCount);
   const today = todayInPoland();
   const visibleBookings = data.bookings.filter((booking) => booking.workflowStatus !== "Anulowana" && toDate(booking.checkIn) < end && toDate(booking.checkOut) >= anchor && (channel === "Wszystkie" || booking.platform === channel));
@@ -56,7 +64,7 @@ export function CalendarView() {
           <Button aria-label="Pokaż poprzednie 7 dni" variant="secondary" onClick={() => setAnchor(addDays(anchor, -7))}><Icon className="size-4 rotate-180" name="chevron" /><span className="hidden sm:inline">7 dni</span></Button>
           <Button variant="secondary" onClick={() => setAnchor(toDate(today))}>Dzisiaj</Button>
           <Button aria-label="Pokaż następne 7 dni" variant="secondary" onClick={() => setAnchor(addDays(anchor, 7))}><span className="hidden sm:inline">7 dni</span><Icon className="size-4" name="chevron" /></Button>
-          <div className="ml-1"><p className="font-display text-xl font-semibold capitalize">{new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" }).format(anchor)}</p><p className="text-xs font-semibold text-[#6d7972]">{new Intl.DateTimeFormat("pl-PL", { day: "numeric", month: "short" }).format(anchor)} – {new Intl.DateTimeFormat("pl-PL", { day: "numeric", month: "short" }).format(addDays(anchor, daysCount - 1))}</p></div>
+          <div className="ml-1"><p className="font-display text-xl font-semibold capitalize">{new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" }).format(anchor)}</p><p className="text-xs font-semibold text-[#6d7972]">{formatPolishDate(anchor, { year: false })} – {formatPolishDate(addDays(anchor, daysCount - 1), { year: false })}</p></div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <select aria-label="Filtr kanału" className="min-h-10 rounded-xl border border-[#cec6b7] bg-white px-3 text-sm font-bold outline-none" value={channel} onChange={(event) => setChannel(event.target.value)}><option>Wszystkie</option>{Array.from(new Set(data.bookings.map((item) => item.platform))).map((item) => <option key={item}>{item}</option>)}</select>
@@ -80,9 +88,12 @@ export function CalendarView() {
         <div className="scrollbar-thin overflow-x-auto scroll-smooth" ref={timelineRef}>
           <div className="min-w-max">
             <div className="grid border-b border-[#ded7ca] bg-[#f7f4ed]" style={{ gridTemplateColumns: `${unitWidth}px auto` }}>
-              <div className="sticky left-0 z-20 flex items-end border-r border-[#ded7ca] bg-[#f7f4ed] p-3 text-[9px] font-black uppercase tracking-[.15em] text-[#78847d]">Domek</div>
+              <div className="sticky left-0 z-20 row-span-2 flex items-end border-r border-[#ded7ca] bg-[#f7f4ed] p-3 text-[9px] font-black uppercase tracking-[.15em] text-[#78847d]">Domek</div>
+              <div className="grid border-b border-[#d5d2ca] bg-[#efeee9]" style={{ gridTemplateColumns: `repeat(${daysCount}, ${dayWidth}px)` }}>
+                {monthSegments.map((segment, index) => <div className={`flex h-7 items-center px-2 ${index ? "border-l-2 border-[#b9b6ad]" : ""}`} key={`${segment.start}-${iso(segment.date)}`} style={{ gridColumn: `${segment.start + 1} / span ${segment.span}` }}><p className="text-[9px] font-black uppercase tracking-[.13em] text-[#536158]">{monthMarker(segment.date)}</p></div>)}
+              </div>
               <div className="grid" style={{ gridTemplateColumns: `repeat(${daysCount}, ${dayWidth}px)` }}>
-                {dates.map((date) => { const dateIso = iso(date); const weekend = [0,6].includes(date.getDay()); return <div className={`border-l border-[#e3ddd2] px-1 py-2 text-center ${weekend ? "bg-[#f1ede3]" : ""} ${dateIso === today ? "bg-[#e8efdf]" : ""}`} key={dateIso}><p className="text-[8px] font-black uppercase tracking-[.08em] text-[#89928c]">{new Intl.DateTimeFormat("pl-PL", { weekday: "short" }).format(date).replace(".", "")}</p><p className={`mt-0.5 font-display text-base font-semibold ${dateIso === today ? "mx-auto grid size-7 place-items-center rounded-full bg-[#174d3b] text-white" : ""}`}>{date.getDate()}</p></div>; })}
+                {dates.map((date) => { const dateIso = iso(date); const weekend = [0,6].includes(date.getDay()); const beginsMonth = date.getDate() === 1; const background = dateIso === today ? "bg-[#e8efdf]" : weekend ? "bg-[#e9e9e6]" : "bg-[#faf9f6]"; return <div className={`min-h-[42px] border-l border-[#dedbd4] px-1 py-1.5 text-center ${beginsMonth ? "border-l-2 border-l-[#b9b6ad]" : ""} ${background}`} key={dateIso}><p className="text-[8px] font-black uppercase tracking-[.08em] text-[#7e8782]">{new Intl.DateTimeFormat("pl-PL", { weekday: "short" }).format(date).replace(".", "")}</p><p className={`mt-0.5 inline-flex items-baseline justify-center gap-0.5 font-display text-base font-semibold ${dateIso === today ? "mx-auto grid size-7 place-items-center rounded-full bg-[#174d3b] text-white" : ""}`}><span>{date.getDate()}</span>{beginsMonth && dateIso !== today ? <span className="font-sans text-[8px] font-black uppercase text-[#69736d]">{shortMonth(date)}</span> : null}</p></div>; })}
               </div>
             </div>
 
@@ -90,7 +101,7 @@ export function CalendarView() {
               const bookings = visibleBookings.filter((booking) => booking.unitId === unit.id);
               const blocks = data.blocks.filter((block) => block.unitId === unit.id && toDate(block.dateFrom) < end && toDate(block.dateTo) > anchor && block.status !== "Anulowana");
               return <div className="grid border-b border-[#ded7ca] last:border-0" style={{ gridTemplateColumns: `${unitWidth}px auto`, minHeight: density === "compact" ? 82 : 112 }} key={unit.id}><div className="sticky left-0 z-20 flex flex-col justify-center border-r border-[#ded7ca] bg-[#fffdf8] p-3"><div className="flex items-center gap-2"><span className="grid size-7 place-items-center rounded-lg bg-[#e8eee1] text-[#41684f]"><Icon className="size-3.5" name="home"/></span><p className="font-display text-[15px] font-semibold leading-tight">{unit.name}</p></div><p className="mt-1 text-[9px] font-bold uppercase tracking-[.08em] text-[#818b85]">max {unit.maxPeople} osób</p></div><div className="relative grid overflow-hidden" style={{ gridTemplateColumns: `repeat(${daysCount}, ${dayWidth}px)` }}>
-                {dates.map((date) => <button aria-label={`Dodaj rezerwację ${unit.name}, ${iso(date)}`} className={`group relative border-r border-[#eee8dd] text-left hover:bg-[#e8efdf] ${[0,6].includes(date.getDay()) ? "bg-[#faf8f3]" : ""} ${iso(date) === today ? "bg-[#edf3e8]" : ""}`} key={iso(date)} onClick={() => startBooking(unit.id, iso(date))}><span className="pointer-events-none absolute bottom-1 right-1 hidden size-4 place-items-center rounded-full bg-[#174d3b] text-white group-hover:grid"><Icon className="size-2.5" name="plus"/></span></button>)}
+                {dates.map((date, index) => { const dateIso = iso(date); const beginsMonth = date.getDate() === 1; const weekend = [0,6].includes(date.getDay()); const background = dateIso === today ? "bg-[#edf3e8]" : weekend ? "bg-[#eeeeeb]" : "bg-[#fffdf8]"; return <button aria-label={`Dodaj rezerwację ${unit.name}, ${formatPolishDate(date)}`} className={`group relative border-r border-[#e4e2dc] text-left hover:bg-[#e3eadf] ${beginsMonth ? "border-l-2 border-l-[#b9b6ad]" : ""} ${background}`} key={dateIso} style={{ gridColumn: index + 1, gridRow: 1 }} onClick={() => startBooking(unit.id, dateIso)}><span className="pointer-events-none absolute bottom-1 right-1 hidden size-4 place-items-center rounded-full bg-[#174d3b] text-white group-hover:grid"><Icon className="size-2.5" name="plus"/></span></button>; })}
                 {bookings.map((booking, index) => <BookingBar anchor={anchor} booking={booking} compact={density === "compact"} dayWidth={dayWidth} daysCount={daysCount} index={index} key={booking.id} conflicts={getBookingConflicts(data.bookings, data.blocks, booking)} />)}
                 {blocks.map((block, index) => { const start = Math.max(0, diffDays(toDate(block.dateFrom), anchor)); const finish = Math.min(daysCount, diffDays(toDate(block.dateTo), anchor)); return <button className="z-[3] mx-1 self-end overflow-hidden rounded-lg border border-dashed border-[#9a927b] bg-[#eee8dc]/95 px-2 py-1 text-left text-[10px] font-black text-[#6d6758]" key={block.id} style={{ gridColumn: `${start + 1} / span ${Math.max(1, finish-start)}`, gridRow: 1, marginBottom: `${8 + index * 24}px` }} title={`${block.reason} · kliknij, aby anulować`} onClick={() => { if (window.confirm(`Anulować blokadę „${block.reason}”?`)) updateBlock({ ...block, status: "Anulowana" }); }}>{block.blockType}</button>; })}
               </div></div>;
@@ -112,7 +123,7 @@ export function CalendarView() {
 
 function BookingBar({ anchor, booking, compact, dayWidth, daysCount, index, conflicts }: { anchor: Date; booking: Booking; compact: boolean; dayWidth: number; daysCount: number; index: number; conflicts: string[] }) {
   const placement = calendarBarPlacement(booking.checkIn, booking.checkOut, iso(anchor), daysCount, dayWidth);
-  return <Link className={`z-10 flex min-w-0 items-center gap-1.5 overflow-hidden border px-2 font-bold shadow-[0_5px_14px_rgba(39,62,53,.15)] transition hover:-translate-y-0.5 hover:shadow-lg ${compact ? "h-8 rounded-lg text-[10px]" : "h-12 rounded-xl text-xs"} ${conflicts.length ? "border-[#b43b27] bg-[#c94e37] text-white" : channelStyles[booking.platform] ?? "border-[#65756d] bg-[#6f8178] text-white"}`} href={`/bookings/${booking.id}`} style={{ gridColumn: `${placement.start + 1} / span ${placement.span}`, gridRow: 1, marginLeft: `${placement.marginLeft}px`, marginRight: `${placement.marginRight}px`, marginTop: `${compact ? 9 + (index % 2) * 34 : 12 + (index % 2) * 54}px` }} title={`${booking.guestLabel}: przyjazd ${booking.checkIn} ${booking.arrivalTime || "16:00"}, wyjazd ${booking.checkOut} ${booking.departureTime || "11:00"}`}><span className="truncate">{booking.guestLabel}</span><span className="ml-auto shrink-0 rounded-full bg-black/10 px-1.5 py-0.5 text-[8px]">{nightsBetween(booking.checkIn, booking.checkOut)}n</span></Link>;
+  return <Link className={`z-10 flex min-w-0 items-center gap-1.5 overflow-hidden border px-2 font-bold shadow-[0_5px_14px_rgba(39,62,53,.15)] transition hover:-translate-y-0.5 hover:shadow-lg ${compact ? "h-8 rounded-lg text-[10px]" : "h-12 rounded-xl text-xs"} ${conflicts.length ? "border-[#b43b27] bg-[#c94e37] text-white" : channelStyles[booking.platform] ?? "border-[#65756d] bg-[#6f8178] text-white"}`} href={`/bookings/${booking.id}`} style={{ gridColumn: `${placement.start + 1} / span ${placement.span}`, gridRow: 1, marginLeft: `${placement.marginLeft}px`, marginRight: `${placement.marginRight}px`, marginTop: `${compact ? 9 + (index % 2) * 34 : 12 + (index % 2) * 54}px` }} title={`${booking.guestLabel}: przyjazd ${formatPolishDate(booking.checkIn)} ${booking.arrivalTime || "16:00"}, wyjazd ${formatPolishDate(booking.checkOut)} ${booking.departureTime || "11:00"}`}><span className="truncate">{booking.guestLabel}</span><span className="ml-auto shrink-0 rounded-full bg-black/10 px-1.5 py-0.5 text-[8px]">{nightsBetween(booking.checkIn, booking.checkOut)}n</span></Link>;
 }
 
 function MiniStat({ label, value, note, good = false }: { label: string; value: string | number; note: string; good?: boolean }) {

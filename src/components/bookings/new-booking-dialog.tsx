@@ -8,6 +8,7 @@ import type { Booking, Channel, ContactConsent, PaymentStatus } from "@/lib/type
 import { getBookingConflicts, nightsBetween } from "@/lib/workflow/rules";
 import { guestDisplayName, validateGuestStep } from "@/lib/workflow/booking-form";
 import { quoteStay } from "@/lib/workflow/pricing";
+import { formatPolishDate } from "@/lib/date";
 
 type BookingDefaults = Partial<Pick<Booking, "unitId" | "checkIn" | "checkOut" | "arrivalTime" | "departureTime">>;
 
@@ -217,7 +218,7 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults }: { onCl
               <p className="text-[10px] font-black uppercase tracking-[.16em] text-[#7d8b4d]">Podsumowanie</p>
               <h3 className="mt-1 font-display text-2xl font-semibold">{selectedUnit?.name ?? "Wybierz domek"}</h3>
               <div className="mt-5 grid gap-3 text-sm">
-                <SummaryLine label="Termin" value={form.checkIn && form.checkOut ? `${form.checkIn} – ${form.checkOut}` : "—"} />
+                <SummaryLine label="Termin" value={form.checkIn && form.checkOut ? `${formatPolishDate(form.checkIn)} – ${formatPolishDate(form.checkOut)}` : "—"} />
                 <SummaryLine label="Pobyt" value={nights > 0 ? `${nights} ${nights === 1 ? "noc" : "nocy"}` : "—"} />
                 <SummaryLine label="Goście" value={`${guestCount} os. (${form.adults || 0}+${form.children || 0})`} />
                 <SummaryLine label="Klient" value={[form.firstName, form.lastName].filter(Boolean).join(" ") || "Do uzupełnienia"} />

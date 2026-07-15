@@ -8,7 +8,7 @@ import { Icon, type IconName } from "@/components/ui/icons";
 import type { Booking, MessageRecord, PaymentTransaction, ScheduledMessage, WorkflowStatus } from "@/lib/types";
 import { bookingQualityScore, canClose, canConfirm, getBookingConflicts, getBookingDataIssues, getNextAction, leadTimeDays, nightsBetween, unitName } from "@/lib/workflow/rules";
 import { NewBookingDialog } from "@/components/bookings/new-booking-dialog";
-import { todayInPoland } from "@/lib/date";
+import { formatPolishDate, todayInPoland } from "@/lib/date";
 import { DepartureDebriefSheet } from "@/components/departures/departure-debrief-sheet";
 import type { DepartureDebrief } from "@/lib/types";
 import { daysLeftInTrash, isBookingInTrash } from "@/lib/booking-trash";
@@ -18,7 +18,7 @@ const tabs = ["Podsumowanie", "Płatności", "Wiadomości", "Zadania", "Historia
 type Tab = (typeof tabs)[number];
 
 function money(value?: number) { return value == null ? "—" : new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", maximumFractionDigits: 0 }).format(value); }
-function shortDate(value?: string) { return value ? new Intl.DateTimeFormat("pl-PL", { day: "numeric", month: "short", year: "numeric" }).format(new Date(`${value}T12:00:00`)) : "—"; }
+function shortDate(value?: string) { return formatPolishDate(value); }
 
 export function BookingsView({ initialId }: { initialId?: string }) {
   const { data } = useAppStore();

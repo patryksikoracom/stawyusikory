@@ -7,9 +7,9 @@ import { Badge, Button, Card } from "@/components/ui/primitives";
 import { Icon, type IconName } from "@/components/ui/icons";
 import type { IssueReport, OpsTask, RepairHorizon } from "@/lib/types";
 import { unitName } from "@/lib/workflow/rules";
-import { todayInPoland } from "@/lib/date";
+import { formatPolishDate, todayInPoland } from "@/lib/date";
 
-function shortDate(value?: string) { return value ? new Intl.DateTimeFormat("pl-PL", { weekday: "short", day: "numeric", month: "short" }).format(new Date(`${value}T12:00:00`)) : "bez terminu"; }
+function shortDate(value?: string) { return value ? formatPolishDate(value, { year: false }) : "bez terminu"; }
 
 export function TasksView() {
   const { data, updateTask, updateIssue } = useAppStore();
@@ -36,7 +36,7 @@ function CleaningBoard({ tasks, data, updateTask }: { tasks: OpsTask[]; data: Re
   const [feedback, setFeedback] = useState("");
   async function sendSms(task: OpsTask) {
     if (!data.settings.cleaningPhone) { setFeedback("Uzupełnij numer telefonu osoby sprzątającej w Ustawieniach."); return; }
-    const body = `${data.settings.organizationName}: sprzątanie ${unitName(data.units, task.unitId)} ${task.dueDate ?? "bez terminu"}. ${task.title}`;
+    const body = `${data.settings.organizationName}: sprzątanie ${unitName(data.units, task.unitId)} ${shortDate(task.dueDate)}. ${task.title}`;
     const idempotencyKey = `cleaning-${task.id}-${task.dueDate ?? "none"}`;
     setFeedback("Wysyłam SMS…");
     const response = await fetch("/api/messages/sms", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ to: data.settings.cleaningPhone, message: body, idempotencyKey }) });
