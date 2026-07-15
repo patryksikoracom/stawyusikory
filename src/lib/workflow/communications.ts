@@ -7,6 +7,7 @@ import type {
   ScheduledMessage,
 } from "../types";
 import { addLocalDays } from "../date";
+import { todayInPoland } from "../date";
 import { nightsBetween, unitName } from "./rules";
 
 const variables = [
@@ -87,7 +88,9 @@ export function renderTemplate(template: MessageTemplate, booking: Booking, data
 export function reconcileScheduledMessages(data: AppData): ScheduledMessage[] {
   const current = new Map(data.scheduledMessages.map((item) => [item.id, item]));
   const output: ScheduledMessage[] = [];
+  const today = todayInPoland();
   for (const booking of data.bookings) {
+    if (booking.historicalImport || booking.checkOut <= today) continue;
     for (const rule of data.automationRules.filter((item) => item.active)) {
       const messageId = `SCH-${rule.id}-${booking.id}`;
       const existing = current.get(messageId);
@@ -97,6 +100,8 @@ export function reconcileScheduledMessages(data: AppData): ScheduledMessage[] {
       if (rule.unitIds?.length && !rule.unitIds.includes(booking.unitId)) continue;
       if (rule.paymentStatuses?.length && !rule.paymentStatuses.includes(booking.paymentStatus)) continue;
       if (rule.minimumNights && nightsBetween(booking.checkIn, booking.checkOut) < rule.minimumNights) continue;
+      const candidateDueAt = dueDate(rule, booking);
+      if (!existing && booking.importRef?.source === "mobile-calendar" && candidateDueAt.slice(0, 10) < today) continue;
       const fingerprint = bookingFingerprint(booking);
       const rendered = renderTemplate(template, booking, data);
       const consent = data.consents.find((item) => item.bookingId === booking.id);
@@ -110,7 +115,7 @@ export function reconcileScheduledMessages(data: AppData): ScheduledMessage[] {
         ruleId: rule.id,
         templateId: template.id,
         templateVersion: template.version,
-        dueAt: status === "Zatwierdzona" ? existing!.dueAt : dueDate(rule, booking),
+        dueAt: status === "Zatwierdzona" ? existing!.dueAt : candidateDueAt,
         channel: template.channel,
         recipient: status === "Zatwierdzona" ? existing!.recipient : recipient,
         subject: status === "Zatwierdzona" ? existing!.subject : rendered.subject,

@@ -58,4 +58,9 @@ describe("draft-first communication", () => {
     const messages = reconcileScheduledMessages(fixture({ consents: [] }));
     expect(messages.find((item) => item.channel === "SMS")?.blockedReason).toContain("Brak kontaktu");
   });
+
+  it("does not create communication backlog for historical imports", () => {
+    const historical = { ...booking, checkIn: "2024-07-10", checkOut: "2024-07-13", historicalImport: true, workflowStatus: "Zamknięta" as const, importRef: { source: "mobile-calendar" as const, key: "1" } };
+    expect(reconcileScheduledMessages(fixture({ bookings: [historical] }))).toEqual([]);
+  });
 });

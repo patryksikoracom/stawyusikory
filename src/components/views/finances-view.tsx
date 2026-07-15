@@ -46,7 +46,7 @@ export function FinancesView() {
   const maxMonth=Math.max(1,...months.map((item)=>item.revenue));
   const unitRevenue=data.units.map((unit)=>({unit,value:bookings.filter((item)=>item.unitId===unit.id).reduce((sum,item)=>sum+(item.grossPrice??0),0),nights:stays.filter((item)=>item.unitId===unit.id).reduce((sum,item)=>sum+nightsBetween(item.checkIn,item.checkOut),0)}));
   const maxUnit=Math.max(1,...unitRevenue.map((item)=>item.value));
-  const paidByBooking=new Map<string,number>(); payments.filter((item)=>["Wpłata","Zaliczka","Wypłata OTA"].includes(item.type)).forEach((item)=>paidByBooking.set(item.bookingId,(paidByBooking.get(item.bookingId)??0)+item.amount));
+  const paidByBooking=new Map<string,number>(bookings.map((item)=>[item.id,item.openingPaidAmount??0])); payments.filter((item)=>["Wpłata","Zaliczka","Wypłata OTA"].includes(item.type)).forEach((item)=>paidByBooking.set(item.bookingId,(paidByBooking.get(item.bookingId)??0)+item.amount));
   const unsettled=bookings.filter((item)=>item.grossPrice==null || (paidByBooking.get(item.id)??0)<item.grossPrice);
 
   function exportCsv(){const lines=[["rezerwacja","gość","domek","wartość","zaksięgowano","saldo"],...bookings.map((item)=>{const paid=paidByBooking.get(item.id)??0;return[item.id,item.guestLabel,unitName(data.units,item.unitId),item.grossPrice??0,paid,Math.max(0,(item.grossPrice??0)-paid)]})];const csv=lines.map((line)=>line.map((value)=>`"${String(value).replaceAll('"','""')}"`).join(",")).join("\n");const url=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));const link=document.createElement("a");link.href=url;link.download=`finanse-stawy-os-${year}.csv`;link.click();URL.revokeObjectURL(url);}

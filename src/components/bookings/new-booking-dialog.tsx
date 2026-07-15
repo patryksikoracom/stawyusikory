@@ -34,6 +34,7 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults }: { onCl
       unitId: booking?.unitId ?? defaults?.unitId ?? data.units[0]?.id ?? "", checkIn: booking?.checkIn ?? defaults?.checkIn ?? today, checkOut: booking?.checkOut ?? defaults?.checkOut ?? tomorrow,
       arrivalTime: booking?.arrivalTime ?? defaults?.arrivalTime ?? data.settings.defaultCheckIn, departureTime: booking?.departureTime ?? defaults?.departureTime ?? data.settings.defaultCheckOut, adults: String(booking?.adults ?? 2), children: String(booking?.children ?? 0),
       platform: booking?.platform ?? "Telefon", externalNo: booking?.platformReservationNo ?? "", pricePerNight: booking?.pricePerNight ? String(booking.pricePerNight) : "", totalPrice: booking?.grossPrice ? String(booking.grossPrice) : "",
+      pricingMode: booking?.pricingMode ?? (booking?.grossPrice ? "manual" as const : "rate-card" as const),
       paymentStatus: booking?.paymentStatus === "Opłacone" ? "Wpłacona całość" : booking?.paymentStatus === "Zaliczka" ? "Wpłacony zadatek" : booking?.paymentStatus === "Częściowo" ? "Częściowo opłacone" : "Oczekiwanie na zadatek", depositAmount: booking?.depositAmount ? String(booking.depositAmount) : "", depositDueDate: booking?.depositDueDate ?? "",
       paymentMethod: booking?.paymentMethod ?? "Brak", currency: booking?.currency ?? "PLN", notes: booking?.specialRequests ?? "",
     };
@@ -58,7 +59,9 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults }: { onCl
   const rateQuote = quoteStay(data.units, data.rates, form.unitId, form.checkIn, form.checkOut);
   const rateCardAvailable = form.currency === "PLN";
   const suggestedNightPrice = rateCardAvailable && rateQuote.averagePerNight ? String(Math.round(rateQuote.averagePerNight * 100) / 100) : "";
-  const calculatedTotal = form.totalPrice ? Number(form.totalPrice) : form.pricePerNight ? Number(form.pricePerNight) * nights : rateCardAvailable ? rateQuote.total : 0;
+  const calculatedTotal = form.pricingMode === "rate-card" && rateCardAvailable
+    ? rateQuote.total
+    : form.totalPrice ? Number(form.totalPrice) : form.pricePerNight ? Number(form.pricePerNight) * nights : 0;
   const conflictProbe: Booking = {
     id: booking?.id ?? "draft", bookingDate: booking?.bookingDate ?? today, source: "Panel Stawy OS", platform: form.platform as Channel,
     unitId: form.unitId, checkIn: form.checkIn, checkOut: form.checkOut, arrivalTime: form.arrivalTime, departureTime: form.departureTime,
@@ -122,7 +125,8 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults }: { onCl
       children: Number(form.children),
       guestLabel,
       grossPrice: calculatedTotal || undefined,
-      pricePerNight: Number(form.pricePerNight) || (form.totalPrice && nights ? calculatedTotal / nights : rateCardAvailable ? rateQuote.averagePerNight : undefined),
+      pricePerNight: form.pricingMode === "rate-card" ? rateQuote.averagePerNight || undefined : Number(form.pricePerNight) || (form.totalPrice && nights ? calculatedTotal / nights : undefined),
+      pricingMode: form.pricingMode,
       depositAmount: Number(form.depositAmount) || undefined,
       depositDueDate: form.depositDueDate || undefined,
       paymentMethod: form.paymentMethod as Booking["paymentMethod"],
@@ -202,15 +206,15 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults }: { onCl
               {step === 3 ? <div className="grid gap-5">
                 <DialogSection eyebrow="Krok 3" title="Cena i płatność" body="Możesz podać cenę za noc albo od razu pełną kwotę pobytu. Pełna kwota ma pierwszeństwo." />
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Cena za dobę"><MoneyInput suffix={moneySuffix} value={form.pricePerNight || suggestedNightPrice} onChange={(value) => setForm({ ...form, pricePerNight: value })} /></Field>
-                  <Field label="Cena za pobyt"><MoneyInput suffix={moneySuffix} value={form.totalPrice} onChange={(value) => setForm({ ...form, totalPrice: value })} /></Field>
+                  <Field label="Cena za dobę"><MoneyInput suffix={moneySuffix} value={form.pricingMode === "rate-card" ? suggestedNightPrice : form.pricePerNight} onChange={(value) => setForm({ ...form, pricePerNight: value, pricingMode: "manual" })} /></Field>
+                  <Field label="Cena za pobyt"><MoneyInput suffix={moneySuffix} value={form.pricingMode === "rate-card" ? String(rateQuote.total || "") : form.totalPrice} onChange={(value) => setForm({ ...form, totalPrice: value, pricingMode: "manual" })} /></Field>
                   <Field label="Status płatności"><select className={inputClass} value={form.paymentStatus} onChange={(e) => setForm({ ...form, paymentStatus: e.target.value })}>{["Oczekiwanie na zadatek", "Brak wpłaty", "Wpłacony zadatek", "Częściowo opłacone", "Wpłacona całość", "Anulowane"].map((item) => <option key={item}>{item}</option>)}</select></Field>
                   <Field label="Rodzaj płatności"><select className={inputClass} value={form.paymentMethod} onChange={(e) => setForm({ ...form, paymentMethod: e.target.value as NonNullable<Booking["paymentMethod"]> })}>{["Brak", "Przelew", "Gotówka", "Karta", "Online"].map((item) => <option key={item}>{item}</option>)}</select></Field>
                   <Field label="Zadatek"><MoneyInput suffix={moneySuffix} value={form.depositAmount} onChange={(value) => setForm({ ...form, depositAmount: value })} /></Field>
                   <Field label="Termin zadatku"><input className={inputClass} type="date" value={form.depositDueDate} onChange={(e) => setForm({ ...form, depositDueDate: e.target.value })} /></Field>
                   <Field label="Waluta"><select className={inputClass} value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value as NonNullable<Booking["currency"]> })}><option>PLN</option><option>EUR</option></select></Field>
                 </div>
-                <div className="rounded-2xl border border-[#d8dfcc] bg-[#edf2e5] p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-black">{form.totalPrice || form.pricePerNight ? "Cena ustawiona ręcznie" : rateCardAvailable ? "Cena z cennika" : "Cena wymaga wpisania"}</p><p className="mt-1 text-xs leading-5 text-[#627069]">{!rateCardAvailable ? "Cennik bazowy jest prowadzony w PLN. Dla EUR wpisz cenę ręcznie — system nie zgaduje kursu walutowego." : rateQuote.breakdown.length ? rateQuote.breakdown.map((item) => `${item.label}: ${item.nights} × ${item.pricePerNight.toLocaleString("pl-PL")} zł`).join(" · ") : "Uzupełnij cenę bazową domku w Ustawieniach."}</p></div>{form.totalPrice || form.pricePerNight ? <Button type="button" variant="secondary" onClick={() => setForm({ ...form, pricePerNight: "", totalPrice: "" })}>Przywróć cennik</Button> : null}</div></div>
+                <div className="rounded-2xl border border-[#d8dfcc] bg-[#edf2e5] p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-black">{form.pricingMode === "manual" ? "Cena ustawiona ręcznie" : rateCardAvailable ? "Cena wyliczana z cennika" : "Cena wymaga wpisania"}</p><p className="mt-1 text-xs leading-5 text-[#627069]">{!rateCardAvailable ? "Cennik bazowy jest prowadzony w PLN. Dla EUR wpisz cenę ręcznie — system nie zgaduje kursu walutowego." : rateQuote.breakdown.length ? rateQuote.breakdown.map((item) => `${item.label}: ${item.nights} × ${item.pricePerNight.toLocaleString("pl-PL")} zł`).join(" · ") : "Uzupełnij cenę bazową domku w Ustawieniach."}</p></div>{form.pricingMode === "manual" ? <Button type="button" variant="secondary" onClick={() => setForm({ ...form, pricePerNight: "", totalPrice: "", pricingMode: "rate-card" })}>Przywróć cennik</Button> : null}</div></div>
               </div> : null}
             </div>
 

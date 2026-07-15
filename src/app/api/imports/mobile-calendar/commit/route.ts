@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireOrganization } from "@/lib/supabase/auth-context";
 
-const schema = z.object({ rows: z.array(z.object({ id: z.string(), checkIn: z.string(), checkOut: z.string(), guestLabel: z.string() }).passthrough()).max(5000) });
+const schema = z.object({
+  rows: z.array(z.object({ id: z.string(), checkIn: z.string(), checkOut: z.string(), guestLabel: z.string() }).passthrough()).max(5000),
+  contacts: z.array(z.object({ bookingId: z.string(), phone: z.string().optional(), email: z.string().optional() }).passthrough()).max(5000).default([]),
+});
 
 export async function POST(request: Request) {
   const context = await requireOrganization();

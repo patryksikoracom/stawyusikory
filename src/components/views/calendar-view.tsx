@@ -75,6 +75,11 @@ export function CalendarView() {
         </div>
       </section>
 
+      <section className="animate-rise-3 flex flex-col gap-3 rounded-2xl border border-[#d6ddc5] bg-[#eef2e5] p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#174d3b] text-white"><Icon className="size-4" name="calendar"/></span><div><p className="text-xs font-black">Praca z kalendarzem</p><p className="text-[11px] text-[#617069]">Kliknij wolny dzień, żeby dodać pobyt. Kliknij pasek rezerwacji, żeby otworzyć szczegóły.</p></div></div>
+        <div className="flex flex-wrap gap-2"><Link className="inline-flex min-h-9 items-center gap-2 rounded-xl border border-[#c8d1bb] bg-white px-3 text-xs font-black text-[#315846] transition hover:border-[#6f8a68]" href="/bookings?view=sheet"><Icon className="size-3.5" name="booking"/>Arkusz rezerwacji</Link><Link className="inline-flex min-h-9 items-center gap-2 rounded-xl border border-[#c8d1bb] bg-white px-3 text-xs font-black text-[#315846] transition hover:border-[#6f8a68]" href="/imports"><Icon className="size-3.5" name="download"/>Import danych</Link></div>
+      </section>
+
       <div className="animate-rise-3 grid gap-3 sm:grid-cols-3">
         <MiniStat label="Obłożenie widoku" value={`${occupancy}%`} note={`${totalNights} zajętych dób`} />
         <MiniStat label="Pobyty w okresie" value={visibleBookings.length} note={`${data.units.length} domki`} />

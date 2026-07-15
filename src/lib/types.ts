@@ -108,6 +108,7 @@ export type Booking = {
   cityArea?: string;
   grossPrice?: number;
   pricePerNight?: number;
+  pricingMode?: "rate-card" | "manual";
   commission?: number;
   payout?: number;
   depositAmount?: number;
@@ -121,6 +122,12 @@ export type Booking = {
   version?: number;
   needsReview?: boolean;
   historicalImport?: boolean;
+  importRef?: {
+    source: "mobile-calendar";
+    key: string;
+  };
+  importWarnings?: string[];
+  openingPaidAmount?: number;
   updatedAt?: string;
   /** Miękko usunięta rezerwacja jest dostępna w koszu przez 30 dni. */
   deletedAt?: string;

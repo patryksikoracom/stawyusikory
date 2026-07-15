@@ -277,7 +277,7 @@ export function getBookingDataIssues(data: AppData, booking: Booking) {
   if (!booking.checkIn || !booking.checkOut) issues.push("brak dat pobytu");
   if (!booking.grossPrice) issues.push("brak ceny brutto");
   if (booking.paymentStatus === "Do uzupełnienia") issues.push("brak statusu płatności");
-  if (["Booking", "Airbnb"].includes(booking.platform) && !importMatch) {
+  if (["Booking", "Airbnb"].includes(booking.platform) && !importMatch && !booking.importRef) {
     issues.push("brak spięcia z importem platformy");
   }
   if (!consent?.email && !consent?.phone && booking.checkOut > todayInPoland()) issues.push("brak kontaktu");

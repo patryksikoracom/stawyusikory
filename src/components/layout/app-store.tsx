@@ -76,7 +76,7 @@ type AppStore = {
   upsertCostSetting: (cost: CostSetting) => void;
   deleteCostSetting: (costId: string) => void;
   updateSettings: (settings: AppData["settings"]) => void;
-  replaceWithImportedBookings: (bookings: Booking[]) => void;
+  replaceWithImportedBookings: (bookings: Booking[], contacts?: ContactConsent[]) => void;
   exportSnapshot: () => Promise<void>;
   exportPricingAnalysis: () => void;
   resetDemo: () => void;
@@ -129,6 +129,7 @@ function normalizeData(parsed?: Partial<AppData> | null): AppData {
     })),
     bookings: (parsed?.bookings ?? initialData.bookings).filter((booking) => !isTrashExpired(booking)).map((booking) => ({
       ...booking,
+      pricingMode: booking.pricingMode ?? (booking.grossPrice ? "manual" : "rate-card"),
       needsReview: booking.needsReview ?? (booking.createdBy === "Import Mobile-Calendar" && (!booking.grossPrice || booking.adults + booking.children === 0)),
       version: booking.version ?? 1,
     })),
@@ -213,6 +214,17 @@ function emptyCloudData(): AppData {
       defaultCheckOut: "11:00",
       aiApprovalRequired: true,
     },
+  });
+}
+
+function tasksForImportedBookings(bookings: Booking[]) {
+  const today = todayInPoland();
+  return bookings.flatMap((booking) => {
+    if (booking.historicalImport || booking.checkOut <= today) return [];
+    return createTasksForBooking(booking).filter((task) => {
+      if (task.type === "Płatność") return booking.paymentStatus !== "Opłacone";
+      return !task.dueDate || task.dueDate >= today;
+    });
   });
 }
 
@@ -564,17 +576,19 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       settings,
       auditLog: [audit("settings", "organization", "updated", "Zmieniono ustawienia organizacji"), ...current.auditLog],
     })),
-    replaceWithImportedBookings: (bookings) => mutate((current) => {
+    replaceWithImportedBookings: (bookings, contacts = []) => mutate((current) => {
       const existingById = new Map(current.bookings.map((booking) => [booking.id, booking]));
       const created = bookings.filter((booking) => !existingById.has(booking.id));
-      const merged = current.bookings.map((booking) => bookings.find((candidate) => candidate.id === booking.id) ?? booking);
-      const tasks = created.flatMap(createTasksForBooking);
+      const createdIds = new Set(created.map((booking) => booking.id));
+      const tasks = tasksForImportedBookings(created);
+      const importedContacts = contacts.filter((contact) => createdIds.has(contact.bookingId));
       const next: AppData = {
         ...current,
-        bookings: [...created, ...merged],
+        bookings: [...created, ...current.bookings],
+        consents: [...importedContacts, ...current.consents],
         tasks: [...tasks, ...current.tasks],
         checklistItems: [...defaultChecklist(tasks), ...current.checklistItems],
-        auditLog: [audit("import", uid("IMP"), "committed", `Scalono ${bookings.length} rekordów z Mobile-Calendar`), ...current.auditLog],
+        auditLog: [audit("import", uid("IMP"), "committed", `Dodano ${created.length} rekordów z Mobile Calendar; pominięto ${bookings.length - created.length} istniejących`), ...current.auditLog],
       };
       next.scheduledMessages = reconcileScheduledMessages(next);
       return next;

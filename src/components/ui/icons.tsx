@@ -25,6 +25,7 @@ export type IconName =
   | "more"
   | "filter"
   | "download"
+  | "upload"
   | "refresh"
   | "close";
 
@@ -62,6 +63,7 @@ export function Icon({ name, ...props }: { name: IconName } & SVGProps<SVGSVGEle
     more: <><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none"/></>,
     filter: <path d="M4 5h16l-6 7v6l-4 2v-8z"/>,
     download: <><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></>,
+    upload: <><path d="M12 21V9M7 14l5-5 5 5M4 3h16"/></>,
     refresh: <><path d="M20 6v5h-5M4 18v-5h5"/><path d="M6.1 9a7 7 0 0 1 11.3-2.6L20 9M4 15l2.6 2.6A7 7 0 0 0 17.9 15"/></>,
     close: <path d="M6 6l12 12M18 6 6 18"/>,
   };
