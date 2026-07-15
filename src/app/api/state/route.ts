@@ -141,6 +141,13 @@ export async function PUT(request: Request) {
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  const committedVersion = Number(data);
+  if (committedVersion < 0) {
+    return NextResponse.json({
+      error: "Dane zmieniły się na innym urządzeniu. Odśwież aplikację.",
+      currentVersion: -committedVersion - 1,
+    }, { status: 409 });
+  }
   const workflowSyncWarning = await syncCommunicationRows(result.supabase!, result.organizationId, parsed.data.data);
-  return NextResponse.json({ ok: true, version: Number(data), workflowSyncWarning });
+  return NextResponse.json({ ok: true, version: committedVersion, workflowSyncWarning });
 }

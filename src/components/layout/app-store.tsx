@@ -262,6 +262,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const cloudReady = useRef(false);
   const stateVersion = useRef(0);
   const skipNextCloudSave = useRef(false);
+  const cloudSaveQueue = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -312,25 +313,33 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       skipNextCloudSave.current = false;
       return;
     }
-    const timeout = window.setTimeout(async () => {
-      try {
-        const response = await fetch("/api/state", {
-          method: "PUT",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ data, expectedVersion: stateVersion.current }),
-        });
-        if (response.status === 409) {
-          setSyncMode("conflict");
-          return;
+    const timeout = window.setTimeout(() => {
+      // Zmiany mogą pojawić się, gdy poprzedni PUT nadal trwa. Kolejka gwarantuje,
+      // że każda operacja odczyta wersję dopiero po zakończeniu poprzedniej.
+      cloudSaveQueue.current = cloudSaveQueue.current.then(async () => {
+        if (!cloudReady.current) return;
+        try {
+          const response = await fetch("/api/state", {
+            method: "PUT",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ data, expectedVersion: stateVersion.current }),
+          });
+          if (response.status === 409) {
+            // Konflikt wymaga świadomego przeładowania danych. Bez tej blokady
+            // każda kolejna lokalna mutacja ponawiała ten sam błędny zapis.
+            cloudReady.current = false;
+            setSyncMode("conflict");
+            return;
+          }
+          if (!response.ok) throw new Error("save failed");
+          const payload = await response.json() as { version?: number };
+          if (typeof payload.version === "number") stateVersion.current = payload.version;
+          setSyncMode("cloud");
+          setLastSavedAt(new Date().toISOString());
+        } catch {
+          setSyncMode("error");
         }
-        if (!response.ok) throw new Error("save failed");
-        const payload = await response.json() as { version?: number };
-        if (typeof payload.version === "number") stateVersion.current = payload.version;
-        setSyncMode("cloud");
-        setLastSavedAt(new Date().toISOString());
-      } catch {
-        setSyncMode("error");
-      }
+      });
     }, 700);
     return () => window.clearTimeout(timeout);
   }, [data, hydrated]);

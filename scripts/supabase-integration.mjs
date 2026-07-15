@@ -73,7 +73,7 @@ try {
 
   const staleCommit = await userClient.rpc("replace_operational_state", { p_expected_version: 0, p_state: state });
   console.log("Integration: stale-write result", { code: staleCommit.error?.code ?? null, returnedVersion: staleCommit.data ?? null });
-  assert(Boolean(staleCommit.error), "Stale write was not rejected.");
+  assert(!staleCommit.error && Number(staleCommit.data) < 0, "Stale write was not rejected without raising a database error.");
 
   const records = await userClient.from("operational_records").select("entity_type,entity_id");
   if (records.error) throw records.error;
