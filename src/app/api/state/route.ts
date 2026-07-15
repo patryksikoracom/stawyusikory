@@ -23,12 +23,12 @@ async function context() {
   if (!user) return { error: NextResponse.json({ error: "Wymagane logowanie" }, { status: 401 }) };
   const { data: membership } = await supabase
     .from("organization_memberships")
-    .select("organization_id")
+    .select("organization_id,role")
     .eq("user_id", user.id)
     .limit(1)
     .maybeSingle();
   if (!membership) return { error: NextResponse.json({ error: "Brak organizacji użytkownika" }, { status: 403 }) };
-  return { supabase, organizationId: membership.organization_id };
+  return { supabase, organizationId: membership.organization_id, role: membership.role as "owner" | "admin" | "viewer" };
 }
 
 function isBundledDemoState(value: unknown) {
@@ -91,7 +91,7 @@ export async function GET() {
       version: revision?.version ?? 0,
       updatedAt: revision?.updated_at,
       source: "records",
-    });
+    }, { headers: { "cache-control": "private, no-store" } });
   }
 
   const { data: legacy, error: legacyError } = await result.supabase!
@@ -108,7 +108,7 @@ export async function GET() {
       updatedAt: legacy?.updated_at,
       source: "empty",
       quarantinedDemo: true,
-    });
+    }, { headers: { "cache-control": "private, no-store" } });
   }
 
   return NextResponse.json({
@@ -116,12 +116,15 @@ export async function GET() {
     version: revision?.version ?? 0,
     updatedAt: legacy?.updated_at,
     source: legacy?.state ? "legacy_snapshot" : "empty",
-  });
+  }, { headers: { "cache-control": "private, no-store" } });
 }
 
 export async function PUT(request: Request) {
   const result = await context();
   if (result.error) return result.error;
+  if (result.role === "viewer") return NextResponse.json({ error: "Konto ma dostęp tylko do odczytu" }, { status: 403 });
+  const contentLength = Number(request.headers.get("content-length") ?? 0);
+  if (contentLength > 5_000_000) return NextResponse.json({ error: "Stan aplikacji jest zbyt duży" }, { status: 413 });
   const parsed = payloadSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Nieprawidłowy stan aplikacji" }, { status: 400 });
   if (isBundledDemoState(parsed.data.data)) {

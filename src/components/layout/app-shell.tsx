@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { AppStoreProvider, useAppStore } from "./app-store";
+import { AppStoreProvider, clearPersistedAppData, useAppStore } from "./app-store";
 import { NewBookingDialog } from "@/components/bookings/new-booking-dialog";
 import { Icon, type IconName } from "@/components/ui/icons";
 import { Button } from "@/components/ui/primitives";
@@ -81,6 +81,11 @@ function ShellInner({ children }: { children: React.ReactNode }) {
   async function signOut() {
     const client = createClient();
     if (client) await client.auth.signOut();
+    clearPersistedAppData();
+    if ("caches" in window) {
+      const keys = await window.caches.keys();
+      await Promise.all(keys.map((key) => window.caches.delete(key)));
+    }
     window.location.href = "/login";
   }
 

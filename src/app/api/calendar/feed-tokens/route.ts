@@ -16,6 +16,5 @@ export async function GET(request: Request) {
       unitId: item.unit_id,
       url: `${origin}/api/calendar/feeds/${item.token}.ics`,
     })),
-  });
+  }, { headers: { "cache-control": "private, no-store" } });
 }
-

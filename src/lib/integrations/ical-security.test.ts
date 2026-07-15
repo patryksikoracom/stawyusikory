@@ -11,9 +11,10 @@ describe("validateExternalCalendarUrl", () => {
     "https://localhost/calendar.ics",
     "https://127.0.0.1/calendar.ics",
     "https://192.168.1.20/calendar.ics",
+    "https://100.64.0.1/calendar.ics",
+    "https://[::1]/calendar.ics",
     "https://user:password@example.com/calendar.ics",
   ])("rejects unsafe feed %s", (url) => {
     expect(validateExternalCalendarUrl(url).ok).toBe(false);
   });
 });
-

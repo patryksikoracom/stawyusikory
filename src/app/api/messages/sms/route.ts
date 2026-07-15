@@ -14,6 +14,15 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Sprawdź numer telefonu i treść SMS." }, { status: 400 });
   const context = await requireOrganization();
   if (context.error) return context.error;
+  if (context.role === "viewer") return NextResponse.json({ error: "Brak uprawnień do wysyłania wiadomości." }, { status: 403 });
+
+  const since = new Date(Date.now() - 86_400_000).toISOString();
+  const { count } = await context.supabase!
+    .from("outbound_messages")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", context.organizationId)
+    .gte("created_at", since);
+  if ((count ?? 0) >= 50) return NextResponse.json({ error: "Osiągnięto dzienny limit 50 wiadomości." }, { status: 429 });
 
   const { data: existing } = await context.supabase!
     .from("outbound_messages")

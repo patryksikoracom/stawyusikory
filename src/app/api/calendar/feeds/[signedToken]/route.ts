@@ -48,9 +48,11 @@ export async function GET(_request: Request, context: { params: Promise<{ signed
     const unitId = signedToken.replace("demo-", "");
     return new NextResponse(renderCalendar(initialData, unitId), { headers: { "content-type": "text/calendar; charset=utf-8", "cache-control": "no-store" } });
   }
+  const tokenValue = signedToken.endsWith(".ics") ? signedToken.slice(0, -4) : signedToken;
+  if (!/^[a-f0-9]{48}$/i.test(tokenValue)) return NextResponse.json({ error: "Nieprawidłowy link kalendarza." }, { status: 404 });
   const supabase = createServiceClient();
   if (!supabase) return NextResponse.json({ error: "Eksport iCal nie jest skonfigurowany." }, { status: 503 });
-  const { data: token } = await supabase.from("calendar_feed_tokens").select("organization_id, unit_id, active").eq("token", signedToken).maybeSingle();
+  const { data: token } = await supabase.from("calendar_feed_tokens").select("organization_id, unit_id, active").eq("token", tokenValue).maybeSingle();
   if (!token?.active) return NextResponse.json({ error: "Nieprawidłowy lub wyłączony link kalendarza." }, { status: 404 });
   const { data: records, error } = await supabase
     .from("operational_records")

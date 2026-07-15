@@ -1,7 +1,32 @@
 import { NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import type { CalendarBlock, SourceConnection } from "@/lib/types";
-import { validateExternalCalendarUrl } from "@/lib/integrations/ical-security";
+import { validateExternalCalendarUrlForFetch } from "@/lib/integrations/ical-security";
+
+const MAX_ICAL_BYTES = 2_000_000;
+
+async function readLimitedText(response: Response) {
+  const declared = Number(response.headers.get("content-length") ?? 0);
+  if (declared > MAX_ICAL_BYTES) throw new Error("Kalendarz przekracza limit 2 MB");
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    length += value.length;
+    if (length > MAX_ICAL_BYTES) {
+      await reader.cancel();
+      throw new Error("Kalendarz przekracza limit 2 MB");
+    }
+    chunks.push(value);
+  }
+  const merged = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of chunks) { merged.set(chunk, offset); offset += chunk.length; }
+  return new TextDecoder().decode(merged);
+}
 
 function unfoldIcs(raw: string) {
   return raw.replace(/\r?\n[ \t]/g, "");
@@ -32,8 +57,9 @@ export async function POST(request: Request) {
 
   let organizationIds: string[] = [];
   if (userClient && user) {
-    const { data: membership } = await userClient.from("organization_memberships").select("organization_id").eq("user_id", user.id).limit(1).maybeSingle();
+    const { data: membership } = await userClient.from("organization_memberships").select("organization_id,role").eq("user_id", user.id).limit(1).maybeSingle();
     if (!membership) return NextResponse.json({ error: "Brak organizacji użytkownika." }, { status: 403 });
+    if (membership.role === "viewer") return NextResponse.json({ error: "Brak uprawnień do synchronizacji." }, { status: 403 });
     organizationIds = [membership.organization_id];
   } else {
     const { data: organizations, error } = await service.from("operational_state_versions").select("organization_id");
@@ -62,7 +88,7 @@ export async function POST(request: Request) {
       feeds += 1;
       const startedAt = new Date().toISOString();
       try {
-        const validated = validateExternalCalendarUrl(connection.importUrl!);
+        const validated = await validateExternalCalendarUrlForFetch(connection.importUrl!);
         if (!validated.ok) throw new Error(validated.error);
         const response = await fetch(validated.url, {
           headers: { "user-agent": "Stawy-OS/1.0" },
@@ -71,7 +97,7 @@ export async function POST(request: Request) {
           signal: AbortSignal.timeout(15_000),
         });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const events = parseIcsEvents(await response.text());
+        const events = parseIcsEvents(await readLimitedText(response));
         const prefix = `ICAL-${connection.id}-`;
         const imported = events.map((event): CalendarBlock => ({
           id: `${prefix}${safeId(event.uid!)}`,

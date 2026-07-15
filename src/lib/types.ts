@@ -108,6 +108,8 @@ export type Booking = {
   cityArea?: string;
   grossPrice?: number;
   pricePerNight?: number;
+  commission?: number;
+  payout?: number;
   depositAmount?: number;
   depositDueDate?: string;
   paymentMethod?: "Brak" | "Przelew" | "Gotówka" | "Karta" | "Online";
@@ -118,6 +120,7 @@ export type Booking = {
   createdBy: string;
   version?: number;
   needsReview?: boolean;
+  historicalImport?: boolean;
   updatedAt?: string;
 };
 

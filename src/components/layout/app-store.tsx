@@ -36,6 +36,7 @@ import type {
 import { cancelOpenStayTasks, createTasksForBooking, rescheduleOpenTasksForBooking } from "@/lib/workflow/rules";
 import { defaultAutomationRules, defaultMessageTemplates, reconcileScheduledMessages } from "@/lib/workflow/communications";
 import { guestInsightAfterDeparture, repairTaskForIssue } from "@/lib/workflow/departures";
+import { downloadEncryptedJson, downloadPricingAnalysisDataset } from "@/lib/security/data-exports";
 
 export type SyncMode = "checking" | "cloud" | "local" | "error" | "conflict";
 
@@ -73,13 +74,21 @@ type AppStore = {
   deleteCostSetting: (costId: string) => void;
   updateSettings: (settings: AppData["settings"]) => void;
   replaceWithImportedBookings: (bookings: Booking[]) => void;
-  exportSnapshot: () => void;
+  exportSnapshot: () => Promise<void>;
+  exportPricingAnalysis: () => void;
   resetDemo: () => void;
 };
 
 const StoreContext = createContext<AppStore | null>(null);
 const storageKey = "stawy-u-sikory-app-data-v3";
 const oldStorageKey = "stawy-u-sikory-app-data-v2";
+const cloudConfigured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+
+export function clearPersistedAppData() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(storageKey);
+  window.localStorage.removeItem(oldStorageKey);
+}
 
 function uid(prefix: string) {
   const value = typeof crypto !== "undefined" && crypto.randomUUID
@@ -206,6 +215,7 @@ function emptyCloudData(): AppData {
 
 function readLocalData() {
   if (typeof window === "undefined") return normalizeData();
+  if (cloudConfigured) return emptyCloudData();
   const raw = window.localStorage.getItem(storageKey) ?? window.localStorage.getItem(oldStorageKey);
   if (!raw) return normalizeData();
   try {
@@ -238,6 +248,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
+      if (cloudConfigured) clearPersistedAppData();
       const local = readLocalData();
       setData(local);
       setHydrated(true);
@@ -278,7 +289,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!hydrated) return;
-    window.localStorage.setItem(storageKey, JSON.stringify(data));
+    if (!cloudConfigured) window.localStorage.setItem(storageKey, JSON.stringify(data));
     if (!cloudReady.current) return;
     if (skipNextCloudSave.current) {
       skipNextCloudSave.current = false;
@@ -522,18 +533,20 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       next.scheduledMessages = reconcileScheduledMessages(next);
       return next;
     }),
-    exportSnapshot: () => {
-      const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `stawy-os-backup-${todayInPoland()}.json`;
-      link.click();
-      URL.revokeObjectURL(url);
+    exportSnapshot: async () => {
+      const passphrase = window.prompt("Ustaw hasło do zaszyfrowanej kopii (minimum 12 znaków). Bez niego nie da się odzyskać danych.");
+      if (!passphrase) return;
+      try {
+        await downloadEncryptedJson(data, passphrase, `stawy-os-backup-${todayInPoland()}.stawyos`);
+      } catch (error) {
+        window.alert(error instanceof Error ? error.message : "Nie udało się utworzyć zaszyfrowanej kopii.");
+      }
     },
+    exportPricingAnalysis: () => downloadPricingAnalysisDataset(data, `stawy-os-ceny-ai-${todayInPoland()}.json`),
     resetDemo: () => {
       if (process.env.NODE_ENV === "production") return;
       setData(normalizeData());
-      window.localStorage.removeItem(storageKey);
+      clearPersistedAppData();
     },
   }), [data, lastSavedAt, mutate, syncMode]);
 
