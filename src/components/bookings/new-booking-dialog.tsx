@@ -12,10 +12,11 @@ import { quoteStay } from "@/lib/workflow/pricing";
 type BookingDefaults = Partial<Pick<Booking, "unitId" | "checkIn" | "checkOut" | "arrivalTime" | "departureTime">>;
 
 export function NewBookingDialog({ onClose, onAdded, booking, defaults }: { onClose: () => void; onAdded: () => void; booking?: Booking; defaults?: BookingDefaults }) {
-  const { data, addBooking, updateBooking, updateConsent } = useAppStore();
+  const { data, addBooking, updateBooking, updateConsent, deleteBooking } = useAppStore();
   const dialogRef = useRef<HTMLElement>(null);
   const [step, setStep] = useState(1);
   const [error, setError] = useState("");
+  const [confirmDeletion, setConfirmDeletion] = useState(false);
   const [draftId] = useState(() => `SUS-${Date.now().toString().slice(-6)}`);
   const [defaultDates] = useState(() => {
     const start = new Date();
@@ -229,7 +230,10 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults }: { onCl
           </div>
 
           <div className="flex flex-col-reverse gap-2 border-t border-[#e3dccf] bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
-            <Button type="button" variant="ghost" onClick={onClose}>Anuluj</Button>
+            <div className="flex items-center gap-2">
+              {booking ? <Button type="button" variant="danger" onClick={() => setConfirmDeletion(true)}>Usuń do kosza</Button> : null}
+              <Button type="button" variant="ghost" onClick={onClose}>Anuluj</Button>
+            </div>
             <div className="flex gap-2">
               {step > 1 ? <Button type="button" variant="secondary" onClick={() => { setError(""); setStep((current) => current - 1); }}><Icon className="size-4 rotate-180" name="arrow" />Wstecz</Button> : null}
               {step < 3 ? <Button type="button" onClick={goNext}>Dalej <Icon className="size-4" name="arrow" /></Button> : <Button type="submit"><Icon className="size-4" name="check" />{booking ? "Zapisz zmiany" : "Dodaj rezerwację"}</Button>}
@@ -237,6 +241,14 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults }: { onCl
           </div>
         </form>
       </section>
+      {confirmDeletion && booking ? <div className="fixed inset-0 z-[60] grid place-items-center bg-[#102c24]/65 p-4 backdrop-blur-sm" role="presentation">
+        <section aria-describedby="delete-booking-description" aria-labelledby="delete-booking-title" aria-modal="true" className="w-full max-w-md rounded-[22px] border border-[#e3b9ad] bg-[#fffdf8] p-6 shadow-[0_28px_80px_rgba(8,29,22,.35)]" role="dialog">
+          <p className="text-[10px] font-black uppercase tracking-[.16em] text-[#a84a2e]">Usuwanie rezerwacji</p>
+          <h3 className="mt-1 font-display text-2xl font-semibold" id="delete-booking-title">Przenieść do kosza?</h3>
+          <p className="mt-3 text-sm leading-6 text-[#5d6c65]" id="delete-booking-description"><strong>{booking.guestLabel}</strong> zniknie z kalendarza i bieżących list. Rezerwację będzie można przywrócić z kosza przez 30 dni, potem zostanie usunięta automatycznie.</p>
+          <div className="mt-6 flex justify-end gap-2"><Button type="button" variant="secondary" onClick={() => setConfirmDeletion(false)}>Wróć</Button><Button type="button" variant="danger" onClick={() => { deleteBooking(booking.id); onAdded(); }}>Tak, usuń do kosza</Button></div>
+        </section>
+      </div> : null}
     </div>
   );
 }

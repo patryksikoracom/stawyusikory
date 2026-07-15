@@ -37,6 +37,7 @@ import { cancelOpenStayTasks, createTasksForBooking, rescheduleOpenTasksForBooki
 import { defaultAutomationRules, defaultMessageTemplates, reconcileScheduledMessages } from "@/lib/workflow/communications";
 import { guestInsightAfterDeparture, repairTaskForIssue } from "@/lib/workflow/departures";
 import { downloadEncryptedJson, downloadPricingAnalysisDataset } from "@/lib/security/data-exports";
+import { isTrashExpired, trashExpiryDate } from "@/lib/booking-trash";
 
 export type SyncMode = "checking" | "cloud" | "local" | "error" | "conflict";
 
@@ -46,7 +47,9 @@ type AppStore = {
   lastSavedAt?: string;
   addBooking: (booking: Booking, contact?: ContactConsent) => void;
   updateBooking: (booking: Booking) => void;
+  cancelBooking: (bookingId: string) => void;
   deleteBooking: (bookingId: string) => void;
+  restoreBooking: (bookingId: string) => void;
   updateTask: (task: OpsTask) => void;
   toggleChecklistItem: (item: TaskChecklistItem) => void;
   addIssue: (issue: IssueReport) => void;
@@ -124,7 +127,7 @@ function normalizeData(parsed?: Partial<AppData> | null): AppData {
       ...unit,
       defaultPricePerNight: unit.defaultPricePerNight ?? rates.find((rate) => rate.unitId === unit.id && rate.active)?.pricePerNight ?? 0,
     })),
-    bookings: (parsed?.bookings ?? initialData.bookings).map((booking) => ({
+    bookings: (parsed?.bookings ?? initialData.bookings).filter((booking) => !isTrashExpired(booking)).map((booking) => ({
       ...booking,
       needsReview: booking.needsReview ?? (booking.createdBy === "Import Mobile-Calendar" && (!booking.grossPrice || booking.adults + booking.children === 0)),
       version: booking.version ?? 1,
@@ -238,7 +241,9 @@ function audit(entityType: string, entityId: string, action: string, summary: st
 }
 
 export function AppStoreProvider({ children }: { children: ReactNode }) {
-  const [data, setData] = useState<AppData>(readLocalData);
+  // Pierwszy render musi być identyczny na serwerze i w przeglądarce. Właściwy
+  // stan lokalny lub chmurowy jest pobierany zaraz po zamontowaniu komponentu.
+  const [data, setData] = useState<AppData>(() => normalizeData());
   const [hydrated, setHydrated] = useState(false);
   const [syncMode, setSyncMode] = useState<SyncMode>("checking");
   const [lastSavedAt, setLastSavedAt] = useState<string>();
@@ -349,7 +354,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       next.scheduledMessages = reconcileScheduledMessages(next);
       return next;
     }),
-    deleteBooking: (bookingId) => mutate((current) => {
+    cancelBooking: (bookingId) => mutate((current) => {
       const next: AppData = {
         ...current,
         bookings: current.bookings.map((item) => item.id === bookingId
@@ -357,6 +362,47 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           : item),
         tasks: cancelOpenStayTasks(current.tasks, bookingId),
         auditLog: [audit("booking", bookingId, "cancelled", "Anulowano rezerwację"), ...current.auditLog],
+      };
+      next.scheduledMessages = reconcileScheduledMessages(next);
+      return next;
+    }),
+    deleteBooking: (bookingId) => mutate((current) => {
+      const deletedAt = new Date().toISOString();
+      const next: AppData = {
+        ...current,
+        bookings: current.bookings.map((item) => item.id === bookingId
+          ? {
+            ...item,
+            workflowStatusBeforeDeletion: item.workflowStatus,
+            workflowStatus: "Anulowana",
+            deletedAt,
+            purgeAfter: trashExpiryDate(deletedAt.slice(0, 10)),
+            updatedAt: deletedAt,
+          }
+          : item),
+        tasks: cancelOpenStayTasks(current.tasks, bookingId),
+        auditLog: [audit("booking", bookingId, "deleted", "Przeniesiono rezerwację do kosza na 30 dni"), ...current.auditLog],
+      };
+      next.scheduledMessages = reconcileScheduledMessages(next);
+      return next;
+    }),
+    restoreBooking: (bookingId) => mutate((current) => {
+      const next: AppData = {
+        ...current,
+        bookings: current.bookings.map((item) => item.id === bookingId
+          ? {
+            ...item,
+            workflowStatus: item.workflowStatusBeforeDeletion ?? "Nowa",
+            workflowStatusBeforeDeletion: undefined,
+            deletedAt: undefined,
+            purgeAfter: undefined,
+            updatedAt: new Date().toISOString(),
+          }
+          : item),
+        tasks: current.tasks.map((task) => task.bookingId === bookingId && task.status === "Nie dotyczy"
+          ? { ...task, status: "Do zrobienia", completedAt: undefined }
+          : task),
+        auditLog: [audit("booking", bookingId, "restored", "Przywrócono rezerwację z kosza"), ...current.auditLog],
       };
       next.scheduledMessages = reconcileScheduledMessages(next);
       return next;

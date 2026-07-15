@@ -122,6 +122,10 @@ export type Booking = {
   needsReview?: boolean;
   historicalImport?: boolean;
   updatedAt?: string;
+  /** Miękko usunięta rezerwacja jest dostępna w koszu przez 30 dni. */
+  deletedAt?: string;
+  purgeAfter?: string;
+  workflowStatusBeforeDeletion?: WorkflowStatus;
 };
 
 export type GuestProfile = {

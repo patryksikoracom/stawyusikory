@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useAppStore } from "@/components/layout/app-store";
+import { isBookingInTrash } from "@/lib/booking-trash";
 import { Badge, Button, Card, Field, inputClass } from "@/components/ui/primitives";
 import { Icon } from "@/components/ui/icons";
 import type { Channel, ContactConsent, DiscoveryMethod, GuestProfile } from "@/lib/types";
@@ -12,7 +13,8 @@ export function GuestsView() {
   const [search, setSearch] = useState("");
   const [segment, setSegment] = useState("Wszystkie");
   const [editingId,setEditingId]=useState<string>();
-  const profiles = useMemo(() => data.bookings.map((booking) => ({ booking, profile: data.guests.find((item) => item.bookingId === booking.id), consent: data.consents.find((item) => item.bookingId === booking.id) })).filter(({ booking, profile }) => (!search || [booking.guestLabel, booking.cityArea, profile?.segment, profile?.motivation].filter(Boolean).some((item) => String(item).toLowerCase().includes(search.toLowerCase()))) && (segment === "Wszystkie" || profile?.segment === segment)), [data, search, segment]);
+  const visibleBookings = useMemo(() => data.bookings.filter((booking) => !isBookingInTrash(booking)), [data.bookings]);
+  const profiles = useMemo(() => visibleBookings.map((booking) => ({ booking, profile: data.guests.find((item) => item.bookingId === booking.id), consent: data.consents.find((item) => item.bookingId === booking.id) })).filter(({ booking, profile }) => (!search || [booking.guestLabel, booking.cityArea, profile?.segment, profile?.motivation].filter(Boolean).some((item) => String(item).toLowerCase().includes(search.toLowerCase()))) && (segment === "Wszystkie" || profile?.segment === segment)), [visibleBookings, data.guests, data.consents, search, segment]);
   const withContact = data.consents.filter((item) => item.email || item.phone).length;
   const marketingOk = data.consents.filter((item) => item.marketingConsent === "Tak").length;
   const reviews = data.guests.filter((item) => item.nps != null).length;
@@ -24,14 +26,14 @@ export function GuestsView() {
   return <div className="grid gap-5">
     <section className="animate-rise-2 grid gap-4 lg:grid-cols-[1.1fr_.9fr]">
       <div className="relative overflow-hidden rounded-[22px] bg-[#173d35] p-6 text-white sm:p-7"><div className="absolute -bottom-20 -right-10 size-64 rounded-full border-[38px] border-white/[.04]"/><span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-[.14em] text-[#dbe4bc]"><Icon className="size-3.5" name="spark"/>Pamięć o gościach</span><h2 className="mt-4 max-w-2xl font-display text-4xl font-semibold leading-[1.05] tracking-[-.035em]">Nie tylko kto przyjechał. <span className="text-[#d2de99]">Dlaczego wybrał właśnie nas.</span></h2><p className="mt-4 max-w-2xl text-sm leading-6 text-white/65">Stawy OS oddziela kanał rezerwacji od źródła odkrycia i buduje wiedzę, która pomaga sprzedawać więcej pobytów bez prowizji.</p></div>
-      <div className="grid grid-cols-2 gap-3"><Stat label="Profile gości" value={data.bookings.length} icon="people"/><Stat label="Kontakt dostępny" value={`${Math.round((withContact / Math.max(1, data.bookings.length)) * 100)}%`} icon="message"/><Stat label="Zgoda marketingowa" value={marketingOk} icon="check"/><Stat label="Zebrane oceny" value={reviews} icon="spark"/></div>
+      <div className="grid grid-cols-2 gap-3"><Stat label="Profile gości" value={visibleBookings.length} icon="people"/><Stat label="Kontakt dostępny" value={`${Math.round((withContact / Math.max(1, visibleBookings.length)) * 100)}%`} icon="message"/><Stat label="Zgoda marketingowa" value={marketingOk} icon="check"/><Stat label="Zebrane oceny" value={reviews} icon="spark"/></div>
     </section>
 
     <section className="animate-rise-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <SegmentCard title="Rodziny i wędkarze" count={1} body="Najwyższa wartość pobytu. Motywacja: czas nad wodą z dziećmi." color="bg-[#dfe8c8]" />
       <SegmentCard title="Pary: cisza i natura" count={1} body="Krótsze pobyty. Wrażliwi na spokój, prywatność i estetykę." color="bg-[#d8e9e6]" />
       <SegmentCard title="Goście powracający" count={0} body="Segment do zbudowania przez follow-up i ofertę bezpośrednią." color="bg-[#f5e7c7]" />
-      <SegmentCard title="Do poznania" count={data.bookings.filter((booking) => !data.guests.find((item) => item.bookingId === booking.id)?.segment).length} body="Rezerwacje z brakami, które ograniczają jakość marketingu." color="bg-[#f5ddd6]" />
+      <SegmentCard title="Do poznania" count={visibleBookings.filter((booking) => !data.guests.find((item) => item.bookingId === booking.id)?.segment).length} body="Rezerwacje z brakami, które ograniczają jakość marketingu." color="bg-[#f5ddd6]" />
     </section>
 
     <Card className="animate-rise-3 overflow-hidden"><div className="border-b border-[#e2dbce] p-5"><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#7d8b4d]">Atrybucja i feedback</p><h3 className="font-display text-2xl font-semibold">Co wiemy — z podaną próbą</h3></div><div className="grid gap-px bg-[#e5ded2] sm:grid-cols-4"><Insight label="Najczęstsze źródło" value={discoveryCounts[0]?.source ?? "brak"} sample={discoveryCounts[0]?.count ?? 0}/><Insight label="Przeglądali oferty" value={browsingCount} sample={data.guests.filter((item) => item.discoveryMethod).length}/><Insight label="Średni NPS" value={averageNps} sample={reviews}/><Insight label="Otwarte uwagi" value={data.issues.filter((item) => item.status !== "Rozwiązane").length} sample={data.departureDebriefs.filter((item) => item.status === "Ukończony").length}/></div></Card>

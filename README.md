@@ -27,6 +27,10 @@ cp .env.example .env.local
 npm run dev
 ```
 
+Potem otwórz **http://localhost:3000**. To jest lokalny podgląd — możesz z niego korzystać i zapisywać zmiany bez commita. Serwer zostaje włączony w terminalu, aż zatrzymasz go skrótem `Ctrl+C`.
+
+Jeśli port 3000 jest już zajęty, Next poda w terminalu następny adres (zwykle `http://localhost:3001`). Sam lokalny commit nie publikuje aplikacji; Vercel wdroży wersję online po `git push` do podłączonego repozytorium/brancha.
+
 Kontrola jakości:
 
 ```bash

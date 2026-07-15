@@ -11,6 +11,7 @@ import { NewBookingDialog } from "@/components/bookings/new-booking-dialog";
 import { todayInPoland } from "@/lib/date";
 import { DepartureDebriefSheet } from "@/components/departures/departure-debrief-sheet";
 import type { DepartureDebrief } from "@/lib/types";
+import { daysLeftInTrash, isBookingInTrash } from "@/lib/booking-trash";
 
 const statuses: WorkflowStatus[] = ["Nowa", "Potwierdzona", "Przed przyjazdem", "W trakcie", "Po pobycie", "Zamknięta", "Anulowana"];
 const tabs = ["Podsumowanie", "Płatności", "Wiadomości", "Zadania", "Historia"] as const;
@@ -27,14 +28,17 @@ export function BookingsView({ initialId }: { initialId?: string }) {
   const [payment, setPayment] = useState("Wszystkie");
   const [selectedId, setSelectedId] = useState(initialId ?? data.bookings[0]?.id ?? "");
   const [descending, setDescending] = useState(true);
-  const rows = useMemo(() => data.bookings.filter((booking) => {
+  const [showTrash, setShowTrash] = useState(false);
+  const activeBookings = useMemo(() => data.bookings.filter((booking) => !isBookingInTrash(booking)), [data.bookings]);
+  const trashedBookings = useMemo(() => data.bookings.filter(isBookingInTrash), [data.bookings]);
+  const rows = useMemo(() => activeBookings.filter((booking) => {
     const q = search.toLowerCase();
     const matchesQuery = !q || [booking.guestLabel, booking.id, booking.platformReservationNo, unitName(data.units, booking.unitId)].filter(Boolean).some((value) => String(value).toLowerCase().includes(q));
     return matchesQuery && (platform === "Wszystkie" || booking.platform === platform) && (payment === "Wszystkie" || booking.paymentStatus === payment);
-  }).sort((a, b) => descending ? b.checkIn.localeCompare(a.checkIn) : a.checkIn.localeCompare(b.checkIn)), [data, search, platform, payment, descending]);
-  const selected = data.bookings.find((booking) => booking.id === selectedId) ?? rows[0];
-  const future = data.bookings.filter((item) => item.checkOut >= todayInPoland() && item.workflowStatus !== "Anulowana").length;
-  const unsettled = data.bookings.filter((item) => ["Do uzupełnienia", "Do dopłaty", "Częściowo"].includes(item.paymentStatus)).length;
+  }).sort((a, b) => descending ? b.checkIn.localeCompare(a.checkIn) : a.checkIn.localeCompare(b.checkIn)), [activeBookings, data.units, search, platform, payment, descending]);
+  const selected = activeBookings.find((booking) => booking.id === selectedId) ?? rows[0];
+  const future = activeBookings.filter((item) => item.checkOut >= todayInPoland() && item.workflowStatus !== "Anulowana").length;
+  const unsettled = activeBookings.filter((item) => ["Do uzupełnienia", "Do dopłaty", "Częściowo"].includes(item.paymentStatus)).length;
 
   function downloadCsv() {
     const lines = [["id", "gość", "domek", "przyjazd", "wyjazd", "kanał", "kwota", "płatność", "status"], ...rows.map((booking) => [booking.id, booking.guestLabel, unitName(data.units, booking.unitId), booking.checkIn, booking.checkOut, booking.platform, booking.grossPrice ?? "", booking.paymentStatus, booking.workflowStatus])];
@@ -45,17 +49,17 @@ export function BookingsView({ initialId }: { initialId?: string }) {
 
   return <div className="grid gap-5">
     <section className="animate-rise-2 grid gap-3 sm:grid-cols-3">
-      <Summary label="Wszystkie rezerwacje" value={data.bookings.length} note={`${future} nadchodzących`} icon="booking" />
+      <Summary label="Wszystkie rezerwacje" value={activeBookings.length} note={`${future} nadchodzących`} icon="booking" />
       <Summary label="Do rozliczenia" value={unsettled} note="wymagają sprawdzenia" icon="wallet" warn={unsettled > 0} />
-      <Summary label="Wartość rezerwacji" value={money(data.bookings.reduce((sum, item) => sum + (item.grossPrice ?? 0), 0))} note="brutto w bazie" icon="spark" />
+      <Summary label="Wartość rezerwacji" value={money(activeBookings.reduce((sum, item) => sum + (item.grossPrice ?? 0), 0))} note="brutto w bazie" icon="spark" />
     </section>
 
     <Card className="animate-rise-3 overflow-hidden">
       <div className="grid gap-3 border-b border-[#e2dbce] p-4 lg:grid-cols-[1fr_190px_210px_auto]">
         <div className="relative"><Icon className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[#7b867f]" name="search"/><input className={`${inputClass} pl-10`} placeholder="Szukaj gościa, numeru lub domku..." value={search} onChange={(event) => setSearch(event.target.value)} /></div>
-        <select className={inputClass} value={platform} onChange={(event) => setPlatform(event.target.value)}><option>Wszystkie</option>{Array.from(new Set(data.bookings.map((item) => item.platform))).map((item) => <option key={item}>{item}</option>)}</select>
-        <select className={inputClass} value={payment} onChange={(event) => setPayment(event.target.value)}><option>Wszystkie</option>{Array.from(new Set(data.bookings.map((item) => item.paymentStatus))).map((item) => <option key={item}>{item}</option>)}</select>
-        <Button variant="secondary" onClick={downloadCsv}><Icon className="size-4" name="download"/>Eksport</Button>
+        <select className={inputClass} value={platform} onChange={(event) => setPlatform(event.target.value)}><option>Wszystkie</option>{Array.from(new Set(activeBookings.map((item) => item.platform))).map((item) => <option key={item}>{item}</option>)}</select>
+        <select className={inputClass} value={payment} onChange={(event) => setPayment(event.target.value)}><option>Wszystkie</option>{Array.from(new Set(activeBookings.map((item) => item.paymentStatus))).map((item) => <option key={item}>{item}</option>)}</select>
+        <div className="flex gap-2"><Button variant="secondary" onClick={() => setShowTrash(true)}>Kosz{trashedBookings.length ? ` (${trashedBookings.length})` : ""}</Button><Button variant="secondary" onClick={downloadCsv}><Icon className="size-4" name="download"/>Eksport</Button></div>
       </div>
 
       <div className="grid min-h-[620px] xl:grid-cols-[390px_minmax(0,1fr)]">
@@ -69,6 +73,17 @@ export function BookingsView({ initialId }: { initialId?: string }) {
         <main className="min-w-0 bg-[#fffdf8]">{selected ? <BookingCommandCenter booking={selected} /> : <div className="grid h-full place-items-center p-10 text-center"><div><Icon className="mx-auto size-10 text-[#829052]" name="booking"/><p className="mt-3 font-display text-2xl font-semibold">Wybierz rezerwację</p></div></div>}</main>
       </div>
     </Card>
+    {showTrash ? <BookingTrashDialog bookings={trashedBookings} onClose={() => setShowTrash(false)} /> : null}
+  </div>;
+}
+
+function BookingTrashDialog({ bookings, onClose }: { bookings: Booking[]; onClose: () => void }) {
+  const { restoreBooking } = useAppStore();
+  return <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#102c24]/70 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
+    <section aria-labelledby="booking-trash-title" aria-modal="true" className="my-6 w-full max-w-2xl rounded-[22px] bg-[#fffdf8] shadow-2xl" role="dialog">
+      <div className="flex items-start justify-between border-b border-[#e3dccf] p-6"><div><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#a84a2e]">Usunięte rezerwacje</p><h2 className="font-display text-2xl font-semibold" id="booking-trash-title">Kosz rezerwacji</h2><p className="mt-1 text-sm text-[#68756f]">Po 30 dniach pozycje są usuwane automatycznie.</p></div><button aria-label="Zamknij" type="button" onClick={onClose}><Icon className="size-5" name="close"/></button></div>
+      <div className="grid gap-3 p-5">{bookings.length ? bookings.sort((a, b) => String(b.deletedAt).localeCompare(String(a.deletedAt))).map((booking) => <article className="flex flex-col gap-3 rounded-2xl border border-[#e4dac7] bg-white p-4 sm:flex-row sm:items-center" key={booking.id}><div className="min-w-0 flex-1"><p className="truncate text-sm font-black">{booking.guestLabel}</p><p className="mt-1 text-xs text-[#68756f]">{shortDate(booking.checkIn)} – {shortDate(booking.checkOut)} · {booking.id}</p><p className="mt-2 text-xs font-bold text-[#9b4029]">{daysLeftInTrash(booking)} dni do trwałego usunięcia</p></div><Button variant="secondary" onClick={() => restoreBooking(booking.id)}>Przywróć</Button></article>) : <p className="p-8 text-center text-sm font-bold text-[#738078]">Kosz jest pusty.</p>}</div>
+    </section>
   </div>;
 }
 
@@ -82,7 +97,7 @@ function BookingRow({ booking, unit, nextAction, active, onClick }: { booking: B
 }
 
 function BookingCommandCenter({ booking }: { booking: Booking }) {
-  const { data, updateBooking, updateTask, deleteBooking } = useAppStore();
+  const { data, cancelBooking, updateBooking, updateTask } = useAppStore();
   const [tab, setTab] = useState<Tab>("Podsumowanie");
   const [editing, setEditing] = useState(false);
   const [actions, setActions] = useState(false);
@@ -110,7 +125,7 @@ function BookingCommandCenter({ booking }: { booking: Booking }) {
 
   return <div className="min-w-0">
     <div className="border-b border-[#e3dccf] p-5 sm:p-6">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between"><div><div className="mb-2 flex flex-wrap items-center gap-2"><Badge tone={booking.platform === "Booking" ? "lake" : booking.platform === "Airbnb" ? "bad" : "good"}>{booking.platform}</Badge><Badge tone={importMatch ? "good" : "warn"}>{importMatch ? "Dane OTA" : "Ręczny wpis"}</Badge>{booking.needsReview ? <Badge tone="warn">Wymaga uzupełnienia</Badge> : null}{conflicts.length ? <Badge tone="bad">Konflikt terminu</Badge> : null}</div><h2 className="font-display text-[30px] font-semibold leading-tight tracking-[-.03em] sm:text-[36px]">{booking.guestLabel}</h2><p className="mt-1 text-sm font-semibold text-[#68756f]">{booking.platformReservationNo || booking.id} · utworzona {shortDate(booking.bookingDate)}</p></div><div className="relative flex items-center gap-2"><Button variant="secondary" onClick={() => setTab("Wiadomości")}><Icon className="size-4" name="message"/>Napisz</Button><Button onClick={() => setActions((value) => !value)}><Icon className="size-4" name="more"/>Akcje</Button>{actions ? <div className="absolute right-0 top-12 z-20 w-52 rounded-2xl border border-[#d7cfc0] bg-white p-2 shadow-xl"><button className="w-full rounded-xl px-3 py-2 text-left text-sm font-bold hover:bg-[#f1eee6]" onClick={() => { setEditing(true); setActions(false); }}>Edytuj rezerwację</button><button className="w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-[#9b4029] hover:bg-[#f9dfd7]" onClick={() => { if (window.confirm("Anulować tę rezerwację? Termin zostanie zwolniony.")) deleteBooking(booking.id); setActions(false); }}>Anuluj rezerwację</button></div> : null}</div></div>
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between"><div><div className="mb-2 flex flex-wrap items-center gap-2"><Badge tone={booking.platform === "Booking" ? "lake" : booking.platform === "Airbnb" ? "bad" : "good"}>{booking.platform}</Badge><Badge tone={importMatch ? "good" : "warn"}>{importMatch ? "Dane OTA" : "Ręczny wpis"}</Badge>{booking.needsReview ? <Badge tone="warn">Wymaga uzupełnienia</Badge> : null}{conflicts.length ? <Badge tone="bad">Konflikt terminu</Badge> : null}</div><h2 className="font-display text-[30px] font-semibold leading-tight tracking-[-.03em] sm:text-[36px]">{booking.guestLabel}</h2><p className="mt-1 text-sm font-semibold text-[#68756f]">{booking.platformReservationNo || booking.id} · utworzona {shortDate(booking.bookingDate)}</p></div><div className="relative flex items-center gap-2"><Button variant="secondary" onClick={() => setTab("Wiadomości")}><Icon className="size-4" name="message"/>Napisz</Button><Button onClick={() => setActions((value) => !value)}><Icon className="size-4" name="more"/>Akcje</Button>{actions ? <div className="absolute right-0 top-12 z-20 w-52 rounded-2xl border border-[#d7cfc0] bg-white p-2 shadow-xl"><button className="w-full rounded-xl px-3 py-2 text-left text-sm font-bold hover:bg-[#f1eee6]" onClick={() => { setEditing(true); setActions(false); }}>Edytuj rezerwację</button><button className="w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-[#9b4029] hover:bg-[#f9dfd7]" onClick={() => { if (window.confirm("Anulować tę rezerwację? Termin zostanie zwolniony.")) cancelBooking(booking.id); setActions(false); }}>Anuluj rezerwację</button></div> : null}</div></div>
       <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><DataPoint icon="calendar" label="Pobyt" value={`${shortDate(booking.checkIn)} – ${shortDate(booking.checkOut)}`} sub={`${nightsBetween(booking.checkIn, booking.checkOut)} nocy`} /><DataPoint icon="home" label="Domek" value={unitName(data.units, booking.unitId)} sub={`${booking.adults + booking.children} gości`} /><DataPoint icon="wallet" label="Wartość" value={money(booking.grossPrice)} sub={booking.paymentStatus} /><DataPoint icon="clock" label="Wyprzedzenie" value={`${leadTimeDays(booking) ?? "—"} dni`} sub={`jakość danych ${quality.score}%`} /></div>
     </div>
 
