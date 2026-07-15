@@ -18,6 +18,36 @@ export function overlaps(aStart?: string, aEnd?: string, bStart?: string, bEnd?:
   return aStart < bEnd && aEnd > bStart;
 }
 
+export function calendarBarPlacement(checkIn: string, checkOut: string, anchor: string, daysCount: number, dayWidth: number) {
+  const rawStart = dateDiffDays(anchor, checkIn);
+  const rawFinish = dateDiffDays(anchor, checkOut);
+  const start = Math.max(0, rawStart);
+  const finish = Math.min(daysCount, rawFinish);
+  const halfDay = dayWidth / 2;
+  return {
+    start,
+    span: Math.max(1, finish - start),
+    marginLeft: rawStart >= 0 && rawStart < daysCount ? halfDay + 2 : 2,
+    marginRight: rawFinish === 0 ? halfDay + 2 : rawFinish > 0 && rawFinish < daysCount ? -(halfDay - 2) : 2,
+  };
+}
+
+export function boundaryTimesOverlap(booking: Booking, candidate: Booking) {
+  if (booking.checkIn === candidate.checkOut && booking.arrivalTime && candidate.departureTime) {
+    return timeInMinutes(booking.arrivalTime) < timeInMinutes(candidate.departureTime);
+  }
+  if (booking.checkOut === candidate.checkIn && booking.departureTime && candidate.arrivalTime) {
+    return timeInMinutes(candidate.arrivalTime) < timeInMinutes(booking.departureTime);
+  }
+  return false;
+}
+
+function timeInMinutes(value: string) {
+  const [hours, minutes] = value.split(":").map(Number);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return Number.POSITIVE_INFINITY;
+  return hours * 60 + minutes;
+}
+
 export function unitName(units: Unit[], unitId?: string) {
   return units.find((unit) => unit.id === unitId)?.name ?? "Nieznany domek";
 }
@@ -29,10 +59,10 @@ export function getBookingConflicts(bookings: Booking[], blocks: CalendarBlock[]
     .filter((candidate) => candidate.id !== booking.id)
     .filter((candidate) => candidate.unitId === booking.unitId)
     .filter((candidate) => candidate.workflowStatus !== "Anulowana")
-    .filter((candidate) =>
-      overlaps(booking.checkIn, booking.checkOut, candidate.checkIn, candidate.checkOut),
-    )
-    .map((candidate) => `Konflikt z rezerwacją ${candidate.id}`);
+    .filter((candidate) => overlaps(booking.checkIn, booking.checkOut, candidate.checkIn, candidate.checkOut) || boundaryTimesOverlap(booking, candidate))
+    .map((candidate) => boundaryTimesOverlap(booking, candidate)
+      ? `Godziny nachodzą się z rezerwacją ${candidate.id}`
+      : `Konflikt z rezerwacją ${candidate.id}`);
 
   const blockConflicts = blocks
     .filter((block) => block.unitId === booking.unitId)
@@ -122,6 +152,27 @@ export function createTasksForBooking(booking: Booking): OpsTask[] {
       title: "Dopytać o zgody na zdjęcia/content, jeśli pojawiły się materiały.",
     },
   ];
+}
+
+export function rescheduleOpenTasksForBooking(tasks: OpsTask[], booking: Booking) {
+  return tasks.map((task) => {
+    if (task.bookingId !== booking.id || ["Zrobione", "Nie dotyczy"].includes(task.status)) return task;
+    if (task.type === "Naprawa") return task;
+    const dueDate = task.type === "Płatność" ? booking.depositDueDate || addLocalDays(booking.checkIn, -3)
+      : task.type === "Przed przyjazdem" ? addLocalDays(booking.checkIn, -1)
+        : task.type === "Opinia" ? addLocalDays(booking.checkOut, 1)
+          : task.type === "Sprzątanie" ? booking.checkOut
+            : undefined;
+    return { ...task, unitId: booking.unitId, dueDate: dueDate ?? task.dueDate };
+  });
+}
+
+export function cancelOpenStayTasks(tasks: OpsTask[], bookingId: string) {
+  return tasks.map((task) => task.bookingId === bookingId
+    && task.type !== "Naprawa"
+    && !["Zrobione", "Nie dotyczy"].includes(task.status)
+    ? { ...task, status: "Nie dotyczy" as const }
+    : task);
 }
 
 export type CheckItem = {
@@ -217,7 +268,6 @@ export function getChecks(data: AppData): CheckItem[] {
 }
 
 export function getBookingDataIssues(data: AppData, booking: Booking) {
-  const profile = data.guests.find((guest) => guest.bookingId === booking.id);
   const consent = data.consents.find((item) => item.bookingId === booking.id);
   const importMatch = data.imports.find((item) => item.matchedBookingId === booking.id);
   const media = data.media.filter((asset) => asset.bookingId === booking.id);
@@ -230,14 +280,7 @@ export function getBookingDataIssues(data: AppData, booking: Booking) {
   if (["Booking", "Airbnb"].includes(booking.platform) && !importMatch) {
     issues.push("brak spięcia z importem platformy");
   }
-  if (!profile?.segment) issues.push("brak segmentu");
-  if (!profile?.motivation) issues.push("brak motywacji");
-  if (!profile?.decisionMaker) issues.push("brak decydenta");
-  if (!profile?.discoveryChannel) issues.push("brak kanału odkrycia");
-  if (booking.children > 0 && !profile?.childrenAges) issues.push("brak wieku dzieci");
-  if (!profile?.searchPhraseOrAiPrompt) issues.push("brak frazy/promptu");
-  if (!profile?.bestQuote) issues.push("brak cytatu lub języka gościa");
-  if (!consent?.email && !consent?.phone) issues.push("brak kontaktu");
+  if (!consent?.email && !consent?.phone && booking.checkOut > todayInPoland()) issues.push("brak kontaktu");
   if (media.length && (!consent || consent.photoFbConsent === "Do dopytania")) {
     issues.push("brak jasnej zgody na media");
   }
@@ -261,6 +304,11 @@ export function leadTimeDays(booking: Booking) {
 export function getNextAction(data: AppData, booking: Booking) {
   const conflicts = getBookingConflicts(data.bookings, data.blocks, booking);
   if (conflicts.length) return "Sprawdzić konflikt kalendarza";
+
+  const debrief = data.departureDebriefs.find((item) => item.bookingId === booking.id);
+  if (booking.checkOut <= todayInPoland() && (!debrief || debrief.status === "Oczekuje")) {
+    return "Uzupełnić podsumowanie wyjazdu";
+  }
 
   const openTask = data.tasks.find(
     (task) => task.bookingId === booking.id && !["Zrobione", "Nie dotyczy"].includes(task.status),

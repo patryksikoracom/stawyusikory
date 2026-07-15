@@ -1,19 +1,23 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useAppStore } from "@/components/layout/app-store";
 import { Badge, Card } from "@/components/ui/primitives";
 import { Icon, type IconName } from "@/components/ui/icons";
 import { dashboardMetrics, nightsBetween, unitName } from "@/lib/workflow/rules";
 import type { Booking, OpsTask } from "@/lib/types";
 import { todayInPoland } from "@/lib/date";
+import { DepartureDebriefSheet } from "@/components/departures/departure-debrief-sheet";
+import { departurePromptQueue } from "@/lib/workflow/departures";
 
 function isoToday() { return todayInPoland(); }
 function formatDay(date?: string) { if (!date) return "—"; return new Intl.DateTimeFormat("pl-PL", { day: "numeric", month: "short" }).format(new Date(`${date}T12:00:00`)); }
 function money(value: number) { return new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", maximumFractionDigits: 0 }).format(value); }
 
 export function DashboardView() {
-  const { data, updateTask } = useAppStore();
+  const { data, updateTask, prepareDepartureDebriefs, markDeparturePrompted } = useAppStore();
+  const [departureId, setDepartureId] = useState<string>();
   const today = isoToday();
   const metrics = dashboardMetrics(data);
   const active = data.bookings.filter((booking) => booking.workflowStatus !== "Anulowana" && booking.checkIn <= today && booking.checkOut > today);
@@ -27,6 +31,18 @@ export function DashboardView() {
   const daysInMonth = new Date(Number(today.slice(0,4)),Number(today.slice(5,7)),0).getDate();
   const occupancy = Math.min(100,Math.round((monthNights/Math.max(1,daysInMonth*data.units.length))*100));
   const urgentCount=priorityTasks.filter((task)=>task.priority==="Wysoki").length;
+  const todayDepartures = data.bookings.filter((booking) => booking.workflowStatus !== "Anulowana" && booking.checkOut === today);
+  const departureKey = todayDepartures.map((item) => item.id).join("|");
+  useEffect(() => { if (departureKey) prepareDepartureDebriefs(departureKey.split("|")); }, [departureKey, prepareDepartureDebriefs]);
+  useEffect(() => {
+    if (departureId) return;
+    const now = new Date().toISOString();
+    const pending = departurePromptQueue(data.bookings, data.departureDebriefs, today, now)[0];
+    if (!pending) return;
+    const timer = window.setTimeout(() => { markDeparturePrompted(pending.id); setDepartureId(pending.id); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [data.bookings, data.departureDebriefs, departureId, markDeparturePrompted, today]);
+  const selectedDeparture = todayDepartures.find((item) => item.id === departureId);
 
   return (
     <div className="grid gap-5">
@@ -48,6 +64,11 @@ export function DashboardView() {
           </div>
         </div>
       </section>
+
+      {todayDepartures.length ? <section className="animate-rise-3 overflow-hidden rounded-[22px] border border-[#d8c9ad] bg-[#f6edda] shadow-[0_16px_45px_rgba(84,66,30,.08)]">
+        <div className="flex flex-col gap-3 border-b border-[#dfd0b6] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6"><div><p className="text-[11px] font-black uppercase tracking-[.18em] text-[#887334]">Moment prawdy</p><h2 className="font-display text-2xl font-semibold">Wyjazdy dzisiaj</h2><p className="mt-1 text-sm text-[#6f6756]">Zamknij pobyt, zapisz słowa gościa i nie zgub żadnej usterki.</p></div><Badge tone={todayDepartures.some((booking) => data.departureDebriefs.find((item) => item.bookingId === booking.id)?.status === "Oczekuje") ? "warn" : "good"}>{todayDepartures.filter((booking) => data.departureDebriefs.find((item) => item.bookingId === booking.id)?.status === "Oczekuje").length} do rozmowy</Badge></div>
+        <div className="grid gap-3 p-4 lg:grid-cols-2">{todayDepartures.map((booking, index) => { const debrief = data.departureDebriefs.find((item) => item.bookingId === booking.id); const cleaning = data.tasks.find((item) => item.bookingId === booking.id && item.type === "Sprzątanie"); const next = data.bookings.filter((item) => item.unitId === booking.unitId && item.checkIn >= booking.checkOut && item.id !== booking.id && item.workflowStatus !== "Anulowana").sort((a,b) => a.checkIn.localeCompare(b.checkIn))[0]; const faults = data.issues.filter((item) => item.bookingId === booking.id && item.status !== "Rozwiązane").length; return <button key={booking.id} className="group rounded-2xl border border-[#ddcfb7] bg-[#fffdf8] p-4 text-left transition hover:-translate-y-0.5 hover:border-[#9cad70] hover:shadow-lg" onClick={() => setDepartureId(booking.id)}><div className="flex items-start justify-between gap-3"><div><p className="font-display text-xl font-semibold">{booking.guestLabel}</p><p className="mt-0.5 text-xs font-bold text-[#6d756d]">{unitName(data.units, booking.unitId)} · do {booking.departureTime || data.settings.defaultCheckOut}</p></div><Badge tone={debrief?.status === "Ukończony" ? "good" : debrief?.status === "Pominięty" ? "neutral" : "warn"}>{debrief?.status || "Oczekuje"}</Badge></div><div className="mt-4 grid grid-cols-2 gap-2 text-xs"><DepartureFact label="Sprzątanie" value={cleaning?.status || "brak zadania"}/><DepartureFact label="Płatność" value={booking.paymentStatus}/><DepartureFact label="Następny przyjazd" value={next?.checkIn || "brak"}/><DepartureFact label="Usterki" value={faults ? `${faults} otwarte` : "brak"}/></div><span className="mt-4 inline-flex items-center gap-1 text-xs font-black text-[#2d6954]">{debrief?.status === "Ukończony" ? "Otwórz podsumowanie" : `Rozpocznij · ${index + 1}/${todayDepartures.length}`}<Icon className="size-3.5 transition group-hover:translate-x-0.5" name="arrow"/></span></button>; })}</div>
+      </section> : null}
 
       <section className="animate-rise-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <PulseCard label="Obłożenie w tym miesiącu" value={`${occupancy}%`} change={`${monthNights} zajętych dób`} tone="moss" />
@@ -95,9 +116,25 @@ export function DashboardView() {
           <div className="mx-4 mb-4 flex flex-col gap-3 rounded-2xl bg-[#edf2e5] p-4 sm:flex-row sm:items-center"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#174d3b] text-white"><Icon className="size-5" name="spark" /></span><div className="flex-1"><p className="text-sm font-black">Kontrola dostępności</p><p className="text-xs leading-5 text-[#637068]">Kalendarz pokazuje rzeczywiste rezerwacje i blokady. Rekomendacje cenowe pozostają wyłączone, dopóki stawki sezonowe i koszty nie będą kompletne.</p></div><Link className="inline-flex min-h-10 items-center justify-center rounded-xl border border-[#cec6b7] bg-white px-4 text-sm font-bold" href="/calendar">Sprawdź kalendarz</Link></div>
         </Card>
       </div>
+      {selectedDeparture ? (
+        <DepartureDebriefSheet
+          booking={selectedDeparture}
+          queueLabel={`${todayDepartures.findIndex((item) => item.id === selectedDeparture.id) + 1} z ${todayDepartures.length}`}
+          onClose={() => setDepartureId(undefined)}
+          onSaved={() => {
+            const currentIndex = todayDepartures.findIndex((item) => item.id === selectedDeparture.id);
+            const next = todayDepartures
+              .slice(currentIndex + 1)
+              .find((item) => data.departureDebriefs.find((debrief) => debrief.bookingId === item.id)?.status === "Oczekuje");
+            setDepartureId(next?.id);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
+
+function DepartureFact({ label, value }: { label: string; value: string }) { return <div className="rounded-xl bg-[#f3efe6] px-3 py-2"><span className="block text-[9px] font-black uppercase tracking-[.12em] text-[#879087]">{label}</span><span className="mt-0.5 block truncate font-bold text-[#394d44]">{value}</span></div>; }
 
 function HeroStat({ icon, label, value, note }: { icon: IconName; label: string; value: string | number; note: string }) {
   return <div className="bg-[#143f33]/90 p-4 sm:p-5"><div className="flex items-center gap-2 text-white/55"><Icon className="size-4" name={icon} /><span className="text-[10px] font-black uppercase tracking-[.13em]">{label}</span></div><p className="mt-3 font-display text-3xl font-semibold">{value}</p><p className="mt-0.5 text-xs text-white/50">{note}</p></div>;

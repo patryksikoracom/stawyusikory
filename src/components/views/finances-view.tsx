@@ -8,6 +8,7 @@ import { Icon, type IconName } from "@/components/ui/icons";
 import { nightsBetween, unitName } from "@/lib/workflow/rules";
 import type { InvoiceRecord } from "@/lib/types";
 import { todayInPoland } from "@/lib/date";
+import { calculateModeledCosts } from "@/lib/workflow/pricing";
 
 function money(value: number) { return new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", maximumFractionDigits: 0 }).format(value); }
 const monthNames = ["sty","lut","mar","kwi","maj","cze","lip","sie","wrz","paź","lis","gru"];
@@ -19,23 +20,30 @@ export function FinancesView() {
   const [showLedger,setShowLedger]=useState(false);
   const [showAssumptions,setShowAssumptions]=useState(false);
   const [showInvoice,setShowInvoice]=useState(false);
-  const bookings = data.bookings.filter((item)=>Number(item.checkIn.slice(0,4))===year && item.workflowStatus!=="Anulowana");
+  const currentLocalDate = todayInPoland();
+  const currentYear = Number(currentLocalDate.slice(0,4));
+  const monthsInPeriod = year === currentYear ? Number(currentLocalDate.slice(5,7)) : 12;
+  const stays = data.bookings.filter((item)=>Number(item.checkIn.slice(0,4))===year && item.workflowStatus!=="Anulowana");
+  const foreignBookings = stays.filter((item)=>(item.currency??"PLN")!=="PLN");
+  const bookings = stays.filter((item)=>(item.currency??"PLN")==="PLN");
   const payments = data.payments.filter((item)=>Number(item.occurredAt.slice(0,4))===year && item.status==="Zaksięgowana");
   const gross = bookings.reduce((sum,item)=>sum+(item.grossPrice??0),0);
   const commissionFromLedger = payments.filter((item)=>item.type==="Prowizja").reduce((sum,item)=>sum+item.amount,0);
   const commissionFromImports = data.imports.filter((item)=>item.checkIn?.startsWith(String(year))).reduce((sum,item)=>sum+(item.commission??0),0);
   const commission = commissionFromLedger || commissionFromImports;
   const explicitCosts = payments.filter((item)=>item.type==="Koszt").reduce((sum,item)=>sum+item.amount,0);
-  const cleaning = explicitCosts || bookings.reduce((sum,item)=>sum+(data.units.find((unit)=>unit.id===item.unitId)?.defaultCleaningCost??0),0);
-  const net = gross-commission-cleaning;
-  const nights = bookings.reduce((sum,item)=>sum+nightsBetween(item.checkIn,item.checkOut),0);
+  const cleaning = stays.reduce((sum,item)=>sum+(data.units.find((unit)=>unit.id===item.unitId)?.defaultCleaningCost??0),0);
+  const modeledCosts = calculateModeledCosts(data.costSettings, stays, monthsInPeriod);
+  const operatingCosts = explicitCosts + cleaning + modeledCosts.total;
+  const net = gross-commission-operatingCosts;
+  const nights = stays.reduce((sum,item)=>sum+nightsBetween(item.checkIn,item.checkOut),0);
   const daysInYear = new Date(year,1,29).getMonth()===1?366:365;
   const occupancy = Math.round((nights/Math.max(1,daysInYear*data.units.length))*100);
   const adr = nights?gross/nights:0;
   const revPar = gross/Math.max(1,daysInYear*data.units.length);
-  const months = monthNames.map((label,index)=>{const prefix=`${year}-${String(index+1).padStart(2,"0")}`;const revenue=bookings.filter((item)=>item.checkIn.startsWith(prefix)).reduce((sum,item)=>sum+(item.grossPrice??0),0);const monthCosts=data.payments.filter((item)=>item.occurredAt.startsWith(prefix)&&["Prowizja","Koszt","Zwrot"].includes(item.type)&&item.status==="Zaksięgowana").reduce((sum,item)=>sum+item.amount,0);return{label,revenue,net:Math.max(0,revenue-monthCosts)}});
+  const months = monthNames.map((label,index)=>{const prefix=`${year}-${String(index+1).padStart(2,"0")}`;const monthStays=stays.filter((item)=>item.checkIn.startsWith(prefix));const monthBookings=bookings.filter((item)=>item.checkIn.startsWith(prefix));const revenue=monthBookings.reduce((sum,item)=>sum+(item.grossPrice??0),0);const ledgerCosts=data.payments.filter((item)=>item.occurredAt.startsWith(prefix)&&["Prowizja","Koszt","Zwrot"].includes(item.type)&&item.status==="Zaksięgowana").reduce((sum,item)=>sum+item.amount,0);const monthCleaning=monthStays.reduce((sum,item)=>sum+(data.units.find((unit)=>unit.id===item.unitId)?.defaultCleaningCost??0),0);const masterCosts=calculateModeledCosts(data.costSettings,monthStays,1).total;return{label,revenue,net:Math.max(0,revenue-ledgerCosts-monthCleaning-masterCosts)}});
   const maxMonth=Math.max(1,...months.map((item)=>item.revenue));
-  const unitRevenue=data.units.map((unit)=>({unit,value:bookings.filter((item)=>item.unitId===unit.id).reduce((sum,item)=>sum+(item.grossPrice??0),0),nights:bookings.filter((item)=>item.unitId===unit.id).reduce((sum,item)=>sum+nightsBetween(item.checkIn,item.checkOut),0)}));
+  const unitRevenue=data.units.map((unit)=>({unit,value:bookings.filter((item)=>item.unitId===unit.id).reduce((sum,item)=>sum+(item.grossPrice??0),0),nights:stays.filter((item)=>item.unitId===unit.id).reduce((sum,item)=>sum+nightsBetween(item.checkIn,item.checkOut),0)}));
   const maxUnit=Math.max(1,...unitRevenue.map((item)=>item.value));
   const paidByBooking=new Map<string,number>(); payments.filter((item)=>["Wpłata","Zaliczka","Wypłata OTA"].includes(item.type)).forEach((item)=>paidByBooking.set(item.bookingId,(paidByBooking.get(item.bookingId)??0)+item.amount));
   const unsettled=bookings.filter((item)=>item.grossPrice==null || (paidByBooking.get(item.id)??0)<item.grossPrice);
@@ -44,8 +52,10 @@ export function FinancesView() {
 
   return <div className="grid gap-5">
     <div className="animate-rise-2 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#d9d1c1] bg-[#fffdf8] p-3"><div className="flex items-center gap-2"><span className="text-xs font-black uppercase tracking-[.13em] text-[#7b857f]">Okres</span><select className="min-h-10 rounded-xl border border-[#cec6b7] bg-white px-3 text-sm font-black" value={year} onChange={(event)=>setYear(Number(event.target.value))}>{years.map((item)=><option key={item}>{item}</option>)}</select></div><Button variant="secondary" onClick={exportCsv}><Icon className="size-4" name="download"/>Eksport CSV</Button></div>
-    <section className="animate-rise-2 grid gap-4 md:grid-cols-2 xl:grid-cols-4"><FinanceStat label="Przychód brutto" value={money(gross)} note={`${bookings.length} aktywnych rezerwacji`} icon="wallet" tone="forest"/><FinanceStat label="Prowizje OTA" value={money(commission)} note={commission?`${Math.round((commission/Math.max(1,gross))*100)}% przychodu`:"brak transakcji prowizji"} icon="plug" tone="coral"/><FinanceStat label="Koszty operacyjne" value={money(cleaning)} note={explicitCosts?"z rejestru transakcji":"szacunek sprzątania"} icon="cleaning" tone="sun"/><FinanceStat label="Wynik operacyjny" value={money(net)} note="przed podatkami i mediami" icon="spark" tone="lake"/></section>
+    {foreignBookings.length ? <p className="rounded-xl border border-[#ecd39b] bg-[#fbf0d3] p-3 text-xs font-bold text-[#745815]">{foreignBookings.length} rezerwacji w walucie innej niż PLN nie wchodzi do sum przychodu ani marży. Dodamy je po skonfigurowaniu kontrolowanego kursu walutowego.</p> : null}
+    <section className="animate-rise-2 grid gap-4 md:grid-cols-2 xl:grid-cols-4"><FinanceStat label="Przychód brutto" value={money(gross)} note={`${bookings.length} aktywnych rezerwacji PLN`} icon="wallet" tone="forest"/><FinanceStat label="Prowizje OTA" value={money(commission)} note={commission?`${Math.round((commission/Math.max(1,gross))*100)}% przychodu`:"brak transakcji prowizji"} icon="plug" tone="coral"/><FinanceStat label="Koszty operacyjne" value={money(operatingCosts)} note={`sprzątanie ${money(cleaning)} · master ${money(modeledCosts.total)}`} icon="cleaning" tone="sun"/><FinanceStat label="Wynik operacyjny" value={money(net)} note={gross?`marża ${Math.round(net/gross*100)}% przed podatkiem`:"brak przychodu"} icon="spark" tone="lake"/></section>
     <section className="grid gap-3 sm:grid-cols-3"><Mini label="Obłożenie" value={`${occupancy}%`} note={`${nights} sprzedanych nocy`}/><Mini label="ADR" value={money(adr)} note="średnia cena sprzedanej nocy"/><Mini label="RevPAR" value={money(revPar)} note="przychód na dostępną noc"/></section>
+    {modeledCosts.lines.length ? <Card className="overflow-hidden"><div className="border-b border-[#e2dbce] p-5"><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#7d8b4d]">Założenia kosztowe</p><h2 className="font-display text-2xl font-semibold">Master kosztów {year}</h2><p className="mt-1 text-xs text-[#68756f]">Koszty stałe policzone za {monthsInPeriod} {monthsInPeriod===1?"miesiąc":"miesięcy"}. Rejestruj osobno tylko koszty jednorazowe, aby nie dublować pozycji z mastera.</p></div><div className="grid gap-px bg-[#e4ddd1] sm:grid-cols-2 xl:grid-cols-4">{modeledCosts.lines.map(({cost,total})=><div className="bg-[#fffdf8] p-4" key={cost.id}><p className="text-xs font-black">{cost.label}</p><p className="mt-1 font-display text-xl font-semibold">{money(total)}</p><p className="text-[10px] text-[#6d7972]">{cost.value.toLocaleString("pl-PL")} {cost.unit==="% przychodu"?"%":`zł / ${cost.unit}`}</p></div>)}</div></Card> : null}
 
     <div className="grid gap-5 xl:grid-cols-[1.1fr_.9fr]">
       <Card className="overflow-hidden"><div className="border-b border-[#e2dbce] p-5 sm:p-6"><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#7d8b4d]">Przepływ pieniędzy</p><h2 className="font-display text-2xl font-semibold">Przychód i wynik miesięczny</h2></div><div className="p-5 sm:p-6"><div className="flex h-64 items-end gap-2 border-b border-[#dcd5c8] px-1">{months.map((item)=><div className="group flex h-full flex-1 flex-col justify-end gap-2" key={item.label}><div className="relative mx-auto w-full max-w-10 rounded-t-lg bg-[#dfe6d5]" style={{height:`${Math.max(item.revenue?6:0,(item.revenue/maxMonth)*100)}%`}} title={`${item.label}: ${money(item.revenue)}`}><div className="absolute inset-x-0 bottom-0 rounded-t-lg bg-[#3b7d67]" style={{height:`${item.revenue?Math.max(0,(item.net/item.revenue)*100):0}%`}}/></div><span className="text-center text-[9px] font-black uppercase text-[#818a85]">{item.label}</span></div>)}</div><div className="mt-5 flex gap-4 text-xs font-bold text-[#65736c]"><span className="inline-flex items-center gap-2"><span className="size-2.5 rounded-full bg-[#3b7d67]"/>Wynik</span><span className="inline-flex items-center gap-2"><span className="size-2.5 rounded-full bg-[#dfe6d5]"/>Przychód</span></div></div></Card>

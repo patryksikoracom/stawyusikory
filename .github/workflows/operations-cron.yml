@@ -38,3 +38,13 @@ jobs:
             -X POST \
             -H "Authorization: Bearer $CRON_SECRET" \
             "$APP_URL/api/messages/sms/process"
+
+      - name: Inspect due communication drafts
+        env:
+          APP_URL: ${{ secrets.STAWY_OS_APP_URL }}
+          CRON_SECRET: ${{ secrets.STAWY_OS_CRON_SECRET }}
+        run: |
+          curl --fail --silent --show-error --retry 2 \
+            -X POST \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_URL/api/automations/process"

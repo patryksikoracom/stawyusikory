@@ -6,12 +6,17 @@ import { Icon } from "@/components/ui/icons";
 import { Button, Field, inputClass } from "@/components/ui/primitives";
 import type { Booking, Channel, ContactConsent, PaymentStatus } from "@/lib/types";
 import { getBookingConflicts, nightsBetween } from "@/lib/workflow/rules";
+import { guestDisplayName, validateGuestStep } from "@/lib/workflow/booking-form";
+import { quoteStay } from "@/lib/workflow/pricing";
 
-export function NewBookingDialog({ onClose, onAdded, booking }: { onClose: () => void; onAdded: () => void; booking?: Booking }) {
+type BookingDefaults = Partial<Pick<Booking, "unitId" | "checkIn" | "checkOut" | "arrivalTime" | "departureTime">>;
+
+export function NewBookingDialog({ onClose, onAdded, booking, defaults }: { onClose: () => void; onAdded: () => void; booking?: Booking; defaults?: BookingDefaults }) {
   const { data, addBooking, updateBooking, updateConsent } = useAppStore();
   const dialogRef = useRef<HTMLElement>(null);
   const [step, setStep] = useState(1);
   const [error, setError] = useState("");
+  const [draftId] = useState(() => `SUS-${Date.now().toString().slice(-6)}`);
   const [defaultDates] = useState(() => {
     const start = new Date();
     const end = new Date(start);
@@ -24,8 +29,8 @@ export function NewBookingDialog({ onClose, onAdded, booking }: { onClose: () =>
     const name = booking?.guestLabel.trim().split(/\s+/) ?? [];
     return {
       firstName: name.length > 1 ? name.shift() ?? "" : "", lastName: name.join(" ") || booking?.guestLabel || "", phone: contact?.phone ?? "", email: contact?.email ?? "",
-      unitId: booking?.unitId ?? data.units[0]?.id ?? "", checkIn: booking?.checkIn ?? today, checkOut: booking?.checkOut ?? tomorrow,
-      arrivalTime: booking?.arrivalTime ?? "16:00", departureTime: booking?.departureTime ?? "11:00", adults: String(booking?.adults ?? 2), children: String(booking?.children ?? 0),
+      unitId: booking?.unitId ?? defaults?.unitId ?? data.units[0]?.id ?? "", checkIn: booking?.checkIn ?? defaults?.checkIn ?? today, checkOut: booking?.checkOut ?? defaults?.checkOut ?? tomorrow,
+      arrivalTime: booking?.arrivalTime ?? defaults?.arrivalTime ?? data.settings.defaultCheckIn, departureTime: booking?.departureTime ?? defaults?.departureTime ?? data.settings.defaultCheckOut, adults: String(booking?.adults ?? 2), children: String(booking?.children ?? 0),
       platform: booking?.platform ?? "Telefon", externalNo: booking?.platformReservationNo ?? "", pricePerNight: booking?.pricePerNight ? String(booking.pricePerNight) : "", totalPrice: booking?.grossPrice ? String(booking.grossPrice) : "",
       paymentStatus: booking?.paymentStatus === "Opłacone" ? "Wpłacona całość" : booking?.paymentStatus === "Zaliczka" ? "Wpłacony zadatek" : booking?.paymentStatus === "Częściowo" ? "Częściowo opłacone" : "Oczekiwanie na zadatek", depositAmount: booking?.depositAmount ? String(booking.depositAmount) : "", depositDueDate: booking?.depositDueDate ?? "",
       paymentMethod: booking?.paymentMethod ?? "Brak", currency: booking?.currency ?? "PLN", notes: booking?.specialRequests ?? "",
@@ -48,15 +53,24 @@ export function NewBookingDialog({ onClose, onAdded, booking }: { onClose: () =>
   const nights = nightsBetween(form.checkIn, form.checkOut);
   const selectedUnit = data.units.find((unit) => unit.id === form.unitId);
   const guestCount = Number(form.adults || 0) + Number(form.children || 0);
-  const calculatedTotal = form.totalPrice ? Number(form.totalPrice) : Number(form.pricePerNight || 0) * nights;
+  const rateQuote = quoteStay(data.units, data.rates, form.unitId, form.checkIn, form.checkOut);
+  const rateCardAvailable = form.currency === "PLN";
+  const suggestedNightPrice = rateCardAvailable && rateQuote.averagePerNight ? String(Math.round(rateQuote.averagePerNight * 100) / 100) : "";
+  const calculatedTotal = form.totalPrice ? Number(form.totalPrice) : form.pricePerNight ? Number(form.pricePerNight) * nights : rateCardAvailable ? rateQuote.total : 0;
   const conflictProbe: Booking = {
     id: booking?.id ?? "draft", bookingDate: booking?.bookingDate ?? today, source: "Panel Stawy OS", platform: form.platform as Channel,
-    unitId: form.unitId, checkIn: form.checkIn, checkOut: form.checkOut,
+    unitId: form.unitId, checkIn: form.checkIn, checkOut: form.checkOut, arrivalTime: form.arrivalTime, departureTime: form.departureTime,
     adults: Number(form.adults || 0), children: Number(form.children || 0),
     guestLabel: "Wersja robocza", paymentStatus: "Do uzupełnienia",
     workflowStatus: "Nowa", createdBy: "Stawy OS",
   };
   const conflicts = form.checkIn && form.checkOut ? getBookingConflicts(data.bookings, data.blocks, conflictProbe) : [];
+  const sameDayTurnovers = data.bookings
+    .filter((candidate) => candidate.id !== booking?.id && candidate.unitId === form.unitId && candidate.workflowStatus !== "Anulowana")
+    .filter((candidate) => candidate.checkOut === form.checkIn || candidate.checkIn === form.checkOut);
+  const turnoverSummary = sameDayTurnovers.map((candidate) => candidate.checkOut === form.checkIn
+    ? `${candidate.guestLabel} wyjeżdża o ${candidate.departureTime || data.settings.defaultCheckOut}; nowy przyjazd o ${form.arrivalTime || data.settings.defaultCheckIn}`
+    : `Po tym pobycie: ${candidate.guestLabel} przyjeżdża o ${candidate.arrivalTime || data.settings.defaultCheckIn}`);
 
   function normalizedPaymentStatus(): PaymentStatus {
     if (form.paymentStatus === "Wpłacona całość") return "Opłacone";
@@ -66,16 +80,21 @@ export function NewBookingDialog({ onClose, onAdded, booking }: { onClose: () =>
     return calculatedTotal ? "Do dopłaty" : "Do uzupełnienia";
   }
 
+  function validationError(targetStep: number) {
+    if (targetStep === 1) {
+      if (!form.unitId || !form.checkIn || !form.checkOut) return "Wybierz domek oraz pełny termin pobytu.";
+      if (nights < 1) return "Wyjazd musi być co najmniej dzień po przyjeździe.";
+      if (Number(form.adults) < 1) return "Rezerwacja musi mieć co najmniej jedną osobę dorosłą.";
+      if (selectedUnit && guestCount > selectedUnit.maxPeople) return `${selectedUnit.name} mieści maksymalnie ${selectedUnit.maxPeople} osób.`;
+      if (conflicts.length) return `Ten termin jest zajęty: ${conflicts[0]}.`;
+    }
+    if (targetStep === 2) return validateGuestStep(form.firstName, form.lastName);
+  }
+
   function goNext() {
     setError("");
-    if (step === 1) {
-      if (!form.unitId || !form.checkIn || !form.checkOut) { setError("Wybierz domek oraz pełny termin pobytu."); return; }
-      if (nights < 1) { setError("Wyjazd musi być co najmniej dzień po przyjeździe."); return; }
-      if (Number(form.adults) < 1) { setError("Rezerwacja musi mieć co najmniej jedną osobę dorosłą."); return; }
-      if (selectedUnit && guestCount > selectedUnit.maxPeople) { setError(`${selectedUnit.name} mieści maksymalnie ${selectedUnit.maxPeople} osób.`); return; }
-      if (conflicts.length) { setError(`Ten termin jest zajęty: ${conflicts[0]}.`); return; }
-    }
-    if (step === 2 && !form.lastName.trim()) { setError("Uzupełnij nazwisko lub nazwę rezerwacji."); return; }
+    const message = validationError(step);
+    if (message) { setError(message); return; }
     setStep((current) => Math.min(3, current + 1));
   }
 
@@ -84,10 +103,10 @@ export function NewBookingDialog({ onClose, onAdded, booking }: { onClose: () =>
     if (step < 3) { goNext(); return; }
     if (conflicts.length) { setError(`Ten termin jest zajęty: ${conflicts[0]}.`); setStep(1); return; }
     if (Number(form.depositAmount || 0) > calculatedTotal && calculatedTotal > 0) { setError("Zadatek nie może być większy niż suma rezerwacji."); return; }
-    const guestLabel = [form.firstName.trim(), form.lastName.trim()].filter(Boolean).join(" ");
+    const guestLabel = guestDisplayName(form.firstName, form.lastName);
     const savedBooking: Booking = {
       ...booking,
-      id: booking?.id ?? `SUS-${Date.now().toString().slice(-6)}`,
+      id: booking?.id ?? draftId,
       bookingDate: booking?.bookingDate || today,
       source: form.platform === "Bezpośrednio" ? "Panel Stawy OS" : form.platform,
       platform: form.platform as Channel,
@@ -101,7 +120,7 @@ export function NewBookingDialog({ onClose, onAdded, booking }: { onClose: () =>
       children: Number(form.children),
       guestLabel,
       grossPrice: calculatedTotal || undefined,
-      pricePerNight: Number(form.pricePerNight) || (calculatedTotal && nights ? calculatedTotal / nights : undefined),
+      pricePerNight: Number(form.pricePerNight) || (form.totalPrice && nights ? calculatedTotal / nights : rateCardAvailable ? rateQuote.averagePerNight : undefined),
       depositAmount: Number(form.depositAmount) || undefined,
       depositDueDate: form.depositDueDate || undefined,
       paymentMethod: form.paymentMethod as Booking["paymentMethod"],
@@ -140,9 +159,11 @@ export function NewBookingDialog({ onClose, onAdded, booking }: { onClose: () =>
           <ol className="mt-5 grid grid-cols-3 gap-2">
             {stepLabels.map((label, index) => {
               const number = index + 1;
-              return <li className={`flex items-center gap-2 rounded-xl px-2.5 py-2 text-xs font-black transition sm:px-3 ${step === number ? "bg-[#174d3b] text-white shadow-lg" : step > number ? "bg-[#e2ecdc] text-[#285642]" : "bg-white/65 text-[#78827b]"}`} key={label}><span className={`grid size-6 shrink-0 place-items-center rounded-full text-[10px] ${step === number ? "bg-white text-[#174d3b]" : "bg-[#f2efe7]"}`}>{step > number ? "✓" : number}</span><span className="truncate">{label}</span></li>;
+              const available = number <= step + 1;
+              return <li key={label}><button type="button" disabled={!available} className={`flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs font-black transition sm:px-3 ${step === number ? "bg-[#174d3b] text-white shadow-lg" : step > number ? "bg-[#e2ecdc] text-[#285642]" : available ? "bg-white/80 text-[#5d6d65] hover:bg-white" : "cursor-not-allowed bg-white/45 text-[#9aa19d]"}`} onClick={() => { setError(""); if (number <= step) setStep(number); else goNext(); }}><span className={`grid size-6 shrink-0 place-items-center rounded-full text-[10px] ${step === number ? "bg-white text-[#174d3b]" : "bg-[#f2efe7]"}`}>{step > number ? "✓" : number}</span><span className="truncate">{label}</span></button></li>;
             })}
           </ol>
+          {error ? <p aria-live="polite" className="mt-3 rounded-xl border border-[#efb8a8] bg-[#f9dfd7] px-4 py-3 text-sm font-bold text-[#963c27]">{error}</p> : null}
         </div>
 
         <form onSubmit={submit}>
@@ -152,7 +173,7 @@ export function NewBookingDialog({ onClose, onAdded, booking }: { onClose: () =>
                 <DialogSection eyebrow="Krok 1" title="Kiedy i który domek?" body="Najpierw blokujemy właściwy termin. Konflikt zobaczysz przed wpisywaniem danych gościa." />
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Domek"><select autoFocus className={inputClass} required value={form.unitId} onChange={(e) => setForm({ ...form, unitId: e.target.value })}>{data.units.map((unit) => <option key={unit.id} value={unit.id}>{unit.name} · do {unit.maxPeople} osób</option>)}</select></Field>
-                  <div className={`rounded-xl border px-4 py-3 ${conflicts.length ? "border-[#efb7a8] bg-[#fbe7e1] text-[#8f3b27]" : "border-[#bdd7c3] bg-[#e9f2e7] text-[#275e3f]"}`}><p className="text-[10px] font-black uppercase tracking-[.14em]">Dostępność</p><p className="mt-1 text-sm font-black">{conflicts.length ? "Termin zajęty" : nights > 0 ? "Termin wolny" : "Wybierz poprawne daty"}</p><p className="mt-0.5 text-xs">{conflicts[0] ?? (nights > 0 ? `${nights} ${nights === 1 ? "noc" : "nocy"} · sprawdzono rezerwacje i blokady` : "Wyjazd musi być po przyjeździe")}</p></div>
+                  <div className={`rounded-xl border px-4 py-3 ${conflicts.length ? "border-[#efb7a8] bg-[#fbe7e1] text-[#8f3b27]" : "border-[#bdd7c3] bg-[#e9f2e7] text-[#275e3f]"}`}><p className="text-[10px] font-black uppercase tracking-[.14em]">Dostępność</p><p className="mt-1 text-sm font-black">{conflicts.length ? "Termin zajęty" : nights > 0 ? sameDayTurnovers.length ? "Termin wolny · turnover tego samego dnia" : "Termin wolny" : "Wybierz poprawne daty"}</p><p className="mt-0.5 text-xs">{conflicts[0] ?? turnoverSummary[0] ?? (nights > 0 ? `${nights} ${nights === 1 ? "noc" : "nocy"} · sprawdzono rezerwacje i blokady` : "Wyjazd musi być po przyjeździe")}</p></div>
                   <Field label="Przyjazd"><input className={inputClass} required type="date" value={form.checkIn} onChange={(e) => setForm({ ...form, checkIn: e.target.value })} /></Field>
                   <Field label="Wyjazd"><input className={inputClass} required type="date" value={form.checkOut} onChange={(e) => setForm({ ...form, checkOut: e.target.value })} /></Field>
                   <Field label="Godzina przyjazdu"><input className={inputClass} type="time" value={form.arrivalTime} onChange={(e) => setForm({ ...form, arrivalTime: e.target.value })} /></Field>
@@ -160,13 +181,14 @@ export function NewBookingDialog({ onClose, onAdded, booking }: { onClose: () =>
                   <Field label="Dorośli"><input className={inputClass} min="1" required type="number" value={form.adults} onChange={(e) => setForm({ ...form, adults: e.target.value })} /></Field>
                   <Field label="Dzieci"><input className={inputClass} min="0" type="number" value={form.children} onChange={(e) => setForm({ ...form, children: e.target.value })} /></Field>
                 </div>
+                {rateQuote.belowMinimum ? <p className="rounded-xl border border-[#ecd39b] bg-[#fbf0d3] p-3 text-xs font-bold text-[#745815]">Cennik sezonowy sugeruje minimum {rateQuote.minimumNights} noce. Możesz przejść dalej, ale sprawdź wyjątek przed potwierdzeniem.</p> : null}
               </div> : null}
 
               {step === 2 ? <div className="grid gap-5">
                 <DialogSection eyebrow="Krok 2" title="Kto przyjeżdża?" body="Minimum to nazwisko. Kontakt pozwoli później wysłać instrukcję przyjazdu i prośbę o opinię." />
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Imię"><input autoFocus className={inputClass} autoComplete="given-name" placeholder="Anna" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} /></Field>
-                  <Field label="Nazwisko / nazwa rezerwacji"><input className={inputClass} autoComplete="family-name" placeholder="Kowalska" required value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></Field>
+                  <Field label="Nazwisko / nazwa rezerwacji" hint="Opcjonalne, jeśli podano imię."><input className={inputClass} autoComplete="family-name" placeholder="Kowalska" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></Field>
                   <Field label="Telefon"><input className={inputClass} autoComplete="tel" inputMode="tel" placeholder="+48 600 000 000" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
                   <Field label="E-mail"><input className={inputClass} autoComplete="email" placeholder="gosc@example.com" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
                   <Field label="Źródło rezerwacji"><select className={inputClass} value={form.platform} onChange={(e) => setForm({ ...form, platform: e.target.value as Channel })}>{["Telefon", "E-mail", "Bezpośrednio", "Strona www", "Booking", "Airbnb", "Facebook", "Google", "Polecenie", "Slowhop", "Aloha Camp", "Agoda", "Expedia", "VRBO", "Influencer/barter", "Inne"].map((item) => <option key={item}>{item}</option>)}</select></Field>
@@ -178,7 +200,7 @@ export function NewBookingDialog({ onClose, onAdded, booking }: { onClose: () =>
               {step === 3 ? <div className="grid gap-5">
                 <DialogSection eyebrow="Krok 3" title="Cena i płatność" body="Możesz podać cenę za noc albo od razu pełną kwotę pobytu. Pełna kwota ma pierwszeństwo." />
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Cena za dobę"><MoneyInput suffix={moneySuffix} value={form.pricePerNight} onChange={(value) => setForm({ ...form, pricePerNight: value })} /></Field>
+                  <Field label="Cena za dobę"><MoneyInput suffix={moneySuffix} value={form.pricePerNight || suggestedNightPrice} onChange={(value) => setForm({ ...form, pricePerNight: value })} /></Field>
                   <Field label="Cena za pobyt"><MoneyInput suffix={moneySuffix} value={form.totalPrice} onChange={(value) => setForm({ ...form, totalPrice: value })} /></Field>
                   <Field label="Status płatności"><select className={inputClass} value={form.paymentStatus} onChange={(e) => setForm({ ...form, paymentStatus: e.target.value })}>{["Oczekiwanie na zadatek", "Brak wpłaty", "Wpłacony zadatek", "Częściowo opłacone", "Wpłacona całość", "Anulowane"].map((item) => <option key={item}>{item}</option>)}</select></Field>
                   <Field label="Rodzaj płatności"><select className={inputClass} value={form.paymentMethod} onChange={(e) => setForm({ ...form, paymentMethod: e.target.value as NonNullable<Booking["paymentMethod"]> })}>{["Brak", "Przelew", "Gotówka", "Karta", "Online"].map((item) => <option key={item}>{item}</option>)}</select></Field>
@@ -186,9 +208,8 @@ export function NewBookingDialog({ onClose, onAdded, booking }: { onClose: () =>
                   <Field label="Termin zadatku"><input className={inputClass} type="date" value={form.depositDueDate} onChange={(e) => setForm({ ...form, depositDueDate: e.target.value })} /></Field>
                   <Field label="Waluta"><select className={inputClass} value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value as NonNullable<Booking["currency"]> })}><option>PLN</option><option>EUR</option></select></Field>
                 </div>
+                <div className="rounded-2xl border border-[#d8dfcc] bg-[#edf2e5] p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-black">{form.totalPrice || form.pricePerNight ? "Cena ustawiona ręcznie" : rateCardAvailable ? "Cena z cennika" : "Cena wymaga wpisania"}</p><p className="mt-1 text-xs leading-5 text-[#627069]">{!rateCardAvailable ? "Cennik bazowy jest prowadzony w PLN. Dla EUR wpisz cenę ręcznie — system nie zgaduje kursu walutowego." : rateQuote.breakdown.length ? rateQuote.breakdown.map((item) => `${item.label}: ${item.nights} × ${item.pricePerNight.toLocaleString("pl-PL")} zł`).join(" · ") : "Uzupełnij cenę bazową domku w Ustawieniach."}</p></div>{form.totalPrice || form.pricePerNight ? <Button type="button" variant="secondary" onClick={() => setForm({ ...form, pricePerNight: "", totalPrice: "" })}>Przywróć cennik</Button> : null}</div></div>
               </div> : null}
-
-              {error ? <p aria-live="polite" className="mt-5 rounded-xl border border-[#efb8a8] bg-[#f9dfd7] px-4 py-3 text-sm font-bold text-[#963c27]">{error}</p> : null}
             </div>
 
             <aside className="border-t border-[#e3dccf] bg-[#f1eee5] p-5 sm:p-6 lg:border-l lg:border-t-0">

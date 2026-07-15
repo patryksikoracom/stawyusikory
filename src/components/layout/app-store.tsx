@@ -18,6 +18,8 @@ import type {
   Booking,
   CalendarBlock,
   ContactConsent,
+  CostSetting,
+  DepartureDebrief,
   GuestProfile,
   IssueReport,
   InvoiceRecord,
@@ -25,10 +27,15 @@ import type {
   MediaAsset,
   OpsTask,
   PaymentTransaction,
+  RateRule,
   SourceConnection,
+  ScheduledMessage,
   TaskChecklistItem,
+  Unit,
 } from "@/lib/types";
-import { createTasksForBooking } from "@/lib/workflow/rules";
+import { cancelOpenStayTasks, createTasksForBooking, rescheduleOpenTasksForBooking } from "@/lib/workflow/rules";
+import { defaultAutomationRules, defaultMessageTemplates, reconcileScheduledMessages } from "@/lib/workflow/communications";
+import { guestInsightAfterDeparture, repairTaskForIssue } from "@/lib/workflow/departures";
 
 export type SyncMode = "checking" | "cloud" | "local" | "error" | "conflict";
 
@@ -42,6 +49,13 @@ type AppStore = {
   updateTask: (task: OpsTask) => void;
   toggleChecklistItem: (item: TaskChecklistItem) => void;
   addIssue: (issue: IssueReport) => void;
+  updateIssue: (issue: IssueReport) => void;
+  prepareDepartureDebriefs: (bookingIds: string[]) => void;
+  markDeparturePrompted: (bookingId: string) => void;
+  snoozeDepartureDebrief: (bookingId: string) => void;
+  skipDepartureDebrief: (bookingId: string, reason: string) => void;
+  saveDepartureDebrief: (debrief: DepartureDebrief, issue?: IssueReport) => void;
+  updateScheduledMessage: (message: ScheduledMessage) => void;
   addBlock: (block: CalendarBlock) => void;
   updateBlock: (block: CalendarBlock) => void;
   addPayment: (payment: PaymentTransaction) => void;
@@ -52,6 +66,11 @@ type AppStore = {
   updateGuest: (profile: GuestProfile) => void;
   updateConsent: (consent: ContactConsent) => void;
   updateConnection: (connection: SourceConnection) => void;
+  updateUnit: (unit: Unit) => void;
+  upsertRate: (rate: RateRule) => void;
+  deleteRate: (rateId: string) => void;
+  upsertCostSetting: (cost: CostSetting) => void;
+  deleteCostSetting: (costId: string) => void;
   updateSettings: (settings: AppData["settings"]) => void;
   replaceWithImportedBookings: (bookings: Booking[]) => void;
   exportSnapshot: () => void;
@@ -89,9 +108,13 @@ function defaultChecklist(tasks: OpsTask[]) {
 function normalizeData(parsed?: Partial<AppData> | null): AppData {
   const base = { ...initialData, ...parsed };
   const tasks = parsed?.tasks ?? initialData.tasks;
-  return {
+  const rates = parsed?.rates ?? initialData.rates;
+  const normalized: AppData = {
     ...base,
-    units: parsed?.units ?? initialData.units,
+    units: (parsed?.units ?? initialData.units).map((unit) => ({
+      ...unit,
+      defaultPricePerNight: unit.defaultPricePerNight ?? rates.find((rate) => rate.unitId === unit.id && rate.active)?.pricePerNight ?? 0,
+    })),
     bookings: (parsed?.bookings ?? initialData.bookings).map((booking) => ({
       ...booking,
       needsReview: booking.needsReview ?? (booking.createdBy === "Import Mobile-Calendar" && (!booking.grossPrice || booking.adults + booking.children === 0)),
@@ -102,7 +125,8 @@ function normalizeData(parsed?: Partial<AppData> | null): AppData {
     tasks,
     media: parsed?.media ?? initialData.media,
     blocks: parsed?.blocks ?? initialData.blocks,
-    rates: parsed?.rates ?? initialData.rates,
+    rates,
+    costSettings: parsed?.costSettings ?? [],
     imports: parsed?.imports ?? initialData.imports,
     sourceConnections: (parsed?.sourceConnections ?? initialData.sourceConnections).map((connection) => connection.id === "SRC-BOOKING" ? {
       ...connection,
@@ -118,6 +142,11 @@ function normalizeData(parsed?: Partial<AppData> | null): AppData {
     checklistItems: parsed?.checklistItems ?? defaultChecklist(tasks),
     issues: parsed?.issues ?? [],
     messages: parsed?.messages ?? [],
+    departureDebriefs: parsed?.departureDebriefs ?? [],
+    messageTemplates: parsed?.messageTemplates?.length ? parsed.messageTemplates : defaultMessageTemplates,
+    automationRules: parsed?.automationRules?.length ? parsed.automationRules : defaultAutomationRules,
+    scheduledMessages: parsed?.scheduledMessages ?? [],
+    marketingTouchpoints: parsed?.marketingTouchpoints ?? [],
     auditLog: parsed?.auditLog ?? [],
     settings: parsed?.settings ?? {
       organizationName: "Stawy u Sikory",
@@ -129,6 +158,8 @@ function normalizeData(parsed?: Partial<AppData> | null): AppData {
       aiApprovalRequired: true,
     },
   };
+  normalized.scheduledMessages = reconcileScheduledMessages(normalized);
+  return normalized;
 }
 
 function emptyCloudData(): AppData {
@@ -141,6 +172,7 @@ function emptyCloudData(): AppData {
     media: [],
     blocks: [],
     rates: [],
+    costSettings: [],
     imports: [],
     sourceConnections: initialData.sourceConnections.map((connection) => ({
       ...connection,
@@ -154,6 +186,11 @@ function emptyCloudData(): AppData {
     checklistItems: [],
     issues: [],
     messages: [],
+    departureDebriefs: [],
+    messageTemplates: defaultMessageTemplates,
+    automationRules: defaultAutomationRules,
+    scheduledMessages: [],
+    marketingTouchpoints: [],
     auditLog: [],
     settings: {
       organizationName: "Stawy u Sikory",
@@ -278,7 +315,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     lastSavedAt,
     addBooking: (booking, contact) => mutate((current) => {
       const tasks = createTasksForBooking(booking);
-      return {
+      const next: AppData = {
         ...current,
         bookings: [{ ...booking, version: 1, updatedAt: new Date().toISOString() }, ...current.bookings],
         consents: contact ? [contact, ...current.consents] : current.consents,
@@ -286,21 +323,33 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         checklistItems: [...defaultChecklist(tasks), ...current.checklistItems],
         auditLog: [audit("booking", booking.id, "created", `Dodano rezerwację ${booking.guestLabel}`), ...current.auditLog],
       };
+      next.scheduledMessages = reconcileScheduledMessages(next);
+      return next;
     }),
-    updateBooking: (booking) => mutate((current) => ({
-      ...current,
-      bookings: current.bookings.map((item) => item.id === booking.id
-        ? { ...booking, version: (item.version ?? 1) + 1, updatedAt: new Date().toISOString() }
-        : item),
-      auditLog: [audit("booking", booking.id, "updated", `Zmieniono rezerwację ${booking.guestLabel}`), ...current.auditLog],
-    })),
-    deleteBooking: (bookingId) => mutate((current) => ({
-      ...current,
-      bookings: current.bookings.map((item) => item.id === bookingId
-        ? { ...item, workflowStatus: "Anulowana", updatedAt: new Date().toISOString() }
-        : item),
-      auditLog: [audit("booking", bookingId, "cancelled", "Anulowano rezerwację"), ...current.auditLog],
-    })),
+    updateBooking: (booking) => mutate((current) => {
+      const next: AppData = {
+        ...current,
+        bookings: current.bookings.map((item) => item.id === booking.id
+          ? { ...booking, version: (item.version ?? 1) + 1, updatedAt: new Date().toISOString() }
+          : item),
+        tasks: rescheduleOpenTasksForBooking(current.tasks, booking),
+        auditLog: [audit("booking", booking.id, "updated", `Zmieniono rezerwację ${booking.guestLabel}`), ...current.auditLog],
+      };
+      next.scheduledMessages = reconcileScheduledMessages(next);
+      return next;
+    }),
+    deleteBooking: (bookingId) => mutate((current) => {
+      const next: AppData = {
+        ...current,
+        bookings: current.bookings.map((item) => item.id === bookingId
+          ? { ...item, workflowStatus: "Anulowana", updatedAt: new Date().toISOString() }
+          : item),
+        tasks: cancelOpenStayTasks(current.tasks, bookingId),
+        auditLog: [audit("booking", bookingId, "cancelled", "Anulowano rezerwację"), ...current.auditLog],
+      };
+      next.scheduledMessages = reconcileScheduledMessages(next);
+      return next;
+    }),
     updateTask: (task) => mutate((current) => ({
       ...current,
       tasks: current.tasks.map((item) => item.id === task.id ? task : item),
@@ -315,6 +364,64 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       ...current,
       issues: [issue, ...current.issues],
       auditLog: [audit("issue", issue.id, "created", issue.title), ...current.auditLog],
+    })),
+    updateIssue: (issue) => mutate((current) => ({
+      ...current,
+      issues: current.issues.map((item) => item.id === issue.id ? issue : item),
+      tasks: current.tasks.map((task) => task.issueId === issue.id ? {
+        ...task,
+        planningHorizon: issue.planningHorizon,
+        status: issue.status === "Rozwiązane" ? "Zrobione" : issue.status === "W toku" ? "W toku" : task.status === "Zrobione" ? "Do zrobienia" : task.status,
+        completedAt: issue.status === "Rozwiązane" ? todayInPoland() : undefined,
+      } : task),
+      auditLog: [audit("issue", issue.id, "updated", `${issue.title}: ${issue.status}`), ...current.auditLog],
+    })),
+    prepareDepartureDebriefs: (bookingIds) => mutate((current) => {
+      const missing = bookingIds.filter((bookingId) => !current.departureDebriefs.some((item) => item.bookingId === bookingId));
+      if (!missing.length) return current;
+      const next: AppData = {
+        ...current,
+        departureDebriefs: [...current.departureDebriefs, ...missing.map((bookingId) => ({ id: `DEB-${bookingId}`, bookingId, status: "Oczekuje" as const, keysSettled: false, urgentNextArrivalRisk: false, publicQuotePermission: "Do dopytania" as const }))],
+      };
+      return next;
+    }),
+    markDeparturePrompted: (bookingId) => mutate((current) => ({
+      ...current,
+      departureDebriefs: current.departureDebriefs.map((item) => item.bookingId === bookingId ? { ...item, lastPromptedAt: new Date().toISOString(), lastPromptedOn: todayInPoland() } : item),
+    })),
+    snoozeDepartureDebrief: (bookingId) => mutate((current) => ({
+      ...current,
+      departureDebriefs: current.departureDebriefs.map((item) => item.bookingId === bookingId ? { ...item, lastPromptedAt: new Date().toISOString(), lastPromptedOn: todayInPoland(), snoozedUntil: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString() } : item),
+    })),
+    skipDepartureDebrief: (bookingId, reason) => mutate((current) => ({
+      ...current,
+      departureDebriefs: current.departureDebriefs.map((item) => item.bookingId === bookingId ? { ...item, status: "Pominięty", skipReason: reason, completedAt: new Date().toISOString() } : item),
+      bookings: current.bookings.map((item) => item.id === bookingId ? { ...item, workflowStatus: "Po pobycie" } : item),
+      auditLog: [audit("debrief", `DEB-${bookingId}`, "skipped", reason), ...current.auditLog],
+    })),
+    saveDepartureDebrief: (debrief, issue) => mutate((current) => {
+      const booking = current.bookings.find((item) => item.id === debrief.bookingId);
+      if (!booking) return current;
+      const existingProfile = current.guests.find((item) => item.bookingId === booking.id) ?? { bookingId: booking.id };
+      const profile = guestInsightAfterDeparture(existingProfile, debrief);
+      const issueTask: OpsTask | undefined = issue ? repairTaskForIssue(issue, booking) : undefined;
+      const next: AppData = {
+        ...current,
+        bookings: current.bookings.map((item) => item.id === booking.id ? { ...item, workflowStatus: "Po pobycie", updatedAt: new Date().toISOString() } : item),
+        guests: current.guests.some((item) => item.bookingId === booking.id) ? current.guests.map((item) => item.bookingId === booking.id ? profile : item) : [profile, ...current.guests],
+        departureDebriefs: current.departureDebriefs.some((item) => item.bookingId === booking.id) ? current.departureDebriefs.map((item) => item.bookingId === booking.id ? debrief : item) : [...current.departureDebriefs, debrief],
+        issues: issue ? [issue, ...current.issues.filter((item) => item.id !== issue.id)] : current.issues,
+        tasks: issueTask && !current.tasks.some((item) => item.issueId === issueTask.issueId) ? [issueTask, ...current.tasks] : current.tasks,
+        marketingTouchpoints: debrief.discoverySource ? [{ id: `MKT-${debrief.id}`, bookingId: booking.id, recordedAt: debrief.completedAt || new Date().toISOString(), source: debrief.discoverySource, method: debrief.discoveryMethod, note: debrief.discoveryNote }, ...current.marketingTouchpoints.filter((item) => item.id !== `MKT-${debrief.id}`)] : current.marketingTouchpoints,
+        auditLog: [audit("debrief", debrief.id, "completed", `Zapisano rozmowę po pobycie ${booking.guestLabel}`), ...(issue ? [audit("issue", issue.id, "created", issue.title)] : []), ...current.auditLog],
+      };
+      next.scheduledMessages = reconcileScheduledMessages(next);
+      return next;
+    }),
+    updateScheduledMessage: (message) => mutate((current) => ({
+      ...current,
+      scheduledMessages: current.scheduledMessages.map((item) => item.id === message.id ? message : item),
+      auditLog: [audit("scheduled_message", message.id, "updated", `${message.status}: ${message.channel}`), ...current.auditLog],
     })),
     addBlock: (block) => mutate((current) => ({
       ...current,
@@ -370,6 +477,31 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       sourceConnections: current.sourceConnections.map((item) => item.id === connection.id ? connection : item),
       auditLog: [audit("connection", connection.id, "updated", `${connection.platform}: ${connection.status}`), ...current.auditLog],
     })),
+    updateUnit: (unit) => mutate((current) => ({
+      ...current,
+      units: current.units.map((item) => item.id === unit.id ? unit : item),
+      auditLog: [audit("unit", unit.id, "updated", `Zmieniono ceny i koszty: ${unit.name}`), ...current.auditLog],
+    })),
+    upsertRate: (rate) => mutate((current) => ({
+      ...current,
+      rates: current.rates.some((item) => item.id === rate.id) ? current.rates.map((item) => item.id === rate.id ? rate : item) : [rate, ...current.rates],
+      auditLog: [audit("rate", rate.id, "updated", `${rate.season}: ${rate.pricePerNight} PLN`), ...current.auditLog],
+    })),
+    deleteRate: (rateId) => mutate((current) => ({
+      ...current,
+      rates: current.rates.filter((item) => item.id !== rateId),
+      auditLog: [audit("rate", rateId, "deleted", "Usunięto regułę sezonową"), ...current.auditLog],
+    })),
+    upsertCostSetting: (cost) => mutate((current) => ({
+      ...current,
+      costSettings: current.costSettings.some((item) => item.id === cost.id) ? current.costSettings.map((item) => item.id === cost.id ? cost : item) : [cost, ...current.costSettings],
+      auditLog: [audit("cost", cost.id, "updated", `${cost.label}: ${cost.value}/${cost.unit}`), ...current.auditLog],
+    })),
+    deleteCostSetting: (costId) => mutate((current) => ({
+      ...current,
+      costSettings: current.costSettings.filter((item) => item.id !== costId),
+      auditLog: [audit("cost", costId, "deleted", "Usunięto założenie kosztowe"), ...current.auditLog],
+    })),
     updateSettings: (settings) => mutate((current) => ({
       ...current,
       settings,
@@ -380,13 +512,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       const created = bookings.filter((booking) => !existingById.has(booking.id));
       const merged = current.bookings.map((booking) => bookings.find((candidate) => candidate.id === booking.id) ?? booking);
       const tasks = created.flatMap(createTasksForBooking);
-      return {
+      const next: AppData = {
         ...current,
         bookings: [...created, ...merged],
         tasks: [...tasks, ...current.tasks],
         checklistItems: [...defaultChecklist(tasks), ...current.checklistItems],
         auditLog: [audit("import", uid("IMP"), "committed", `Scalono ${bookings.length} rekordów z Mobile-Calendar`), ...current.auditLog],
       };
+      next.scheduledMessages = reconcileScheduledMessages(next);
+      return next;
     }),
     exportSnapshot: () => {
       const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));

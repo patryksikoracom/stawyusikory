@@ -86,6 +86,7 @@ export type Unit = {
   name: string;
   maxPeople: number;
   bedrooms: number;
+  defaultPricePerNight: number;
   defaultCleaningCost: number;
   notes: string;
 };
@@ -129,12 +130,58 @@ export type GuestProfile = {
   childrenAges?: string;
   jobsLifestyle?: string;
   discoveryChannel?: Channel;
+  discoveryMethod?: DiscoveryMethod;
+  discoveryNote?: string;
   bookingChannel?: Channel;
   searchPhraseOrAiPrompt?: string;
   bestQuote?: string;
   objections?: string;
   nps?: number;
   satisfaction?: number;
+};
+
+export type DiscoveryMethod =
+  | "Przeglądanie ofert"
+  | "Wyszukiwarka"
+  | "Polecenie"
+  | "Social media"
+  | "Reklama"
+  | "Inne"
+  | "Nie wiadomo";
+
+export type RepairHorizon =
+  | "Do oceny"
+  | "Przed następnym przyjazdem"
+  | "W tym tygodniu"
+  | "Po sezonie"
+  | "Backlog";
+
+export type DepartureDebrief = {
+  id: string;
+  bookingId: string;
+  status: "Oczekuje" | "Ukończony" | "Pominięty";
+  lastPromptedAt?: string;
+  lastPromptedOn?: string;
+  snoozedUntil?: string;
+  completedAt?: string;
+  capturedBy?: string;
+  actualDepartureAt?: string;
+  departureStatus?: "Wyjechali" | "Późny wyjazd" | "Niepotwierdzone";
+  keysSettled: boolean;
+  paymentOrDamageNote?: string;
+  cleaningHandoff?: string;
+  urgentNextArrivalRisk: boolean;
+  discoverySource?: Channel;
+  discoveryMethod?: DiscoveryMethod;
+  discoveryNote?: string;
+  whyChose?: string;
+  bestParts?: string;
+  improvementNotes?: string;
+  bestQuote?: string;
+  nps?: number;
+  returnIntent?: "Tak" | "Może" | "Nie" | "Nie wiadomo";
+  publicQuotePermission: "Tak" | "Nie" | "Do dopytania";
+  skipReason?: string;
 };
 
 export type ContactConsent = {
@@ -163,6 +210,8 @@ export type OpsTask = {
   blocker?: string;
   completedAt?: string;
   comment?: string;
+  issueId?: string;
+  planningHorizon?: RepairHorizon;
 };
 
 export type PaymentTransaction = {
@@ -203,6 +252,17 @@ export type IssueReport = {
   description?: string;
   status: "Otwarte" | "W toku" | "Rozwiązane";
   createdAt: string;
+  category?: "Bezpieczeństwo" | "Dostęp/drzwi" | "Woda" | "Prąd" | "Wyposażenie" | "Komfort" | "Inne";
+  location?: string;
+  severity?: "Krytyczna" | "Wysoka" | "Średnia" | "Niska";
+  source?: "Gość" | "Sprzątanie" | "Właściciel" | "System";
+  debriefId?: string;
+  photoUrls?: string[];
+  owner?: string;
+  nextArrivalRisk?: boolean;
+  planningHorizon?: RepairHorizon;
+  resolutionNotes?: string;
+  resolvedAt?: string;
 };
 
 export type MessageRecord = {
@@ -216,6 +276,89 @@ export type MessageRecord = {
   status: "Wersja robocza" | "W kolejce" | "Wysłana" | "Dostarczona" | "Błąd";
   createdAt: string;
   idempotencyKey?: string;
+};
+
+export type MessagePurpose =
+  | "Potwierdzenie"
+  | "Płatność"
+  | "Przed przyjazdem"
+  | "Powitanie"
+  | "W trakcie pobytu"
+  | "Wyjazd"
+  | "Prywatny feedback"
+  | "Opinia publiczna"
+  | "Przypomnienie opinii"
+  | "Naprawa";
+
+export type MessageTemplate = {
+  id: string;
+  name: string;
+  purpose: MessagePurpose;
+  channel: "SMS" | "E-mail" | "OTA";
+  language: "pl" | "en";
+  subject?: string;
+  body: string;
+  allowedVariables: string[];
+  version: number;
+  active: boolean;
+};
+
+export type AutomationTrigger =
+  | "Po utworzeniu rezerwacji"
+  | "Termin płatności"
+  | "Przed przyjazdem"
+  | "Po przyjeździe"
+  | "Przed wyjazdem"
+  | "Po wyjeździe"
+  | "Po rozwiązaniu usterki";
+
+export type AutomationRule = {
+  id: string;
+  name: string;
+  templateId: string;
+  trigger: AutomationTrigger;
+  offsetDays: number;
+  sendTime: string;
+  mode: "Wersja robocza" | "Automatycznie";
+  active: boolean;
+  channels?: Channel[];
+  unitIds?: string[];
+  paymentStatuses?: PaymentStatus[];
+  minimumNights?: number;
+};
+
+export type ScheduledMessage = {
+  id: string;
+  bookingId: string;
+  ruleId: string;
+  templateId: string;
+  templateVersion: number;
+  dueAt: string;
+  channel: MessageTemplate["channel"];
+  recipient?: string;
+  subject?: string;
+  renderedBody: string;
+  status: "Wersja robocza" | "Zatwierdzona" | "Wysłana" | "Dostarczona" | "Błąd" | "Anulowana" | "Wymaga sprawdzenia";
+  blockedReason?: string;
+  approvedAt?: string;
+  providerResult?: string;
+  idempotencyKey: string;
+  bookingFingerprint: string;
+  createdAt: string;
+};
+
+export type MarketingTouchpoint = {
+  id: string;
+  bookingId: string;
+  recordedAt: string;
+  source?: Channel;
+  method?: DiscoveryMethod;
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
+  utmContent?: string;
+  landingPage?: string;
+  note?: string;
 };
 
 export type AuditEvent = {
@@ -292,6 +435,16 @@ export type RateRule = {
   active: boolean;
 };
 
+export type CostSetting = {
+  id: string;
+  unitId?: string;
+  label: string;
+  value: number;
+  unit: "miesiąc" | "rok" | "pobyt" | "noc" | "% przychodu";
+  notes?: string;
+  active: boolean;
+};
+
 export type PlatformImport = {
   id: string;
   platform: "Booking" | "Airbnb";
@@ -351,6 +504,7 @@ export type AppData = {
   media: MediaAsset[];
   blocks: CalendarBlock[];
   rates: RateRule[];
+  costSettings: CostSetting[];
   imports: PlatformImport[];
   sourceConnections: SourceConnection[];
   payments: PaymentTransaction[];
@@ -358,6 +512,11 @@ export type AppData = {
   checklistItems: TaskChecklistItem[];
   issues: IssueReport[];
   messages: MessageRecord[];
+  departureDebriefs: DepartureDebrief[];
+  messageTemplates: MessageTemplate[];
+  automationRules: AutomationRule[];
+  scheduledMessages: ScheduledMessage[];
+  marketingTouchpoints: MarketingTouchpoint[];
   auditLog: AuditEvent[];
   settings: AppSettings;
 };

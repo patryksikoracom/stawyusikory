@@ -6,6 +6,7 @@ export const units: Unit[] = [
     name: "Domek Rybaka",
     maxPeople: 6,
     bedrooms: 3,
+    defaultPricePerNight: 650,
     defaultCleaningCost: 250,
     notes: "Większy domek, mocny dla rodzin i wędkarzy.",
   },
@@ -14,6 +15,7 @@ export const units: Unit[] = [
     name: "Czapla",
     maxPeople: 4,
     bedrooms: 2,
+    defaultPricePerNight: 500,
     defaultCleaningCost: 220,
     notes: "Mniejszy domek, para albo rodzina 2+2.",
   },
@@ -278,6 +280,8 @@ export const initialData: AppData = {
     {
       id: "RATE001",
       unitId: "domek-rybaka",
+      dateFrom: "2026-06-01",
+      dateTo: "2026-08-31",
       season: "Wysoki",
       pricePerNight: 650,
       minNights: 3,
@@ -286,12 +290,15 @@ export const initialData: AppData = {
     {
       id: "RATE002",
       unitId: "domek-4",
+      dateFrom: "2026-06-01",
+      dateTo: "2026-08-31",
       season: "Wysoki",
       pricePerNight: 500,
       minNights: 2,
       active: true,
     },
   ],
+  costSettings: [],
   imports: [
     {
       id: "IMP001",
@@ -389,6 +396,11 @@ export const initialData: AppData = {
   checklistItems: [],
   issues: [],
   messages: [],
+  departureDebriefs: [],
+  messageTemplates: [],
+  automationRules: [],
+  scheduledMessages: [],
+  marketingTouchpoints: [],
   auditLog: [],
   settings: {
     organizationName: "Stawy u Sikory",

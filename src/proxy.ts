@@ -27,4 +27,4 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
-export const config = { matcher: ["/((?!api/calendar/feeds|api/integrations/ical/sync|api/messages/sms/process|_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|offline).*)"] };
+export const config = { matcher: ["/((?!api/calendar/feeds|api/integrations/ical/sync|api/messages/sms/process|api/automations/process|_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|offline).*)"] };
