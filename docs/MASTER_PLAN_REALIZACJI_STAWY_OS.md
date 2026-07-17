@@ -32,7 +32,7 @@ Commit, push i deployment są osobnymi decyzjami. Samo ukończenie lokalnej pacz
 | PR-1 / Etap 1.1 | ukończony i zaakceptowany do kontynuacji | loading gate, brak demo flash także dla częściowego payloadu chmurowego, bezpieczne Ustawienia |
 | PR-2 / Etap 1.2a | zaakceptowany 17.07.2026 | prawdziwa tożsamość, alerty i copy; preview online zweryfikowane przez właściciela |
 | PR-3 / Etap 1.2b | zaakceptowany 17.07.2026 | segmenty z rekordów źródłowych, uczciwe empty states i jawna bramka rekomendacji |
-| PR-4 / Etap 1.3 | implementacja i migracja gotowe; preview przed akceptacją | invitation-only, brak domyślnego `owner`, kontrola `disable_signup`; HIBP zablokowane planem Free |
+| PR-4 / Etap 1.3 | **gotowy do ręcznej akceptacji** | invitation-only, brak domyślnego `owner`, kontrola `disable_signup`; preview desktop/mobile zweryfikowane; HIBP zablokowane planem Free |
 | Etap 1 jako całość | w toku | kod kończy PR-4, ale pełna bramka wymaga ręcznej akceptacji i HIBP po przejściu na Supabase Pro |
 
 ## Mapa Etapów i PR-ów
@@ -43,7 +43,7 @@ Commit, push i deployment są osobnymi decyzjami. Samo ukończenie lokalnej pacz
 | 1 | Etap 1 — bezpieczeństwo i zaufanie | PR-1 | loading gate, brak demo/zer, bezpieczne formularze | ukończone |
 | 2 | Etap 1 — bezpieczeństwo i zaufanie | PR-2 — zaakceptowany | profil z sesji, rola, dynamiczne alerty, uczciwe copy, zaszyfrowany backup | konto testowe nie widzi `Marcin/MS`; zero stałych alertów |
 | 3 | Etap 1 — bezpieczeństwo i zaufanie | PR-3 — zaakceptowany | usunięcie przykładowych insightów i uczciwe empty states | przy braku danych nie ma rekomendacji biznesowej |
-| 4 | Etap 1 — bezpieczeństwo i zaufanie | **PR-4 — w weryfikacji** | invitation-only, blokada signup→owner i bramka konfiguracji Auth; HIBP po Pro | ręczna akceptacja PR-4; pełne domknięcie Etapu 1 po HIBP |
+| 4 | Etap 1 — bezpieczeństwo i zaufanie | **PR-4 — gotowy do akceptacji** | invitation-only, blokada signup→owner i bramka konfiguracji Auth; HIBP po Pro | ręczna akceptacja PR-4; pełne domknięcie Etapu 1 po HIBP |
 | 5 | Etap 2 — prawidłowe metryki | PR-5 | wspólny silnik okresów, aktywne rezerwacje, obłożenie, waluty | testy granic miesiąca/roku/DST |
 | 6 | Etap 2 — finanse | PR-6 | sprzedaż, należności, cashflow i wynik zarządczy | pulpit i Finanse używają tych samych definicji |
 | 7 | Etap 3 — wielosesyjność | PR-7 | telemetryka, koordynacja kart, czytelny konflikt | brak cichego nadpisania zmian |
@@ -55,7 +55,7 @@ Commit, push i deployment są osobnymi decyzjami. Samo ukończenie lokalnej pacz
 
 Numery z sufiksem `a…` oznaczają duży zakres, który przed implementacją zostanie rozbity na mniejsze, osobno akceptowane paczki.
 
-## Aktualna paczka: PR-4 — w weryfikacji
+## Aktualna paczka: PR-4 — gotowa do ręcznej akceptacji
 
 ### Zakres
 
