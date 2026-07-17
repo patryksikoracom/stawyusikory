@@ -6,6 +6,7 @@ import { Badge, Button, Card, Field, inputClass } from "@/components/ui/primitiv
 import { Icon, type IconName } from "@/components/ui/icons";
 import { PricingSettings } from "@/components/settings/pricing-settings";
 import { TeamAccessSettings } from "@/components/settings/team-access-settings";
+import { roleLabel } from "@/lib/auth/identity";
 import { formatPolishCount } from "@/lib/polish-plural";
 import type { UserRole } from "@/lib/types";
 
@@ -15,7 +16,7 @@ export function SettingsView({ currentRole = null }: { currentRole?: UserRole | 
   const [saved,setSaved]=useState(false);
   function save(){if(dataStatus!=="ready")return;updateSettings(form);setSaved(true);window.setTimeout(()=>setSaved(false),2500);}
   return <div className="grid gap-5">
-    <section className="animate-rise-2 grid gap-4 sm:grid-cols-3"><SettingStat icon="home" label="Domki" value={data.units.length}/><SettingStat icon="people" label="Dostęp" value="Właściciele"/><SettingStat icon="refresh" label="Magazyn danych" value={syncMode==="cloud"?"Chmura":"Lokalny"}/></section>
+    <section className="animate-rise-2 grid gap-4 sm:grid-cols-3"><SettingStat icon="home" label="Domki" value={data.units.length}/><SettingStat icon="people" label="Dostęp" value={roleLabel(currentRole)}/><SettingStat icon="refresh" label="Magazyn danych" value={syncMode==="cloud"?"Chmura":"Lokalny"}/></section>
     {saved?<p aria-live="polite" className="rounded-xl bg-[#dfeede] p-3 text-sm font-bold text-[#215c3b]">Ustawienia zostały zapisane.</p>:null}
     <div className="animate-rise-3 grid gap-5 xl:grid-cols-[1fr_380px]">
       <div className="grid gap-5">

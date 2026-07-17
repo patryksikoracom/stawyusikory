@@ -45,7 +45,7 @@ describe("SettingsView po twardym odświeżeniu", () => {
     mocks.store.current = storeWithSettings("Nazwa startowa", "loading");
     const { rerender } = render(
       <AppDataGate onRetry={vi.fn()} status="loading">
-        <SettingsView />
+        <SettingsView currentRole="admin" />
       </AppDataGate>,
     );
 
@@ -54,11 +54,12 @@ describe("SettingsView po twardym odświeżeniu", () => {
     mocks.store.current = storeWithSettings("Stawy u Sikory — chmura", "ready");
     rerender(
       <AppDataGate onRetry={vi.fn()} status="ready">
-        <SettingsView />
+        <SettingsView currentRole="admin" />
       </AppDataGate>,
     );
 
     expect(screen.getByRole("textbox", { name: "Nazwa obiektu" })).toHaveValue("Stawy u Sikory — chmura");
+    expect(screen.getByText("Administrator")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Pobierz zaszyfrowany backup" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Zapisz ustawienia" }));
 
