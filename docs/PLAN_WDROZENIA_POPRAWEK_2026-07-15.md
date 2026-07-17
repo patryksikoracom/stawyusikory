@@ -68,7 +68,7 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 - [x] Dodać test i kontrolę produkcyjnego `disable_signup = true` oraz minimalnej długości hasła.
 - [x] Zweryfikować przechowywanie sekretów: `.env.local` i `.vercel` są ignorowane, klucze aplikacyjne są zapisane jako zaszyfrowane zmienne Vercel osobno dla Production/Preview, service role jest importowane wyłącznie w module serwerowym, a osobisty token Supabase pozostaje lokalny. Rotacji nie wykonano bez przygotowanego rollbacku.
 
-**Status PR-4 (2026-07-17): implementacja, testy, migracja produkcyjna i preview desktop/mobile zweryfikowane; oczekuje na ręczną akceptację właściciela.** Pełne zamknięcie Etapu 1 pozostaje zależne od płatnej funkcji HIBP na Supabase Pro.
+**Status PR-4 (2026-07-17): zaakceptowany przez właściciela z jawnym wyjątkiem HIBP.** Implementacja, testy, migracja produkcyjna i preview desktop/mobile zostały zweryfikowane. Etap 1 jest warunkowo zamknięty na obecnym planie Supabase Free; płatna funkcja HIBP pozostaje przyjętym ryzykiem i wróci do realizacji po osobnej decyzji o planie Pro.
 
 **Akceptacja etapu 1:** na wolnym połączeniu żaden ekran nie pokazuje fikcyjnych zer/demo; konto testowe pokazuje własną tożsamość i rolę; signup nie może utworzyć członkostwa; Supabase Advisor nie zgłasza ochrony haseł.
 
