@@ -40,11 +40,14 @@ import { downloadEncryptedJson, downloadPricingAnalysisDataset } from "@/lib/sec
 import { isTrashExpired, trashExpiryDate } from "@/lib/booking-trash";
 
 export type SyncMode = "checking" | "cloud" | "local" | "error" | "conflict";
+export type DataStatus = "loading" | "ready" | "error";
 
 type AppStore = {
   data: AppData;
+  dataStatus: DataStatus;
   syncMode: SyncMode;
   lastSavedAt?: string;
+  retryDataLoad: () => void;
   addBooking: (booking: Booking, contact?: ContactConsent) => void;
   updateBooking: (booking: Booking) => void;
   cancelBooking: (bookingId: string) => void;
@@ -117,31 +120,31 @@ function defaultChecklist(tasks: OpsTask[]) {
     })));
 }
 
-function normalizeData(parsed?: Partial<AppData> | null): AppData {
-  const base = { ...initialData, ...parsed };
-  const tasks = parsed?.tasks ?? initialData.tasks;
-  const rates = parsed?.rates ?? initialData.rates;
+function normalizeData(parsed?: Partial<AppData> | null, fallback: AppData = initialData): AppData {
+  const base = { ...fallback, ...parsed };
+  const tasks = parsed?.tasks ?? fallback.tasks;
+  const rates = parsed?.rates ?? fallback.rates;
   const normalized: AppData = {
     ...base,
-    units: (parsed?.units ?? initialData.units).map((unit) => ({
+    units: (parsed?.units ?? fallback.units).map((unit) => ({
       ...unit,
       defaultPricePerNight: unit.defaultPricePerNight ?? rates.find((rate) => rate.unitId === unit.id && rate.active)?.pricePerNight ?? 0,
     })),
-    bookings: (parsed?.bookings ?? initialData.bookings).filter((booking) => !isTrashExpired(booking)).map((booking) => ({
+    bookings: (parsed?.bookings ?? fallback.bookings).filter((booking) => !isTrashExpired(booking)).map((booking) => ({
       ...booking,
       pricingMode: booking.pricingMode ?? (booking.grossPrice ? "manual" : "rate-card"),
       needsReview: booking.needsReview ?? (booking.createdBy === "Import Mobile-Calendar" && (!booking.grossPrice || booking.adults + booking.children === 0)),
       version: booking.version ?? 1,
     })),
-    guests: parsed?.guests ?? initialData.guests,
-    consents: parsed?.consents ?? initialData.consents,
+    guests: parsed?.guests ?? fallback.guests,
+    consents: parsed?.consents ?? fallback.consents,
     tasks,
-    media: parsed?.media ?? initialData.media,
-    blocks: parsed?.blocks ?? initialData.blocks,
+    media: parsed?.media ?? fallback.media,
+    blocks: parsed?.blocks ?? fallback.blocks,
     rates,
-    costSettings: parsed?.costSettings ?? [],
-    imports: parsed?.imports ?? initialData.imports,
-    sourceConnections: (parsed?.sourceConnections ?? initialData.sourceConnections).map((connection) => connection.id === "SRC-BOOKING" ? {
+    costSettings: parsed?.costSettings ?? fallback.costSettings,
+    imports: parsed?.imports ?? fallback.imports,
+    sourceConnections: (parsed?.sourceConnections ?? fallback.sourceConnections).map((connection) => connection.id === "SRC-BOOKING" ? {
       ...connection,
       connectionType: "iCal",
       coverage: connection.importUrl ? connection.coverage : 0,
@@ -150,26 +153,18 @@ function normalizeData(parsed?: Partial<AppData> | null): AppData {
       notes: "iCal blokuje terminy, ale nie pobiera ceny, prowizji ani danych gościa.",
       staleAfterMinutes: connection.staleAfterMinutes ?? 240,
     } : { ...connection, coverage: connection.importUrl ? connection.coverage : 0, lastSyncAt: connection.lastSyncAt === "demo" ? undefined : connection.lastSyncAt, staleAfterMinutes: connection.staleAfterMinutes ?? 240 }),
-    payments: parsed?.payments ?? [],
-    invoices: parsed?.invoices ?? [],
+    payments: parsed?.payments ?? fallback.payments,
+    invoices: parsed?.invoices ?? fallback.invoices,
     checklistItems: parsed?.checklistItems ?? defaultChecklist(tasks),
-    issues: parsed?.issues ?? [],
-    messages: parsed?.messages ?? [],
-    departureDebriefs: parsed?.departureDebriefs ?? [],
-    messageTemplates: parsed?.messageTemplates?.length ? parsed.messageTemplates : defaultMessageTemplates,
-    automationRules: parsed?.automationRules?.length ? parsed.automationRules : defaultAutomationRules,
-    scheduledMessages: parsed?.scheduledMessages ?? [],
-    marketingTouchpoints: parsed?.marketingTouchpoints ?? [],
-    auditLog: parsed?.auditLog ?? [],
-    settings: parsed?.settings ?? {
-      organizationName: "Stawy u Sikory",
-      timezone: "Europe/Warsaw",
-      cleaningContactName: "Pani Ewa",
-      cleaningPhone: "",
-      defaultCheckIn: "16:00",
-      defaultCheckOut: "11:00",
-      aiApprovalRequired: true,
-    },
+    issues: parsed?.issues ?? fallback.issues,
+    messages: parsed?.messages ?? fallback.messages,
+    departureDebriefs: parsed?.departureDebriefs ?? fallback.departureDebriefs,
+    messageTemplates: parsed?.messageTemplates?.length ? parsed.messageTemplates : fallback.messageTemplates.length ? fallback.messageTemplates : defaultMessageTemplates,
+    automationRules: parsed?.automationRules?.length ? parsed.automationRules : fallback.automationRules.length ? fallback.automationRules : defaultAutomationRules,
+    scheduledMessages: parsed?.scheduledMessages ?? fallback.scheduledMessages,
+    marketingTouchpoints: parsed?.marketingTouchpoints ?? fallback.marketingTouchpoints,
+    auditLog: parsed?.auditLog ?? fallback.auditLog,
+    settings: parsed?.settings ?? fallback.settings,
   };
   normalized.scheduledMessages = reconcileScheduledMessages(normalized);
   return normalized;
@@ -255,10 +250,13 @@ function audit(entityType: string, entityId: string, action: string, summary: st
 export function AppStoreProvider({ children }: { children: ReactNode }) {
   // Pierwszy render musi być identyczny na serwerze i w przeglądarce. Właściwy
   // stan lokalny lub chmurowy jest pobierany zaraz po zamontowaniu komponentu.
-  const [data, setData] = useState<AppData>(() => normalizeData());
+  const [data, setData] = useState<AppData>(() => cloudConfigured ? emptyCloudData() : normalizeData());
+  const [dataStatus, setDataStatus] = useState<DataStatus>("loading");
   const [hydrated, setHydrated] = useState(false);
   const [syncMode, setSyncMode] = useState<SyncMode>("checking");
   const [lastSavedAt, setLastSavedAt] = useState<string>();
+  const [loadRequest, setLoadRequest] = useState(0);
+  const dataReady = useRef(false);
   const cloudReady = useRef(false);
   const stateVersion = useRef(0);
   const skipNextCloudSave = useRef(false);
@@ -266,16 +264,22 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
-      if (cloudConfigured) clearPersistedAppData();
-      const local = readLocalData();
-      setData(local);
+      if (cloudConfigured) {
+        clearPersistedAppData();
+        setData(emptyCloudData());
+      } else {
+        setData(readLocalData());
+        dataReady.current = true;
+        setDataStatus("ready");
+        setSyncMode("local");
+      }
       setHydrated(true);
     }, 0);
     return () => window.clearTimeout(timeout);
   }, []);
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || !cloudConfigured) return;
     let active = true;
     async function loadCloud() {
       try {
@@ -290,23 +294,33 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           };
           stateVersion.current = payload.version ?? 0;
           skipNextCloudSave.current = true;
-          setData(payload.data ? normalizeData(payload.data) : emptyCloudData());
+          setData(payload.data ? normalizeData(payload.data, emptyCloudData()) : emptyCloudData());
           cloudReady.current = true;
+          dataReady.current = true;
+          setDataStatus("ready");
           setSyncMode("cloud");
           setLastSavedAt(payload.updatedAt);
           return;
         }
-        setSyncMode(response.status === 503 ? "local" : "error");
+        cloudReady.current = false;
+        dataReady.current = false;
+        setDataStatus("error");
+        setSyncMode("error");
       } catch {
-        if (active) setSyncMode("local");
+        if (active) {
+          cloudReady.current = false;
+          dataReady.current = false;
+          setDataStatus("error");
+          setSyncMode("error");
+        }
       }
     }
     void loadCloud();
     return () => { active = false; };
-  }, [hydrated]);
+  }, [hydrated, loadRequest]);
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || dataStatus !== "ready") return;
     if (!cloudConfigured) window.localStorage.setItem(storageKey, JSON.stringify(data));
     if (!cloudReady.current) return;
     if (skipNextCloudSave.current) {
@@ -342,14 +356,28 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       });
     }, 700);
     return () => window.clearTimeout(timeout);
-  }, [data, hydrated]);
+  }, [data, dataStatus, hydrated]);
 
-  const mutate = useCallback((fn: (current: AppData) => AppData) => setData(fn), []);
+  const mutate = useCallback((fn: (current: AppData) => AppData) => {
+    if (!dataReady.current) return;
+    setData(fn);
+  }, []);
+
+  const retryDataLoad = useCallback(() => {
+    if (!cloudConfigured) return;
+    dataReady.current = false;
+    cloudReady.current = false;
+    setDataStatus("loading");
+    setSyncMode("checking");
+    setLoadRequest((request) => request + 1);
+  }, []);
 
   const value = useMemo<AppStore>(() => ({
     data,
+    dataStatus,
     syncMode,
     lastSavedAt,
+    retryDataLoad,
     addBooking: (booking, contact) => mutate((current) => {
       const tasks = createTasksForBooking(booking);
       const next: AppData = {
@@ -617,7 +645,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       setData(normalizeData());
       clearPersistedAppData();
     },
-  }), [data, lastSavedAt, mutate, syncMode]);
+  }), [data, dataStatus, lastSavedAt, mutate, retryDataLoad, syncMode]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }
