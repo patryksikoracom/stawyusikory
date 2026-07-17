@@ -58,15 +58,17 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 
 **Status PR-2 (2026-07-17): zaakceptowany przez właściciela po weryfikacji preview online.**
 
-**Status PR-3 (2026-07-17): gotowy do ręcznej akceptacji.** Segmenty i kolejne kroki wynikają wyłącznie z rekordów źródłowych, brak danych nie jest prezentowany jako zero, a stałe rekomendacje biznesowe zostały zastąpione jawną bramką jakości danych. Pełna regresja, build oraz testy desktop/mobile ukończone.
+**Status PR-3 (2026-07-17): zaakceptowany przez właściciela.** Segmenty i kolejne kroki wynikają wyłącznie z rekordów źródłowych, brak danych nie jest prezentowany jako zero, a stałe rekomendacje biznesowe zostały zastąpione jawną bramką jakości danych.
 
 #### 1.3 Auth i konfiguracja
 
-- [ ] Włączyć leaked-password protection w Supabase.
-- [ ] Usunąć automatyczne nadawanie `owner` każdemu nowemu użytkownikowi.
-- [ ] Dodać admin-only invitation/provisioning.
-- [ ] Dodać test/monitor potwierdzający `disable_signup = true`.
-- [ ] Zweryfikować rotację i przechowywanie wszystkich sekretów; nie rotować bez planu rollbacku.
+- [ ] Włączyć leaked-password protection w Supabase. **Blocker zewnętrzny:** funkcja wymaga planu Pro; plan organizacji jest obecnie Free i nie wykonano płatnej zmiany bez zgody właściciela.
+- [x] Usunąć automatyczne nadawanie `owner` każdemu nowemu użytkownikowi, w tym domyślną wartość kolumny członkostwa.
+- [x] Dodać admin-only invitation/provisioning z kompensacyjnym usunięciem konta po błędzie członkostwa.
+- [x] Dodać test i kontrolę produkcyjnego `disable_signup = true` oraz minimalnej długości hasła.
+- [x] Zweryfikować przechowywanie sekretów: `.env.local` i `.vercel` są ignorowane, klucze aplikacyjne są zapisane jako zaszyfrowane zmienne Vercel osobno dla Production/Preview, service role jest importowane wyłącznie w module serwerowym, a osobisty token Supabase pozostaje lokalny. Rotacji nie wykonano bez przygotowanego rollbacku.
+
+**Status PR-4 (2026-07-17): implementacja, testy i migracja produkcyjna gotowe; oczekuje na preview i ręczną akceptację.** Pełne zamknięcie Etapu 1 pozostaje zależne od płatnej funkcji HIBP na Supabase Pro.
 
 **Akceptacja etapu 1:** na wolnym połączeniu żaden ekran nie pokazuje fikcyjnych zer/demo; konto testowe pokazuje własną tożsamość i rolę; signup nie może utworzyć członkostwa; Supabase Advisor nie zgłasza ochrony haseł.
 

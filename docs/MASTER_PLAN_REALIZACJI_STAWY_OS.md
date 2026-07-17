@@ -31,8 +31,9 @@ Commit, push i deployment są osobnymi decyzjami. Samo ukończenie lokalnej pacz
 | Etap 0 | zaakceptowany do kontynuacji 17.07.2026 | wybrana ścieżka A, źródła prawdy, słownik KPI i blokada komunikacji |
 | PR-1 / Etap 1.1 | ukończony i zaakceptowany do kontynuacji | loading gate, brak demo flash także dla częściowego payloadu chmurowego, bezpieczne Ustawienia |
 | PR-2 / Etap 1.2a | zaakceptowany 17.07.2026 | prawdziwa tożsamość, alerty i copy; preview online zweryfikowane przez właściciela |
-| PR-3 / Etap 1.2b | **gotowy do ręcznej akceptacji** | segmenty z rekordów źródłowych, uczciwe empty states i jawna bramka rekomendacji |
-| Etap 1 jako całość | w toku | zakończy się dopiero po PR-4 |
+| PR-3 / Etap 1.2b | zaakceptowany 17.07.2026 | segmenty z rekordów źródłowych, uczciwe empty states i jawna bramka rekomendacji |
+| PR-4 / Etap 1.3 | implementacja i migracja gotowe; preview przed akceptacją | invitation-only, brak domyślnego `owner`, kontrola `disable_signup`; HIBP zablokowane planem Free |
+| Etap 1 jako całość | w toku | kod kończy PR-4, ale pełna bramka wymaga ręcznej akceptacji i HIBP po przejściu na Supabase Pro |
 
 ## Mapa Etapów i PR-ów
 
@@ -41,8 +42,8 @@ Commit, push i deployment są osobnymi decyzjami. Samo ukończenie lokalnej pacz
 | 0 | Etap 0 — zasady pilota | decyzje, bez osobnego PR | ścieżka A, źródła prawdy, KPI, wyłączona wysyłka | ADR-001 i KPI zaakceptowane |
 | 1 | Etap 1 — bezpieczeństwo i zaufanie | PR-1 | loading gate, brak demo/zer, bezpieczne formularze | ukończone |
 | 2 | Etap 1 — bezpieczeństwo i zaufanie | PR-2 — zaakceptowany | profil z sesji, rola, dynamiczne alerty, uczciwe copy, zaszyfrowany backup | konto testowe nie widzi `Marcin/MS`; zero stałych alertów |
-| 3 | Etap 1 — bezpieczeństwo i zaufanie | **PR-3 — gotowy do akceptacji** | usunięcie przykładowych insightów i uczciwe empty states | przy braku danych nie ma rekomendacji biznesowej |
-| 4 | Etap 1 — bezpieczeństwo i zaufanie | PR-4 | leaked passwords, invitation-only, blokada signup→owner | domknięta akceptacja całego Etapu 1 |
+| 3 | Etap 1 — bezpieczeństwo i zaufanie | PR-3 — zaakceptowany | usunięcie przykładowych insightów i uczciwe empty states | przy braku danych nie ma rekomendacji biznesowej |
+| 4 | Etap 1 — bezpieczeństwo i zaufanie | **PR-4 — w weryfikacji** | invitation-only, blokada signup→owner i bramka konfiguracji Auth; HIBP po Pro | ręczna akceptacja PR-4; pełne domknięcie Etapu 1 po HIBP |
 | 5 | Etap 2 — prawidłowe metryki | PR-5 | wspólny silnik okresów, aktywne rezerwacje, obłożenie, waluty | testy granic miesiąca/roku/DST |
 | 6 | Etap 2 — finanse | PR-6 | sprzedaż, należności, cashflow i wynik zarządczy | pulpit i Finanse używają tych samych definicji |
 | 7 | Etap 3 — wielosesyjność | PR-7 | telemetryka, koordynacja kart, czytelny konflikt | brak cichego nadpisania zmian |
@@ -54,33 +55,34 @@ Commit, push i deployment są osobnymi decyzjami. Samo ukończenie lokalnej pacz
 
 Numery z sufiksem `a…` oznaczają duży zakres, który przed implementacją zostanie rozbity na mniejsze, osobno akceptowane paczki.
 
-## Aktualna paczka: PR-3 — gotowa do ręcznej akceptacji
+## Aktualna paczka: PR-4 — w weryfikacji
 
 ### Zakres
 
-- liczyć segmenty wyłącznie z profili powiązanych z widocznymi rezerwacjami,
-- pokazywać liczbę uzupełnionych profili wraz z mianownikiem rezerwacji,
-- odróżniać brak próbki od prawdziwej wartości zero,
-- zastąpić stałą sugestię marketingową jawną bramką jakości danych,
-- wyliczać następne kroki z rzeczywistych braków profili, atrybucji, opinii i zgód,
-- dodać uczciwy stan pusty dla segmentów, filtrów i braku rezerwacji,
-- nie podstawiać wizualnie wartości `Inne`, jeśli kanał odkrycia nie został zapisany.
+- usunąć z bazy domyślną rolę `owner` i dawną funkcję automatycznego provisioningu,
+- dodać serwerowe zaproszenia dostępne tylko dla `owner/admin`, bez możliwości zaproszenia kolejnego `owner`,
+- ograniczyć administratora do zapraszania roli `viewer`,
+- wycofać nowo utworzone konto, jeśli zapis członkostwa nie powiedzie się,
+- dodać kontrolę produkcyjnego `disable_signup=true` i minimalnej długości hasła,
+- sprawdzić przechowywanie sekretów bez wykonywania rotacji bez rollbacku,
+- jawnie odnotować blokadę HIBP na planie Supabase Free.
 
-### Poza zakresem PR-3
+### Poza zakresem PR-4
 
-- zmiana polityk Auth, signup i provisioning — PR-4,
 - naprawa sposobu liczenia KPI — PR-5/PR-6,
 - generowanie mierzalnych rekomendacji wzrostu i consent ledger — PR-11,
-- role domenowe i multi-tenant — PR-9.
+- pełna macierz ról domenowych i multi-tenant — PR-9,
+- płatne podniesienie Supabase do Pro — osobna decyzja właściciela.
 
-### Akceptacja PR-3
+### Akceptacja PR-4
 
-1. W module Goście nie występują stałe segmenty ani behawioralne sugestie bez rekordów źródłowych.
-2. Liczba profili jest liczona z rzeczywistych rekordów i pokazuje mianownik rezerwacji.
-3. Brak próbki jest opisany jako `Brak danych`, nie jako wynik zero.
-4. Segmenty o różnej wielkości liter są agregowane bez dublowania.
-5. Empty state prowadzi do konkretnej rezerwacji lub listy rezerwacji.
+1. Publiczny signup pozostaje wyłączony, a kontrola konfiguracji kończy się powodzeniem.
+2. Nowy rekord członkostwa bez jawnej roli nie może otrzymać `owner`.
+3. Właściciel może zaprosić `admin/viewer`, administrator tylko `viewer`, a użytkownik `viewer` nie widzi formularza.
+4. Błąd zapisu członkostwa usuwa osierocone konto zaproszone przez endpoint.
+5. Sekret service role pozostaje wyłącznie po stronie serwera; osobisty token administracyjny pozostaje lokalny.
 6. Testy automatyczne, build i test przeglądarkowy desktop/mobile przechodzą bez błędów konsoli.
+7. HIBP pozostaje jawnym blockerem pełnej akceptacji Etapu 1 do czasu zatwierdzenia planu Supabase Pro.
 
 ## Stałe zasady do czasu Etapu 7
 

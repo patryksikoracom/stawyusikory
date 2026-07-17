@@ -37,6 +37,7 @@ Kontrola jakości:
 npm run lint
 npm run typecheck
 npm test
+npm run check:auth-config
 npm run build
 ```
 
@@ -44,9 +45,11 @@ npm run build
 
 1. Utwórz projekt w europejskim regionie Supabase.
 2. Uruchom kolejno migracje z `supabase/migrations`.
-3. Włącz logowanie e-mail/hasło i utwórz pierwszego użytkownika właściciela. Trigger utworzy jego organizację i członkostwo.
+3. Włącz logowanie e-mail/hasło, pozostaw publiczny signup wyłączony i utwórz pierwszego właściciela ręcznie. Kolejne konta zapraszaj z ekranu Ustawienia; baza nie nadaje już nikomu automatycznie roli `owner`.
 4. Uzupełnij `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` i `SUPABASE_SERVICE_ROLE_KEY`.
 5. Nigdy nie wystawiaj service role w zmiennej `NEXT_PUBLIC_*`.
+
+Kontrola `npm run check:auth-config` używa lokalnych `SUPABASE_PROJECT_REF` i `SUPABASE_ACCESS_TOKEN`. Kończy się błędem, jeśli publiczny signup zostanie włączony albo minimalna długość hasła spadnie poniżej 12 znaków. Ochrona HIBP jest raportowana jako ostrzeżenie na planie Free; po przejściu na Pro ustaw `REQUIRE_SUPABASE_HIBP=1`, aby stała się twardą bramką. Osobistego tokenu administracyjnego nie zapisujemy w Vercel ani GitHub Actions.
 
 Wbudowane dane demonstracyjne są rozpoznawane i nie mogą zostać automatycznie zapisane do chmury. Legacy snapshot pozostaje kopią awaryjną, a produkcyjny zapis używa `operational_records` oraz wersji organizacji. Przed importem pobierz backup JSON z ekranu Integracje lub Ustawienia.
 

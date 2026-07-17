@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:integration": "node scripts/supabase-integration.mjs",
+    "check:auth-config": "node scripts/verify-supabase-auth-config.mjs",
     "test:watch": "vitest"
   },
   "dependencies": {
