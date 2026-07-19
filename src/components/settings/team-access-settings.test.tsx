@@ -37,4 +37,9 @@ describe("TeamAccessSettings", () => {
     })));
     expect(await screen.findByRole("status")).toHaveTextContent("nowy@example.com");
   });
+
+  it("właściciel może wybrać ograniczoną rolę sprzątania", () => {
+    render(<TeamAccessSettings currentRole="owner" />);
+    expect(screen.getByRole("option", { name: /Sprzątanie/ })).toBeInTheDocument();
+  });
 });

@@ -1,4 +1,4 @@
-export type UserRole = "owner" | "admin" | "viewer";
+export type UserRole = "owner" | "admin" | "viewer" | "cleaning";
 
 export type WorkflowStatus =
   | "Nowa"

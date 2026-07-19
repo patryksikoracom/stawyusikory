@@ -5,7 +5,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 
 const invitationSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(254),
-  role: z.enum(["admin", "viewer"]),
+  role: z.enum(["admin", "viewer", "cleaning"]),
 });
 
 function invitationRedirect(request: Request) {

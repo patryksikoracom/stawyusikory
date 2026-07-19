@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "./server";
 
+export function isOrganizationEditor(role: unknown): role is "owner" | "admin" {
+  return role === "owner" || role === "admin";
+}
+
 export async function requireOrganization() {
   const supabase = await createClient();
   if (!supabase) {
@@ -21,4 +25,3 @@ export async function requireOrganization() {
   }
   return { supabase, user, organizationId: membership.organization_id, role: membership.role };
 }
-

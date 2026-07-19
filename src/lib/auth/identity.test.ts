@@ -44,4 +44,12 @@ describe("tożsamość widoczna w aplikacji", () => {
     });
     expect(roleLabel(null)).toBe("Rola nieustalona");
   });
+
+  it("rozpoznaje konto sprzątania i pokazuje właściwą etykietę", () => {
+    expect(buildAppIdentity({
+      email: "jadzia@example.com",
+      metadata: { display_name: "Jadzia" },
+      role: "cleaning",
+    })).toMatchObject({ displayName: "Jadzia", initials: "JA", role: "cleaning", roleLabel: "Sprzątanie" });
+  });
 });

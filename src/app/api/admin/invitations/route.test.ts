@@ -78,6 +78,17 @@ describe("POST /api/admin/invitations", () => {
     });
   });
 
+  it("pozwala właścicielowi utworzyć ograniczone konto sprzątania", async () => {
+    const response = await POST(request({ email: "jadzia@example.com", role: "cleaning" }));
+
+    expect(response.status).toBe(201);
+    expect(mocks.insertMembership).toHaveBeenCalledWith({
+      organization_id: "org-test",
+      user_id: "user-invited",
+      role: "cleaning",
+    });
+  });
+
   it("wycofuje nowo utworzone konto, gdy członkostwo nie może zostać zapisane", async () => {
     mocks.insertMembership.mockResolvedValue({ error: { message: "database rejected membership" } });
     const response = await POST(request({ email: "nowy@example.com", role: "admin" }));

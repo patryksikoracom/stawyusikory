@@ -59,7 +59,7 @@ export async function POST(request: Request) {
   if (userClient && user) {
     const { data: membership } = await userClient.from("organization_memberships").select("organization_id,role").eq("user_id", user.id).limit(1).maybeSingle();
     if (!membership) return NextResponse.json({ error: "Brak organizacji użytkownika." }, { status: 403 });
-    if (membership.role === "viewer") return NextResponse.json({ error: "Brak uprawnień do synchronizacji." }, { status: 403 });
+    if (membership.role !== "owner" && membership.role !== "admin") return NextResponse.json({ error: "Brak uprawnień do synchronizacji." }, { status: 403 });
     organizationIds = [membership.organization_id];
   } else {
     const { data: organizations, error } = await service.from("operational_state_versions").select("organization_id");

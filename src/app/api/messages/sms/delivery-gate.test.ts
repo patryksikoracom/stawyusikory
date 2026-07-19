@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/supabase/auth-context", () => ({
+  isOrganizationEditor: (role: string) => role === "owner" || role === "admin",
   requireOrganization: vi.fn(async () => ({
     organizationId: "org-test",
     role: "admin",

@@ -28,7 +28,7 @@ async function context() {
     .limit(1)
     .maybeSingle();
   if (!membership) return { error: NextResponse.json({ error: "Brak organizacji użytkownika" }, { status: 403 }) };
-  return { supabase, organizationId: membership.organization_id, role: membership.role as "owner" | "admin" | "viewer" };
+  return { supabase, organizationId: membership.organization_id, role: membership.role as "owner" | "admin" | "viewer" | "cleaning" };
 }
 
 function isBundledDemoState(value: unknown) {
@@ -60,6 +60,9 @@ async function syncCommunicationRows(supabase: Awaited<ReturnType<typeof createC
 export async function GET() {
   const result = await context();
   if (result.error) return result.error;
+  if (result.role === "cleaning") {
+    return NextResponse.json({ error: "To konto korzysta wyłącznie z panelu sprzątania." }, { status: 403 });
+  }
 
   const [{ data: records, error: recordsError }, { data: revision, error: revisionError }] = await Promise.all([
     result.supabase!
@@ -122,7 +125,7 @@ export async function GET() {
 export async function PUT(request: Request) {
   const result = await context();
   if (result.error) return result.error;
-  if (result.role === "viewer") return NextResponse.json({ error: "Konto ma dostęp tylko do odczytu" }, { status: 403 });
+  if (result.role !== "owner" && result.role !== "admin") return NextResponse.json({ error: "Konto nie ma dostępu do pełnego zapisu" }, { status: 403 });
   const contentLength = Number(request.headers.get("content-length") ?? 0);
   if (contentLength > 5_000_000) return NextResponse.json({ error: "Stan aplikacji jest zbyt duży" }, { status: 413 });
   const parsed = payloadSchema.safeParse(await request.json().catch(() => null));

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireOrganization } from "@/lib/supabase/auth-context";
+import { isOrganizationEditor, requireOrganization } from "@/lib/supabase/auth-context";
 import { sendSmsApi } from "@/lib/integrations/smsapi";
 import { isSmsDeliveryEnabled, smsDeliveryDisabledMessage } from "@/lib/integrations/outbound-delivery";
 
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Sprawdź numer telefonu i treść SMS." }, { status: 400 });
   const context = await requireOrganization();
   if (context.error) return context.error;
-  if (context.role === "viewer") return NextResponse.json({ error: "Brak uprawnień do wysyłania wiadomości." }, { status: 403 });
+  if (!isOrganizationEditor(context.role)) return NextResponse.json({ error: "Brak uprawnień do wysyłania wiadomości." }, { status: 403 });
   if (!isSmsDeliveryEnabled()) return NextResponse.json({ error: smsDeliveryDisabledMessage, deliveryEnabled: false }, { status: 423 });
 
   const since = new Date(Date.now() - 86_400_000).toISOString();

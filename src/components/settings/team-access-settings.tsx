@@ -4,15 +4,16 @@ import { useState } from "react";
 import type { UserRole } from "@/lib/types";
 import { Button, Card, CardTitle, Field, inputClass } from "@/components/ui/primitives";
 
-type InvitationRole = Extract<UserRole, "admin" | "viewer">;
+type InvitationRole = Extract<UserRole, "admin" | "viewer" | "cleaning">;
 
 const roleLabels: Record<InvitationRole, string> = {
   admin: "Administrator — może edytować dane",
   viewer: "Podgląd — tylko odczyt",
+  cleaning: "Sprzątanie — tylko zadania i checklisty",
 };
 
 export function TeamAccessSettings({ currentRole }: { currentRole: UserRole | null }) {
-  const allowedRoles: InvitationRole[] = currentRole === "owner" ? ["admin", "viewer"] : currentRole === "admin" ? ["viewer"] : [];
+  const allowedRoles: InvitationRole[] = currentRole === "owner" ? ["admin", "viewer", "cleaning"] : currentRole === "admin" ? ["viewer"] : [];
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<InvitationRole>(allowedRoles[0] ?? "viewer");
   const [status, setStatus] = useState<{ tone: "success" | "error"; message: string } | null>(null);

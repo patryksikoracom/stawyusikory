@@ -21,10 +21,11 @@ const roleLabels: Record<UserRole, string> = {
   owner: "Właściciel",
   admin: "Administrator",
   viewer: "Podgląd",
+  cleaning: "Sprzątanie",
 };
 
 export function isUserRole(value: unknown): value is UserRole {
-  return value === "owner" || value === "admin" || value === "viewer";
+  return value === "owner" || value === "admin" || value === "viewer" || value === "cleaning";
 }
 
 export function roleLabel(role: UserRole | null) {
