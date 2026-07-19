@@ -5,19 +5,23 @@ import { useAppStore } from "@/components/layout/app-store";
 import { Badge, Button, Card, Field, inputClass } from "@/components/ui/primitives";
 import { Icon, type IconName } from "@/components/ui/icons";
 import { PricingSettings } from "@/components/settings/pricing-settings";
+import { TeamAccessSettings } from "@/components/settings/team-access-settings";
+import { roleLabel } from "@/lib/auth/identity";
 import { formatPolishCount } from "@/lib/polish-plural";
+import type { UserRole } from "@/lib/types";
 
-export function SettingsView() {
+export function SettingsView({ currentRole = null }: { currentRole?: UserRole | null }) {
   const { data, dataStatus, syncMode, updateSettings, exportSnapshot, resetDemo } = useAppStore();
   const [form,setForm]=useState(data.settings);
   const [saved,setSaved]=useState(false);
   function save(){if(dataStatus!=="ready")return;updateSettings(form);setSaved(true);window.setTimeout(()=>setSaved(false),2500);}
   return <div className="grid gap-5">
-    <section className="animate-rise-2 grid gap-4 sm:grid-cols-3"><SettingStat icon="home" label="Domki" value={data.units.length}/><SettingStat icon="people" label="Dostęp" value="Właściciele"/><SettingStat icon="refresh" label="Magazyn danych" value={syncMode==="cloud"?"Chmura":"Lokalny"}/></section>
+    <section className="animate-rise-2 grid gap-4 sm:grid-cols-3"><SettingStat icon="home" label="Domki" value={data.units.length}/><SettingStat icon="people" label="Dostęp" value={roleLabel(currentRole)}/><SettingStat icon="refresh" label="Magazyn danych" value={syncMode==="cloud"?"Chmura":"Lokalny"}/></section>
     {saved?<p aria-live="polite" className="rounded-xl bg-[#dfeede] p-3 text-sm font-bold text-[#215c3b]">Ustawienia zostały zapisane.</p>:null}
     <div className="animate-rise-3 grid gap-5 xl:grid-cols-[1fr_380px]">
       <div className="grid gap-5">
         <Card className="overflow-hidden"><Title eyebrow="Operacje" title="Kontakt i godziny"/><div className="grid gap-4 p-5 sm:grid-cols-2"><Field label="Nazwa obiektu"><input className={inputClass} value={form.organizationName} onChange={(event)=>setForm({...form,organizationName:event.target.value})}/></Field><Field label="Osoba sprzątająca"><input className={inputClass} value={form.cleaningContactName} onChange={(event)=>setForm({...form,cleaningContactName:event.target.value})}/></Field><Field label="Telefon do SMS"><input className={inputClass} inputMode="tel" placeholder="+48 600 000 000" value={form.cleaningPhone} onChange={(event)=>setForm({...form,cleaningPhone:event.target.value})}/></Field><Field label="Strefa czasowa"><input className={inputClass} disabled value={form.timezone}/></Field><Field label="Domyślny check-in"><input className={inputClass} type="time" value={form.defaultCheckIn} onChange={(event)=>setForm({...form,defaultCheckIn:event.target.value})}/></Field><Field label="Domyślny check-out"><input className={inputClass} type="time" value={form.defaultCheckOut} onChange={(event)=>setForm({...form,defaultCheckOut:event.target.value})}/></Field></div><div className="flex justify-end border-t p-4"><Button disabled={dataStatus!=="ready"} onClick={save}>Zapisz ustawienia</Button></div></Card>
+        <TeamAccessSettings currentRole={currentRole}/>
         <PricingSettings/>
         <Card className="overflow-hidden"><Title eyebrow="Automatyzacje" title="Reguły draft-first"/><div className="grid gap-2 p-3">{data.automationRules.map((rule)=><Rule key={rule.id} icon="message" title={rule.name} body={`${rule.trigger} · ${rule.offsetDays === 0 ? "tego samego dnia" : `${formatPolishCount(Math.abs(rule.offsetDays), "dzień", "dni", "dni")} ${rule.offsetDays < 0 ? "wcześniej" : "później"}`} · ${rule.sendTime}`} active={rule.active}/>)}</div><div className="border-t border-[#e2dbce] p-4 text-xs leading-5 text-[#68756f]">Wszystkie reguły tworzą szkice. Wysyłka automatyczna pozostaje zablokowana, dopóki kanał i zgody nie przejdą testów.</div></Card>
         <Card className="overflow-hidden"><Title eyebrow="Komunikacja" title="Biblioteka szablonów"/><div className="grid gap-2 p-3 sm:grid-cols-2">{data.messageTemplates.map((template)=><article className="rounded-2xl border border-[#ded7ca] bg-white p-4" key={template.id}><div className="flex items-start justify-between gap-2"><div><p className="text-sm font-black">{template.name}</p><p className="mt-1 text-[10px] font-bold uppercase tracking-[.11em] text-[#758079]">{template.purpose} · {template.channel}</p></div><Badge tone={template.active?"good":"neutral"}>v{template.version}</Badge></div><p className="mt-3 line-clamp-3 text-xs leading-5 text-[#65736c]">{template.body}</p><p className="mt-3 text-[10px] font-semibold text-[#838b86]">{template.allowedVariables.length} dozwolonych zmiennych · {template.language.toUpperCase()}</p></article>)}</div></Card>
