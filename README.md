@@ -17,7 +17,7 @@ Produkcyjny fundament systemu operacyjnego Stawów u Sikory: rezerwacje, wspóln
 - backup JSON, audit log, mobilne menu wszystkich modułów i instalowalna PWA;
 - testy reguł terminów, polskich dat oraz importu.
 
-Bez skonfigurowanego Supabase aplikacja działa w wyraźnie oznaczonym trybie lokalnym. Nie udaje wtedy synchronizacji chmurowej. Bez `SMSAPI_TOKEN` wiadomości nie są wysyłane, a błąd konfiguracji jest zapisywany w historii.
+Bez skonfigurowanego Supabase aplikacja działa w wyraźnie oznaczonym trybie lokalnym. Nie udaje wtedy synchronizacji chmurowej. Wysyłka SMS jest domyślnie zablokowana przez `STAWY_OS_SMS_ENABLED=false`; sam `SMSAPI_TOKEN` nie otwiera kanału.
 
 ## Uruchomienie
 
@@ -58,7 +58,7 @@ Wbudowane dane demonstracyjne są rozpoznawane i nie mogą zostać automatycznie
 - W panelu portalu trzeba potwierdzić, czy dana oferta Booking.com ma import i eksport iCal.
 - iCal nie przenosi ceny, danych gościa ani płatności i może odświeżać się z opóźnieniem.
 
-Workflow `.github/workflows/operations-cron.yml` uruchamia synchronizację co 15 minut, ale interfejs zakłada próg nieaktualności czterech godzin ze względu na ograniczenia portali. Ponowienia SMS są uruchamiane dopiero po ustawieniu sekretu `STAWY_OS_SMS_ENABLED=true`.
+Workflow `.github/workflows/operations-cron.yml` uruchamia synchronizację co 15 minut, ale interfejs zakłada próg nieaktualności czterech godzin ze względu na ograniczenia portali. Ponowienia SMS są uruchamiane dopiero po ustawieniu sekretu GitHub `STAWY_OS_SMS_ENABLED=true`, a endpoint wymaga dodatkowo tej samej wartości w środowisku aplikacji. Warunki otwarcia kanału opisuje ADR-001.
 
 ## Testy integracyjne Supabase
 
@@ -70,7 +70,7 @@ RUN_SUPABASE_INTEGRATION=1 SUPABASE_INTEGRATION_TEST_PROJECT=1 npm run test:inte
 
 ## SMSAPI
 
-Ustaw `SMSAPI_TOKEN`, a następnie wpisz numer osoby sprzątającej w Ustawieniach. Endpoint `POST /api/messages/sms` waliduje numer i treść, wymaga zalogowanego użytkownika oraz chroni przed powtórnym wysłaniem tym samym kluczem idempotencji.
+W pilocie pozostaw `STAWY_OS_SMS_ENABLED=false`. Po formalnym przejściu bramki wysyłki ustaw `SMSAPI_TOKEN` i `STAWY_OS_SMS_ENABLED=true`, a następnie wpisz numer osoby sprzątającej w Ustawieniach. Endpoint `POST /api/messages/sms` waliduje numer i treść, wymaga zalogowanego użytkownika oraz chroni przed powtórnym wysłaniem tym samym kluczem idempotencji.
 
 ## Granice obecnej wersji
 

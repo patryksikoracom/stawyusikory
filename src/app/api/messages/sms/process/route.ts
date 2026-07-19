@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { sendSmsApi } from "@/lib/integrations/smsapi";
+import { isSmsDeliveryEnabled, smsDeliveryDisabledMessage } from "@/lib/integrations/outbound-delivery";
 
 export async function POST(request: Request) {
   const expected = process.env.CRON_SECRET;
   if (!expected || request.headers.get("authorization") !== `Bearer ${expected}`) {
     return NextResponse.json({ error: "Brak autoryzacji harmonogramu." }, { status: 401 });
   }
+  if (!isSmsDeliveryEnabled()) return NextResponse.json({ error: smsDeliveryDisabledMessage, deliveryEnabled: false }, { status: 423 });
   const token = process.env.SMSAPI_TOKEN;
   const service = createServiceClient();
   if (!token || !service) return NextResponse.json({ error: "Brak konfiguracji SMSAPI lub Supabase." }, { status: 503 });
@@ -35,4 +37,3 @@ export async function POST(request: Request) {
   }
   return NextResponse.json({ ok: failed === 0, processed: (messages ?? []).length, sent, failed });
 }
-
