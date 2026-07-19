@@ -83,7 +83,7 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 - [x] Dostępność pomniejszana wyłącznie o nieanulowane bloki `Serwis` i `Remont`, z deduplikacją nakładających się blokad.
 - [x] Dashboard i Finanse pokazują okres, kompletność, źródło oraz przyczynę niepełnych danych.
 
-**Status PR-5 (2026-07-17): gotowy do ręcznej akceptacji.** 100 testów, lint, TypeScript, build oraz test preview Dashboardu i Finansów na desktopie i telefonie przeszły bez błędów konsoli. PR-6 pozostaje nierozpoczęty.
+**Status PR-5 (2026-07-19): zaakceptowany przez właściciela do publikacji online.** 100 testów, lint, TypeScript, build oraz test preview Dashboardu i Finansów na desktopie i telefonie przeszły bez błędów konsoli. PR-6 pozostaje nierozpoczęty.
 
 #### 2.2 Cztery perspektywy finansowe
 

@@ -34,8 +34,8 @@ Commit, push i deployment są osobnymi decyzjami. Samo ukończenie lokalnej pacz
 | PR-3 / Etap 1.2b | zaakceptowany 17.07.2026 | segmenty z rekordów źródłowych, uczciwe empty states i jawna bramka rekomendacji |
 | PR-4 / Etap 1.3 | **zaakceptowany 17.07.2026 z wyjątkiem HIBP** | invitation-only, brak domyślnego `owner`, kontrola `disable_signup`; preview desktop/mobile zweryfikowane; właściciel jawnie zaakceptował pozostawienie HIBP do czasu planu Pro |
 | Etap 1 jako całość | **warunkowo zamknięty 17.07.2026** | wszystkie zmiany możliwe na obecnym planie są wdrożone; jedyny przyjęty wyjątek to płatna ochrona HIBP |
-| PR-5 / Etap 2.1 | **gotowy do ręcznej akceptacji** | wspólny silnik okresów i KPI, osobne PLN/EUR, metadane jakości; testy lokalne i preview desktop/mobile zakończone powodzeniem |
-| Etap 2 jako całość | w toku | PR-5 czeka na akceptację; sprzedaż, należności, cashflow i wynik pozostają zakresem PR-6 |
+| PR-5 / Etap 2.1 | **zaakceptowany do publikacji 19.07.2026** | wspólny silnik okresów i KPI, osobne PLN/EUR, metadane jakości; testy lokalne i preview desktop/mobile zakończone powodzeniem |
+| Etap 2 jako całość | w toku | PR-5 zaakceptowany; sprzedaż, należności, cashflow i wynik pozostają zakresem PR-6 |
 
 ## Mapa Etapów i PR-ów
 
@@ -46,7 +46,7 @@ Commit, push i deployment są osobnymi decyzjami. Samo ukończenie lokalnej pacz
 | 2 | Etap 1 — bezpieczeństwo i zaufanie | PR-2 — zaakceptowany | profil z sesji, rola, dynamiczne alerty, uczciwe copy, zaszyfrowany backup | konto testowe nie widzi `Marcin/MS`; zero stałych alertów |
 | 3 | Etap 1 — bezpieczeństwo i zaufanie | PR-3 — zaakceptowany | usunięcie przykładowych insightów i uczciwe empty states | przy braku danych nie ma rekomendacji biznesowej |
 | 4 | Etap 1 — bezpieczeństwo i zaufanie | **PR-4 — zaakceptowany z wyjątkiem HIBP** | invitation-only, blokada signup→owner i bramka konfiguracji Auth; HIBP po Pro | ukończone na obecnym planie; HIBP pozostaje przyjętym ryzykiem |
-| 5 | Etap 2 — prawidłowe metryki | **PR-5 — gotowy do akceptacji** | wspólny silnik okresów, aktywne rezerwacje, obłożenie, waluty | testy granic miesiąca/roku/DST i preview przeszły; ręczna akceptacja właściciela |
+| 5 | Etap 2 — prawidłowe metryki | **PR-5 — zaakceptowany** | wspólny silnik okresów, aktywne rezerwacje, obłożenie, waluty | testy granic miesiąca/roku/DST i preview przeszły; właściciel zatwierdził publikację online |
 | 6 | Etap 2 — finanse | PR-6 | sprzedaż, należności, cashflow i wynik zarządczy | pulpit i Finanse używają tych samych definicji |
 | 7 | Etap 3 — wielosesyjność | PR-7 | telemetryka, koordynacja kart, czytelny konflikt | brak cichego nadpisania zmian |
 | 8 | Etap 3 — zapis domenowy | PR-8a… | komendy per domena i odejście od pełnego snapshotu | migracja etapami; każdy pod-PR osobno |
@@ -57,7 +57,7 @@ Commit, push i deployment są osobnymi decyzjami. Samo ukończenie lokalnej pacz
 
 Numery z sufiksem `a…` oznaczają duży zakres, który przed implementacją zostanie rozbity na mniejsze, osobno akceptowane paczki.
 
-## Aktualna paczka: PR-5 — gotowa do ręcznej akceptacji
+## Aktualna paczka: PR-5 — zaakceptowana do publikacji online
 
 ### Zakres
 
@@ -87,7 +87,7 @@ Numery z sufiksem `a…` oznaczają duży zakres, który przed implementacją zo
 6. Każda karta KPI podaje okres, kompletność i źródło obliczenia.
 7. Testy automatyczne, build i test przeglądarkowy desktop/mobile przechodzą bez błędów konsoli.
 
-**Status PR-5 (2026-07-17):** implementacja i preview są gotowe do ręcznej akceptacji. Zweryfikowano 100 testów automatycznych, lint, TypeScript, build oraz Dashboard i Finanse na desktopie i telefonie. PR-6 nie został rozpoczęty.
+**Status PR-5 (2026-07-19): zaakceptowany przez właściciela do publikacji online.** Zweryfikowano 100 testów automatycznych, lint, TypeScript, build oraz Dashboard i Finanse na desktopie i telefonie. PR-6 nie został rozpoczęty.
 
 ## Stałe zasady do czasu Etapu 7
 
