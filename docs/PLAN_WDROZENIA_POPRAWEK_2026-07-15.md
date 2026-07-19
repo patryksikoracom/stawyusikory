@@ -51,12 +51,14 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 
 - [x] Profil, nazwa i inicjały z sesji/użytkownika, nie `Marcin/MS`.
 - [x] Alerty wyłącznie z realnych reguł i danych.
-- [ ] Usunąć stałe segmenty oraz stałą sugestię marketingową.
-- [ ] „Profile gości” liczyć jako `data.guests.length` lub zmienić etykietę na „Rezerwacje/goście”.
+- [x] Usunąć stałe segmenty oraz stałą sugestię marketingową.
+- [x] „Profile gości” liczyć z rzeczywistych rekordów i pokazać mianownik widocznych rezerwacji.
 - [x] Poprawić odmianę liczebników objętych PR-2.
 - [x] Zmienić etykietę backupu na „Pobierz zaszyfrowany backup”.
 
-**Status PR-2 (2026-07-17): gotowy do ręcznej akceptacji; testy automatyczne, desktop i mobile ukończone. Pozostałe dwa niezaznaczone punkty sekcji 1.2 należą do PR-3.**
+**Status PR-2 (2026-07-17): zaakceptowany przez właściciela po weryfikacji preview online.**
+
+**Status PR-3 (2026-07-17): gotowy do ręcznej akceptacji.** Segmenty i kolejne kroki wynikają wyłącznie z rekordów źródłowych, brak danych nie jest prezentowany jako zero, a stałe rekomendacje biznesowe zostały zastąpione jawną bramką jakości danych. Pełna regresja, build oraz testy desktop/mobile ukończone.
 
 #### 1.3 Auth i konfiguracja
 

@@ -30,7 +30,8 @@ Commit, push i deployment są osobnymi decyzjami. Samo ukończenie lokalnej pacz
 | Audyt ogólny | ukończony | stan wejściowy i lista ryzyk są zapisane |
 | Etap 0 | zaakceptowany do kontynuacji 17.07.2026 | wybrana ścieżka A, źródła prawdy, słownik KPI i blokada komunikacji |
 | PR-1 / Etap 1.1 | ukończony i zaakceptowany do kontynuacji | loading gate, brak demo flash także dla częściowego payloadu chmurowego, bezpieczne Ustawienia |
-| PR-2 / Etap 1.2a | **gotowy do ręcznej akceptacji** | prawdziwa tożsamość, alerty i copy; automatyczna weryfikacja ukończona 17.07.2026 |
+| PR-2 / Etap 1.2a | zaakceptowany 17.07.2026 | prawdziwa tożsamość, alerty i copy; preview online zweryfikowane przez właściciela |
+| PR-3 / Etap 1.2b | **gotowy do ręcznej akceptacji** | segmenty z rekordów źródłowych, uczciwe empty states i jawna bramka rekomendacji |
 | Etap 1 jako całość | w toku | zakończy się dopiero po PR-4 |
 
 ## Mapa Etapów i PR-ów
@@ -39,8 +40,8 @@ Commit, push i deployment są osobnymi decyzjami. Samo ukończenie lokalnej pacz
 |---:|---|---|---|---|
 | 0 | Etap 0 — zasady pilota | decyzje, bez osobnego PR | ścieżka A, źródła prawdy, KPI, wyłączona wysyłka | ADR-001 i KPI zaakceptowane |
 | 1 | Etap 1 — bezpieczeństwo i zaufanie | PR-1 | loading gate, brak demo/zer, bezpieczne formularze | ukończone |
-| 2 | Etap 1 — bezpieczeństwo i zaufanie | **PR-2 — gotowy do akceptacji** | profil z sesji, rola, dynamiczne alerty, uczciwe copy, zaszyfrowany backup | konto testowe nie widzi `Marcin/MS`; zero stałych alertów |
-| 3 | Etap 1 — bezpieczeństwo i zaufanie | PR-3 — po akceptacji PR-2 | usunięcie przykładowych insightów i uczciwe empty states | przy braku danych nie ma rekomendacji biznesowej |
+| 2 | Etap 1 — bezpieczeństwo i zaufanie | PR-2 — zaakceptowany | profil z sesji, rola, dynamiczne alerty, uczciwe copy, zaszyfrowany backup | konto testowe nie widzi `Marcin/MS`; zero stałych alertów |
+| 3 | Etap 1 — bezpieczeństwo i zaufanie | **PR-3 — gotowy do akceptacji** | usunięcie przykładowych insightów i uczciwe empty states | przy braku danych nie ma rekomendacji biznesowej |
 | 4 | Etap 1 — bezpieczeństwo i zaufanie | PR-4 | leaked passwords, invitation-only, blokada signup→owner | domknięta akceptacja całego Etapu 1 |
 | 5 | Etap 2 — prawidłowe metryki | PR-5 | wspólny silnik okresów, aktywne rezerwacje, obłożenie, waluty | testy granic miesiąca/roku/DST |
 | 6 | Etap 2 — finanse | PR-6 | sprzedaż, należności, cashflow i wynik zarządczy | pulpit i Finanse używają tych samych definicji |
@@ -53,34 +54,33 @@ Commit, push i deployment są osobnymi decyzjami. Samo ukończenie lokalnej pacz
 
 Numery z sufiksem `a…` oznaczają duży zakres, który przed implementacją zostanie rozbity na mniejsze, osobno akceptowane paczki.
 
-## Aktualna paczka: PR-2 — gotowa do ręcznej akceptacji
+## Aktualna paczka: PR-3 — gotowa do ręcznej akceptacji
 
 ### Zakres
 
-- pobrać e-mail, nazwę i rolę z aktualnej sesji/członkostwa,
-- wyliczać bezpieczny fallback nazwy oraz inicjałów bez stałych `Marcin/MS`,
-- pokazać prawdziwą rolę i e-mail w menu konta,
-- generować alerty wyłącznie z aktualnych danych aplikacji,
-- usunąć stały alert `1 płatność do sprawdzenia`,
-- poprawić komunikaty synchronizacji/profilu objęte tą paczką,
-- zmienić etykietę backupu na `Pobierz zaszyfrowany backup`,
-- poprawić odmianę liczebników dotkniętych przez nowe alerty i copy.
+- liczyć segmenty wyłącznie z profili powiązanych z widocznymi rezerwacjami,
+- pokazywać liczbę uzupełnionych profili wraz z mianownikiem rezerwacji,
+- odróżniać brak próbki od prawdziwej wartości zero,
+- zastąpić stałą sugestię marketingową jawną bramką jakości danych,
+- wyliczać następne kroki z rzeczywistych braków profili, atrybucji, opinii i zgód,
+- dodać uczciwy stan pusty dla segmentów, filtrów i braku rezerwacji,
+- nie podstawiać wizualnie wartości `Inne`, jeśli kanał odkrycia nie został zapisany.
 
-### Poza zakresem PR-2
+### Poza zakresem PR-3
 
-- przebudowa modułu Goście i marketing — PR-3,
 - zmiana polityk Auth, signup i provisioning — PR-4,
 - naprawa sposobu liczenia KPI — PR-5/PR-6,
+- generowanie mierzalnych rekomendacji wzrostu i consent ledger — PR-11,
 - role domenowe i multi-tenant — PR-9.
 
-### Akceptacja PR-2
+### Akceptacja PR-3
 
-1. Konto testowe pokazuje własny e-mail i rolę `admin`/`Administrator`.
-2. W interfejsie nie występują stałe `Marcin`, `MS` ani `Panel właściciela` dla innego użytkownika.
-3. Liczba i treść alertów wynikają z fixture'ów i danych chmurowych.
-4. Przy zerowej liczbie alertów interfejs pokazuje uczciwy stan pusty.
-5. Backup jest opisany jako zaszyfrowany.
-6. Testy automatyczne i test przeglądarkowy przechodzą bez błędów konsoli.
+1. W module Goście nie występują stałe segmenty ani behawioralne sugestie bez rekordów źródłowych.
+2. Liczba profili jest liczona z rzeczywistych rekordów i pokazuje mianownik rezerwacji.
+3. Brak próbki jest opisany jako `Brak danych`, nie jako wynik zero.
+4. Segmenty o różnej wielkości liter są agregowane bez dublowania.
+5. Empty state prowadzi do konkretnej rezerwacji lub listy rezerwacji.
+6. Testy automatyczne, build i test przeglądarkowy desktop/mobile przechodzą bez błędów konsoli.
 
 ## Stałe zasady do czasu Etapu 7
 
