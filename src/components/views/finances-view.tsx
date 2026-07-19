@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useAppStore } from "@/components/layout/app-store";
 import { Badge, Button, Card, Field, inputClass } from "@/components/ui/primitives";
 import { Icon, type IconName } from "@/components/ui/icons";
@@ -10,19 +10,47 @@ import type { InvoiceRecord } from "@/lib/types";
 import { todayInPoland } from "@/lib/date";
 import { calculateModeledCosts } from "@/lib/workflow/pricing";
 import { formatPolishDate } from "@/lib/date";
+import { MetricContext } from "@/components/metrics/metric-context";
+import {
+  calculateCommercialMetrics,
+  calendarYearPeriod,
+  type CommercialMetrics,
+  type CurrencyMetric,
+  type MetricMetadata,
+} from "@/lib/metrics/commercial";
 
 function money(value: number) { return new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", maximumFractionDigits: 0 }).format(value); }
+function metricMoney(value: number, currency: CurrencyMetric["currency"]) { return new Intl.NumberFormat("pl-PL", { style: "currency", currency, maximumFractionDigits: 0 }).format(value); }
+function currencyMetricValues(metrics: CurrencyMetric[], key: "adr" | "revPar") {
+  const values = metrics.filter((metric) => metric[key] != null);
+  if (!values.length) return ["Brak danych"];
+  return values.map((metric) => `${metric.currency} ${metricMoney(metric[key] ?? 0, metric.currency)}`);
+}
 const monthNames = ["sty","lut","mar","kwi","maj","cze","lip","sie","wrz","paź","lis","gru"];
 
 export function FinancesView() {
   const { data, addInvoice } = useAppStore();
-  const years = Array.from(new Set(data.bookings.map((item) => Number(item.checkIn.slice(0,4))).filter(Boolean))).sort((a,b)=>b-a);
-  const [year,setYear]=useState(years[0] ?? new Date().getFullYear());
+  const currentLocalDate = todayInPoland();
+  const currentYear = Number(currentLocalDate.slice(0,4));
+  const years = Array.from(new Set([currentYear, ...data.bookings.map((item) => Number(item.checkIn.slice(0,4))).filter(Boolean)])).sort((a,b)=>b-a);
+  const [year,setYear]=useState(years[0]);
   const [showLedger,setShowLedger]=useState(false);
   const [showAssumptions,setShowAssumptions]=useState(false);
   const [showInvoice,setShowInvoice]=useState(false);
-  const currentLocalDate = todayInPoland();
-  const currentYear = Number(currentLocalDate.slice(0,4));
+  const commercial = useMemo(() => {
+    const fullYearPeriod = calendarYearPeriod(year);
+    const period = year < currentYear
+      ? fullYearPeriod
+      : year === currentYear
+        ? { ...fullYearPeriod, toExclusive: currentLocalDate }
+        : { ...fullYearPeriod, toExclusive: fullYearPeriod.from };
+    return calculateCommercialMetrics({
+      bookings: data.bookings,
+      units: data.units,
+      blocks: data.blocks,
+      period,
+    });
+  }, [currentLocalDate, currentYear, data.blocks, data.bookings, data.units, year]);
   const monthsInPeriod = year === currentYear ? Number(currentLocalDate.slice(5,7)) : 12;
   const stays = data.bookings.filter((item)=>Number(item.checkIn.slice(0,4))===year && item.workflowStatus!=="Anulowana");
   const foreignBookings = stays.filter((item)=>(item.currency??"PLN")!=="PLN");
@@ -37,11 +65,6 @@ export function FinancesView() {
   const modeledCosts = calculateModeledCosts(data.costSettings, stays, monthsInPeriod);
   const operatingCosts = explicitCosts + cleaning + modeledCosts.total;
   const net = gross-commission-operatingCosts;
-  const nights = stays.reduce((sum,item)=>sum+nightsBetween(item.checkIn,item.checkOut),0);
-  const daysInYear = new Date(year,1,29).getMonth()===1?366:365;
-  const occupancy = Math.round((nights/Math.max(1,daysInYear*data.units.length))*100);
-  const adr = nights?gross/nights:0;
-  const revPar = gross/Math.max(1,daysInYear*data.units.length);
   const months = monthNames.map((label,index)=>{const prefix=`${year}-${String(index+1).padStart(2,"0")}`;const monthStays=stays.filter((item)=>item.checkIn.startsWith(prefix));const monthBookings=bookings.filter((item)=>item.checkIn.startsWith(prefix));const revenue=monthBookings.reduce((sum,item)=>sum+(item.grossPrice??0),0);const ledgerCosts=data.payments.filter((item)=>item.occurredAt.startsWith(prefix)&&["Prowizja","Koszt","Zwrot"].includes(item.type)&&item.status==="Zaksięgowana").reduce((sum,item)=>sum+item.amount,0);const monthCleaning=monthStays.reduce((sum,item)=>sum+(data.units.find((unit)=>unit.id===item.unitId)?.defaultCleaningCost??0),0);const masterCosts=calculateModeledCosts(data.costSettings,monthStays,1).total;return{label,revenue,net:Math.max(0,revenue-ledgerCosts-monthCleaning-masterCosts)}});
   const maxMonth=Math.max(1,...months.map((item)=>item.revenue));
   const unitRevenue=data.units.map((unit)=>({unit,value:bookings.filter((item)=>item.unitId===unit.id).reduce((sum,item)=>sum+(item.grossPrice??0),0),nights:stays.filter((item)=>item.unitId===unit.id).reduce((sum,item)=>sum+nightsBetween(item.checkIn,item.checkOut),0)}));
@@ -53,9 +76,14 @@ export function FinancesView() {
 
   return <div className="grid gap-5">
     <div className="animate-rise-2 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#d9d1c1] bg-[#fffdf8] p-3"><div className="flex items-center gap-2"><span className="text-xs font-black uppercase tracking-[.13em] text-[#7b857f]">Okres</span><select className="min-h-10 rounded-xl border border-[#cec6b7] bg-white px-3 text-sm font-black" value={year} onChange={(event)=>setYear(Number(event.target.value))}>{years.map((item)=><option key={item}>{item}</option>)}</select></div><Button variant="secondary" onClick={exportCsv}><Icon className="size-4" name="download"/>Eksport CSV</Button></div>
-    {foreignBookings.length ? <p className="rounded-xl border border-[#ecd39b] bg-[#fbf0d3] p-3 text-xs font-bold text-[#745815]">{foreignBookings.length} rezerwacji w walucie innej niż PLN nie wchodzi do sum przychodu ani marży. Dodamy je po skonfigurowaniu kontrolowanego kursu walutowego.</p> : null}
+    <div className="rounded-2xl border border-[#cddbc8] bg-[#edf3e8] p-4 text-sm leading-6 text-[#425d4e]"><strong className="font-black text-[#234b3b]">KPI v2 mają wspólną definicję.</strong> Obłożenie, ADR i RevPAR poniżej używają jednego silnika okresów i oddzielają PLN od EUR. Sprzedaż, prowizje, koszty i wynik pozostają modelem pilotażowym do przebudowy w PR6.</div>
+    {foreignBookings.length ? <p className="rounded-xl border border-[#ecd39b] bg-[#fbf0d3] p-3 text-xs font-bold text-[#745815]">{foreignBookings.length} rezerwacji w EUR nie wchodzi jeszcze do pilotażowych kart przychodu i wyniku. W KPI v2 ADR/RevPAR jest pokazane osobno, bez przeliczania i łączenia walut.</p> : null}
     <section className="animate-rise-2 grid gap-4 md:grid-cols-2 xl:grid-cols-4"><FinanceStat label="Przychód brutto" value={money(gross)} note={`${bookings.length} aktywnych rezerwacji PLN`} icon="wallet" tone="forest"/><FinanceStat label="Prowizje OTA" value={money(commission)} note={commission?`${Math.round((commission/Math.max(1,gross))*100)}% przychodu`:"brak transakcji prowizji"} icon="plug" tone="coral"/><FinanceStat label="Koszty operacyjne" value={money(operatingCosts)} note={`sprzątanie ${money(cleaning)} · master ${money(modeledCosts.total)}`} icon="cleaning" tone="sun"/><FinanceStat label="Wynik operacyjny" value={money(net)} note={gross?`marża ${Math.round(net/gross*100)}% przed podatkiem`:"brak przychodu"} icon="spark" tone="lake"/></section>
-    <section className="grid gap-3 sm:grid-cols-3"><Mini label="Obłożenie" value={`${occupancy}%`} note={`${nights} sprzedanych nocy`}/><Mini label="ADR" value={money(adr)} note="średnia cena sprzedanej nocy"/><Mini label="RevPAR" value={money(revPar)} note="przychód na dostępną noc"/></section>
+    <section className="grid gap-3 sm:grid-cols-3">
+      <Mini label="Obłożenie komercyjne" values={[commercial.occupancyPercent == null ? "Brak danych" : `${commercial.occupancyPercent.toLocaleString("pl-PL", { maximumFractionDigits: 1 })}%`]} note={`${commercial.soldNights} sprzedanych / ${commercial.availableNights} dostępnych nocy`} metadata={commercial.occupancyMetadata} issues={commercial.occupancyIssues}/>
+      <Mini label="ADR zrealizowany" values={currencyMetricValues(commercial.currencies, "adr")} note={`${commercial.valueMetadata.sampleSize} nocy zrealizowanych · waluty osobno`} metadata={commercial.valueMetadata} issues={commercial.valueIssues}/>
+      <Mini label="RevPAR zrealizowany" values={currencyMetricValues(commercial.currencies, "revPar")} note="wartość noclegów / dostępne noce" metadata={commercial.valueMetadata} issues={commercial.valueIssues}/>
+    </section>
     {modeledCosts.lines.length ? <Card className="overflow-hidden"><div className="border-b border-[#e2dbce] p-5"><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#7d8b4d]">Założenia kosztowe</p><h2 className="font-display text-2xl font-semibold">Master kosztów {year}</h2><p className="mt-1 text-xs text-[#68756f]">Koszty stałe policzone za {monthsInPeriod} {monthsInPeriod===1?"miesiąc":"miesięcy"}. Rejestruj osobno tylko koszty jednorazowe, aby nie dublować pozycji z mastera.</p></div><div className="grid gap-px bg-[#e4ddd1] sm:grid-cols-2 xl:grid-cols-4">{modeledCosts.lines.map(({cost,total})=><div className="bg-[#fffdf8] p-4" key={cost.id}><p className="text-xs font-black">{cost.label}</p><p className="mt-1 font-display text-xl font-semibold">{money(total)}</p><p className="text-[10px] text-[#6d7972]">{cost.value.toLocaleString("pl-PL")} {cost.unit==="% przychodu"?"%":`zł / ${cost.unit}`}</p></div>)}</div></Card> : null}
 
     <div className="grid gap-5 xl:grid-cols-[1.1fr_.9fr]">
@@ -72,6 +100,6 @@ export function FinancesView() {
   </div>;
 }
 
-function Mini({label,value,note}:{label:string;value:string;note:string}){return <div className="rounded-2xl border border-[#d9d1c1] bg-[#fffdf8] p-4"><p className="text-[10px] font-black uppercase tracking-[.13em] text-[#7b857f]">{label}</p><p className="mt-1 font-display text-2xl font-semibold">{value}</p><p className="text-xs text-[#707b75]">{note}</p></div>}
+function Mini({label,values,note,metadata,issues}:{label:string;values:string[];note:string;metadata:MetricMetadata;issues:CommercialMetrics["issues"]}){return <div className="rounded-2xl border border-[#d9d1c1] bg-[#fffdf8] p-4"><p className="text-[10px] font-black uppercase tracking-[.13em] text-[#7b857f]">{label}</p><div className="mt-1 grid gap-0.5">{values.map((value)=><p className="font-display text-2xl font-semibold" key={value}>{value}</p>)}</div><p className="mt-1 text-xs text-[#707b75]">{note}</p><MetricContext issues={issues} metadata={metadata}/></div>}
 function FinanceStat({label,value,note,icon,tone}:{label:string;value:string;note:string;icon:IconName;tone:"forest"|"coral"|"sun"|"lake"}){const tones={forest:"bg-[#174d3b] text-white",coral:"bg-[#f7dfd7] text-[#a1442c]",sun:"bg-[#f6ebc8] text-[#806117]",lake:"bg-[#dcebea] text-[#276662]"};return <div className="rounded-[18px] border border-[#d9d1c1] bg-[#fffdf8] p-4"><div className="flex items-start justify-between"><div><p className="text-[10px] font-black uppercase tracking-[.13em] text-[#7b857f]">{label}</p><p className="mt-2 font-display text-[28px] font-semibold">{value}</p><p className="mt-1 text-xs text-[#707b75]">{note}</p></div><span className={`grid size-10 place-items-center rounded-xl ${tones[tone]}`}><Icon className="size-5" name={icon}/></span></div></div>}
 function InvoiceDialog({bookings,onClose,onSave}:{bookings:ReturnType<typeof useAppStore>["data"]["bookings"];onClose:()=>void;onSave:(invoice:InvoiceRecord)=>void}){const [form,setForm]=useState({bookingId:bookings[0]?.id??"",number:`FV/${todayInPoland().replaceAll("-","")}/1`,issuedAt:todayInPoland(),amount:bookings[0]?.grossPrice?String(bookings[0].grossPrice):"",status:"Do wystawienia" as InvoiceRecord["status"]});return <div className="fixed inset-0 z-50 grid place-items-center bg-[#102c24]/70 p-4 backdrop-blur-sm" onMouseDown={(event)=>{if(event.target===event.currentTarget)onClose();}}><form className="w-full max-w-lg rounded-[22px] bg-[#fffdf8] p-6 shadow-2xl" onSubmit={(event)=>{event.preventDefault();const amount=Number(form.amount);if(!amount)return;onSave({id:`INV-${Date.now()}`,...form,amount});}}><div className="flex items-start justify-between"><div><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#7d8b4d]">Rejestr dokumentów</p><h2 className="font-display text-2xl font-semibold">Dodaj fakturę lub rachunek</h2></div><button aria-label="Zamknij" type="button" onClick={onClose}><Icon className="size-5" name="close"/></button></div><div className="mt-5 grid gap-4 sm:grid-cols-2"><Field label="Numer"><input className={inputClass} required value={form.number} onChange={(event)=>setForm({...form,number:event.target.value})}/></Field><Field label="Data"><input className={inputClass} type="date" required value={form.issuedAt} onChange={(event)=>setForm({...form,issuedAt:event.target.value})}/></Field><Field label="Rezerwacja"><select className={inputClass} value={form.bookingId} onChange={(event)=>{const booking=bookings.find((item)=>item.id===event.target.value);setForm({...form,bookingId:event.target.value,amount:booking?.grossPrice?String(booking.grossPrice):form.amount});}}>{bookings.map((booking)=><option key={booking.id} value={booking.id}>{booking.guestLabel}</option>)}</select></Field><Field label="Kwota PLN"><input className={inputClass} min="0.01" step="0.01" type="number" required value={form.amount} onChange={(event)=>setForm({...form,amount:event.target.value})}/></Field><Field label="Status"><select className={inputClass} value={form.status} onChange={(event)=>setForm({...form,status:event.target.value as InvoiceRecord["status"]})}>{["Do wystawienia","Wystawiona","Opłacona","Anulowana"].map((item)=><option key={item}>{item}</option>)}</select></Field></div><p className="mt-4 rounded-xl bg-[#f5ead0] p-3 text-xs leading-5 text-[#725a1d]">Ten wpis jest rejestrem operacyjnym. Nie wysyła dokumentu do KSeF i nie nadaje mu skutków księgowych.</p><div className="mt-6 flex justify-end gap-2"><Button type="button" variant="ghost" onClick={onClose}>Anuluj</Button><Button type="submit">Dodaj do rejestru</Button></div></form></div>}

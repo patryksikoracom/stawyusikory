@@ -76,10 +76,14 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 
 #### 2.1 Wspólny silnik okresów
 
-- [ ] Jedna funkcja wyznaczająca przecięcie pobytu z okresem.
-- [ ] Wykluczenie anulowanych i kosza we wszystkich KPI.
-- [ ] Jawna polityka walut: osobne sumy per waluta albo zatwierdzony kurs ze źródłem i datą.
-- [ ] Testy pobytów przecinających miesiąc, rok, DST i 29 lutego.
+- [x] Jedna funkcja wyznaczająca przecięcie pobytu z okresem.
+- [x] Wykluczenie nowych, anulowanych i kosza we wszystkich KPI PR-5.
+- [x] Jawna polityka walut: PLN i EUR są liczone i prezentowane oddzielnie, bez niejawnego kursu.
+- [x] Testy pobytów przecinających miesiąc, rok, DST i 29 lutego.
+- [x] Dostępność pomniejszana wyłącznie o nieanulowane bloki `Serwis` i `Remont`, z deduplikacją nakładających się blokad.
+- [x] Dashboard i Finanse pokazują okres, kompletność, źródło oraz przyczynę niepełnych danych.
+
+**Status PR-5 (2026-07-19): zaakceptowany przez właściciela do publikacji online.** 100 testów, lint, TypeScript, build oraz test preview Dashboardu i Finansów na desktopie i telefonie przeszły bez błędów konsoli. PR-6 pozostaje nierozpoczęty.
 
 #### 2.2 Cztery perspektywy finansowe
 

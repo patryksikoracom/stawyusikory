@@ -1,35 +1,54 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAppStore } from "@/components/layout/app-store";
 import { Badge, Card } from "@/components/ui/primitives";
 import { Icon, type IconName } from "@/components/ui/icons";
-import { dashboardMetrics, nightsBetween, unitName } from "@/lib/workflow/rules";
+import { dashboardMetrics, unitName } from "@/lib/workflow/rules";
 import type { Booking, OpsTask } from "@/lib/types";
 import { formatPolishDate, todayInPoland } from "@/lib/date";
 import { DepartureDebriefSheet } from "@/components/departures/departure-debrief-sheet";
 import { departurePromptQueue } from "@/lib/workflow/departures";
+import { MetricContext } from "@/components/metrics/metric-context";
+import {
+  calculateCommercialMetrics,
+  monthPeriodContaining,
+  type CommercialMetrics,
+  type CurrencyMetric,
+  type MetricMetadata,
+} from "@/lib/metrics/commercial";
 
 function isoToday() { return todayInPoland(); }
 function formatDay(date?: string) { return formatPolishDate(date, { year: false }); }
-function money(value: number) { return new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", maximumFractionDigits: 0 }).format(value); }
+function money(value: number, currency: CurrencyMetric["currency"]) {
+  return new Intl.NumberFormat("pl-PL", { style: "currency", currency, maximumFractionDigits: 0 }).format(value);
+}
+
+function currencyValues(metrics: CurrencyMetric[], key: "adr" | "revPar") {
+  const values = metrics.filter((metric) => metric[key] != null);
+  if (!values.length) return "Brak danych";
+  return values.map((metric) => `${metric.currency} ${money(metric[key] ?? 0, metric.currency)}`).join(" · ");
+}
 
 export function DashboardView() {
   const { data, updateTask, prepareDepartureDebriefs, markDeparturePrompted } = useAppStore();
   const [departureId, setDepartureId] = useState<string>();
   const today = isoToday();
   const metrics = dashboardMetrics(data);
+  const commercial = useMemo(() => calculateCommercialMetrics({
+    bookings: data.bookings,
+    units: data.units,
+    blocks: data.blocks,
+    period: monthPeriodContaining(today) ?? { from: today, toExclusive: today },
+    realizedToExclusive: today,
+  }), [data.blocks, data.bookings, data.units, today]);
   const active = data.bookings.filter((booking) => booking.workflowStatus !== "Anulowana" && booking.checkIn <= today && booking.checkOut > today);
   const arrivals = data.bookings.filter((booking) => booking.workflowStatus !== "Anulowana" && booking.checkIn >= today).sort((a, b) => a.checkIn.localeCompare(b.checkIn)).slice(0, 4);
   const departures = data.bookings.filter((booking) => booking.workflowStatus !== "Anulowana" && booking.checkOut >= today).sort((a, b) => a.checkOut.localeCompare(b.checkOut)).slice(0, 4);
   const openTasks = data.tasks.filter((task) => !["Zrobione", "Nie dotyczy"].includes(task.status));
   const priorityTasks = [...openTasks].sort((a, b) => (a.priority === "Wysoki" ? -1 : b.priority === "Wysoki" ? 1 : 0)).slice(0, 4);
   const pendingPayments = data.bookings.filter((booking) => ["Do uzupełnienia", "Do dopłaty", "Częściowo"].includes(booking.paymentStatus));
-  const monthPrefix = today.slice(0,7);
-  const monthNights = data.bookings.filter((booking)=>booking.workflowStatus!=="Anulowana" && (booking.checkIn.startsWith(monthPrefix)||booking.checkOut.startsWith(monthPrefix))).reduce((sum,booking)=>sum+nightsBetween(booking.checkIn,booking.checkOut),0);
-  const daysInMonth = new Date(Number(today.slice(0,4)),Number(today.slice(5,7)),0).getDate();
-  const occupancy = Math.min(100,Math.round((monthNights/Math.max(1,daysInMonth*data.units.length))*100));
   const urgentCount=priorityTasks.filter((task)=>task.priority==="Wysoki").length;
   const todayDepartures = data.bookings.filter((booking) => booking.workflowStatus !== "Anulowana" && booking.checkOut === today);
   const departureKey = todayDepartures.map((item) => item.id).join("|");
@@ -71,10 +90,24 @@ export function DashboardView() {
       </section> : null}
 
       <section className="animate-rise-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <PulseCard label="Obłożenie w tym miesiącu" value={`${occupancy}%`} change={`${monthNights} zajętych dób`} tone="moss" />
-        <PulseCard label="Przychód potwierdzony" value={money(metrics.revenue)} change={`${money(metrics.averageNightPrice)} / noc`} tone="lake" />
-        <PulseCard label="Rezerwacje direct" value={`${metrics.directShare}%`} change="cel: 30%" tone="sun" />
-        <PulseCard label="Jakość danych" value={`${metrics.dataQuality}%`} change={`${metrics.missingMarketingFields} pól do uzupełnienia`} tone="coral" />
+        <PulseCard
+          label="Obłożenie komercyjne · miesiąc"
+          value={commercial.occupancyPercent == null ? "Brak danych" : `${commercial.occupancyPercent.toLocaleString("pl-PL", { maximumFractionDigits: 1 })}%`}
+          change={`${commercial.soldNights} sprzedanych / ${commercial.availableNights} dostępnych nocy`}
+          tone="moss"
+          metadata={commercial.occupancyMetadata}
+          issues={commercial.occupancyIssues}
+        />
+        <PulseCard
+          label="ADR zrealizowany · MTD"
+          value={currencyValues(commercial.currencies, "adr")}
+          change={`${commercial.valueMetadata.sampleSize} zrealizowanych nocy · waluty osobno`}
+          tone="lake"
+          metadata={commercial.valueMetadata}
+          issues={commercial.valueIssues}
+        />
+        <PulseCard label="Rezerwacje direct" value={`${metrics.directShare}%`} change="cel: 30%" tone="sun" legacyContext="Cały zbiór · silnik v1 (PR6)" />
+        <PulseCard label="Jakość danych" value={`${metrics.dataQuality}%`} change={`${metrics.missingMarketingFields} pól do uzupełnienia`} tone="coral" legacyContext="Cały zbiór · rekordy operacyjne v1" />
       </section>
 
       <div className="grid gap-5 xl:grid-cols-[1.15fr_.85fr]">
@@ -140,9 +173,9 @@ function HeroStat({ icon, label, value, note }: { icon: IconName; label: string;
   return <div className="bg-[#143f33]/90 p-4 sm:p-5"><div className="flex items-center gap-2 text-white/55"><Icon className="size-4" name={icon} /><span className="text-[10px] font-black uppercase tracking-[.13em]">{label}</span></div><p className="mt-3 font-display text-3xl font-semibold">{value}</p><p className="mt-0.5 text-xs text-white/50">{note}</p></div>;
 }
 
-function PulseCard({ label, value, change, tone }: { label: string; value: string; change: string; tone: "moss" | "lake" | "sun" | "coral" }) {
+function PulseCard({ label, value, change, tone, metadata, issues, legacyContext }: { label: string; value: string; change: string; tone: "moss" | "lake" | "sun" | "coral"; metadata?: MetricMetadata; issues?: CommercialMetrics["issues"]; legacyContext?: string }) {
   const tones = { moss: "before:bg-[#9bac60]", lake: "before:bg-[#317a78]", sun: "before:bg-[#f0be55]", coral: "before:bg-[#e86e4e]" };
-  return <div className={`relative overflow-hidden rounded-[18px] border border-[#d9d1c1] bg-[#fffdf8] p-5 shadow-[0_12px_35px_rgba(38,53,45,.05)] before:absolute before:inset-y-0 before:left-0 before:w-1 ${tones[tone]}`}><p className="text-[11px] font-black uppercase tracking-[.13em] text-[#77817c]">{label}</p><p className="mt-2 font-display text-[30px] font-semibold leading-none tracking-[-.035em]">{value}</p><p className="mt-2 text-xs font-semibold text-[#64726c]">{change}</p></div>;
+  return <div className={`relative overflow-hidden rounded-[18px] border border-[#d9d1c1] bg-[#fffdf8] p-5 shadow-[0_12px_35px_rgba(38,53,45,.05)] before:absolute before:inset-y-0 before:left-0 before:w-1 ${tones[tone]}`}><p className="text-[11px] font-black uppercase tracking-[.13em] text-[#77817c]">{label}</p><p className="mt-2 font-display text-[clamp(1.45rem,2vw,1.875rem)] font-semibold leading-tight tracking-[-.035em]">{value}</p><p className="mt-2 text-xs font-semibold text-[#64726c]">{change}</p>{metadata ? <MetricContext issues={issues} metadata={metadata} /> : legacyContext ? <p className="mt-3 border-t border-[#e8e1d5] pt-3 text-[10px] font-bold text-[#8a7460]">{legacyContext}</p> : null}</div>;
 }
 
 function ScheduleColumn({ label, icon, bookings, dateKey, data, reverse = false }: { label: string; icon: IconName; bookings: Booking[]; dateKey: "checkIn" | "checkOut"; data: ReturnType<typeof useAppStore>["data"]; reverse?: boolean }) {
