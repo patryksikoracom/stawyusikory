@@ -2,6 +2,7 @@ import { isBookingInTrash } from "@/lib/booking-trash";
 import { todayInPoland } from "@/lib/date";
 import { formatPolishCount } from "@/lib/polish-plural";
 import type { AppData } from "@/lib/types";
+import { calculateBookingFinance } from "@/lib/metrics/finance";
 
 export type ShellAlert = {
   id: string;
@@ -9,8 +10,6 @@ export type ShellAlert = {
   title: string;
   body: string;
 };
-
-const unsettledPaymentStatuses = new Set(["Do uzupełnienia", "Do dopłaty", "Częściowo"]);
 
 function isCurrentBooking(booking: AppData["bookings"][number], today: string) {
   return !isBookingInTrash(booking)
@@ -31,7 +30,10 @@ export function deriveShellAlerts(data: AppData, today = todayInPoland()): Shell
 
   const currentBookings = data.bookings.filter((booking) => isCurrentBooking(booking, today));
   const reviewCount = currentBookings.filter((booking) => booking.needsReview).length;
-  const paymentCount = currentBookings.filter((booking) => unsettledPaymentStatuses.has(booking.paymentStatus)).length;
+  const paymentCount = currentBookings.filter((booking) => {
+    const finance = calculateBookingFinance(booking, data.payments);
+    return finance.balanceStatus !== "settled" || finance.perspectives.receivables.completeness !== "complete";
+  }).length;
   const blockedTaskCount = data.tasks.filter((task) => task.status === "Zablokowane").length;
 
   return [
@@ -46,7 +48,7 @@ export function deriveShellAlerts(data: AppData, today = todayInPoland()): Shell
       id: "payments-review",
       icon: "wallet" as const,
       title: `${formatPolishCount(paymentCount, "płatność", "płatności", "płatności")} do sprawdzenia`,
-      body: "Dotyczy bieżących lub nadchodzących rezerwacji z nieuzgodnionym statusem płatności.",
+      body: "Dotyczy bieżących lub nadchodzących rezerwacji z saldem, nadpłatą albo niepełnym dowodem płatności.",
     }] : []),
     ...(blockedTaskCount ? [{
       id: "blocked-tasks",

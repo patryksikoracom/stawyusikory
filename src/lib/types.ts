@@ -1,5 +1,7 @@
 export type UserRole = "owner" | "admin" | "viewer" | "cleaning";
 
+export type Currency = "PLN" | "EUR";
+
 export type WorkflowStatus =
   | "Nowa"
   | "Potwierdzona"
@@ -114,7 +116,7 @@ export type Booking = {
   depositAmount?: number;
   depositDueDate?: string;
   paymentMethod?: "Brak" | "Przelew" | "Gotówka" | "Karta" | "Online";
-  currency?: "PLN" | "EUR";
+  currency?: Currency;
   paymentStatus: PaymentStatus;
   workflowStatus: WorkflowStatus;
   specialRequests?: string;
@@ -128,6 +130,8 @@ export type Booking = {
   };
   importWarnings?: string[];
   openingPaidAmount?: number;
+  openingPaidCurrency?: Currency;
+  openingPaidSource?: string;
   updatedAt?: string;
   /** Miękko usunięta rezerwacja jest dostępna w koszu przez 30 dni. */
   deletedAt?: string;
@@ -234,6 +238,7 @@ export type PaymentTransaction = {
   occurredAt: string;
   type: "Wpłata" | "Zaliczka" | "Zwrot" | "Prowizja" | "Wypłata OTA" | "Koszt";
   amount: number;
+  currency?: Currency;
   status: "Oczekuje" | "Zaksięgowana" | "Anulowana";
   method?: Booking["paymentMethod"];
   note?: string;

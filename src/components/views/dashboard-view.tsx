@@ -18,6 +18,7 @@ import {
   type CurrencyMetric,
   type MetricMetadata,
 } from "@/lib/metrics/commercial";
+import { calculateBookingFinance } from "@/lib/metrics/finance";
 
 function isoToday() { return todayInPoland(); }
 function formatDay(date?: string) { return formatPolishDate(date, { year: false }); }
@@ -48,7 +49,11 @@ export function DashboardView() {
   const departures = data.bookings.filter((booking) => booking.workflowStatus !== "Anulowana" && booking.checkOut >= today).sort((a, b) => a.checkOut.localeCompare(b.checkOut)).slice(0, 4);
   const openTasks = data.tasks.filter((task) => !["Zrobione", "Nie dotyczy"].includes(task.status));
   const priorityTasks = [...openTasks].sort((a, b) => (a.priority === "Wysoki" ? -1 : b.priority === "Wysoki" ? 1 : 0)).slice(0, 4);
-  const pendingPayments = data.bookings.filter((booking) => ["Do uzupełnienia", "Do dopłaty", "Częściowo"].includes(booking.paymentStatus));
+  const pendingPayments = data.bookings.filter((booking) => {
+    if (booking.workflowStatus === "Anulowana" || booking.deletedAt || booking.checkOut < today) return false;
+    const finance = calculateBookingFinance(booking, data.payments);
+    return finance.balanceStatus !== "settled" || finance.perspectives.receivables.completeness !== "complete";
+  });
   const urgentCount=priorityTasks.filter((task)=>task.priority==="Wysoki").length;
   const todayDepartures = data.bookings.filter((booking) => booking.workflowStatus !== "Anulowana" && booking.checkOut === today);
   const departureKey = todayDepartures.map((item) => item.id).join("|");
@@ -72,7 +77,7 @@ export function DashboardView() {
           <div>
             <div className="mb-5 flex flex-wrap items-center gap-2"><span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-[.14em] text-[#dbe5bb]"><Icon className="size-3.5" name="spark" />Brief operacyjny</span><span className="text-xs text-white/60">na podstawie aktualnych danych</span></div>
             <h2 className="max-w-3xl font-display text-[34px] font-semibold leading-[1.04] tracking-[-.035em] sm:text-[46px]">{active.length?`${active.length} ${active.length===1?"pobyt trwa":"pobyty trwają"}.`:"Domki są dziś wolne."} <span className="text-[#d3df9a]">{urgentCount?`${urgentCount} pilne ${urgentCount===1?"zadanie wymaga":"zadania wymagają"} uwagi.`:"Brak pilnych zadań."}</span></h2>
-            <p className="mt-4 max-w-2xl text-sm font-medium leading-6 text-white/70">{arrivals[0]?`Najbliższy przyjazd: ${formatDay(arrivals[0].checkIn)}, ${unitName(data.units,arrivals[0].unitId)}.`:"Brak kolejnego przyjazdu w kalendarzu."} {pendingPayments.length?`${pendingPayments.length} rezerwacji wymaga sprawdzenia rozliczenia.`:"Wszystkie statusy płatności są oznaczone jako uzgodnione."}</p>
+            <p className="mt-4 max-w-2xl text-sm font-medium leading-6 text-white/70">{arrivals[0]?`Najbliższy przyjazd: ${formatDay(arrivals[0].checkIn)}, ${unitName(data.units,arrivals[0].unitId)}.`:"Brak kolejnego przyjazdu w kalendarzu."} {pendingPayments.length?`${pendingPayments.length} rezerwacji wymaga sprawdzenia rozliczenia.`:"Wszystkie bieżące salda mają kompletne dowody."}</p>
             <div className="mt-6 flex flex-wrap gap-2"><Link className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#f2c25e] px-4 text-sm font-black text-[#18332c] transition hover:bg-[#f7d47e]" href="/bookings">Przejdź do rezerwacji <Icon className="size-4" name="arrow" /></Link><Link className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/15 bg-white/[.07] px-4 text-sm font-bold text-white transition hover:bg-white/[.12]" href="/tasks">Zobacz plan operacji</Link></div>
           </div>
           <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-white/10 bg-white/10">

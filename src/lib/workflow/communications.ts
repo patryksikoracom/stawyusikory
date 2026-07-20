@@ -9,6 +9,7 @@ import type {
 import { addLocalDays } from "../date";
 import { todayInPoland } from "../date";
 import { nightsBetween, unitName } from "./rules";
+import { calculateBookingFinance } from "../metrics/finance";
 
 const variables = [
   "guest_name", "guest_first_name", "unit_name", "check_in", "check_out",
@@ -66,7 +67,10 @@ function contactFor(template: MessageTemplate, consent?: ContactConsent) {
 }
 
 export function renderTemplate(template: MessageTemplate, booking: Booking, data: Pick<AppData, "units" | "payments">) {
-  const paid = data.payments.filter((item) => item.bookingId === booking.id && item.status === "Zaksięgowana").reduce((sum, item) => sum + (item.type === "Zwrot" ? -item.amount : item.amount), 0);
+  const finance = calculateBookingFinance(booking, data.payments);
+  const balanceDue = finance.amountDue == null
+    ? "do ustalenia"
+    : `${finance.amountDue.toLocaleString("pl-PL")} ${finance.currency ?? ""}`.trim();
   const values: Record<string, string> = {
     guest_name: booking.guestLabel,
     guest_first_name: booking.guestLabel.trim().split(/\s+/)[0] || "Gościu",
@@ -76,7 +80,9 @@ export function renderTemplate(template: MessageTemplate, booking: Booking, data
     arrival_time: booking.arrivalTime || "16:00",
     departure_time: booking.departureTime || "11:00",
     booking_id: booking.platformReservationNo || booking.id,
-    balance_due: `${Math.max(0, (booking.grossPrice || 0) - paid).toLocaleString("pl-PL")} zł`,
+    balance_due: finance.balanceStatus === "overpaid"
+      ? `0 ${finance.currency ?? ""} (nadpłata ${(finance.overpayment ?? 0).toLocaleString("pl-PL")} ${finance.currency ?? ""})`.replaceAll(/\s+/g, " ").trim()
+      : balanceDue,
   };
   const replace = (value?: string) => value?.replace(/{{\s*([a-z_]+)\s*}}/g, (_, key: string) => values[key] ?? `{{${key}}}`);
   const body = replace(template.body) || "";
