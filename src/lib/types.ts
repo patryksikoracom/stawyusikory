@@ -242,6 +242,11 @@ export type PaymentTransaction = {
   status: "Oczekuje" | "Zaksięgowana" | "Anulowana";
   method?: Booking["paymentMethod"];
   note?: string;
+  source?: string;
+  sourceRef?: string;
+  costCategory?: CostCategory;
+  costSettingId?: string;
+  unitId?: string;
 };
 
 export type InvoiceRecord = {
@@ -454,6 +459,17 @@ export type RateRule = {
   active: boolean;
 };
 
+export type CostCategory =
+  | "Sprzątanie"
+  | "Energia"
+  | "Woda"
+  | "Szambo"
+  | "Serwis i naprawy"
+  | "Marketing"
+  | "Podatki i opłaty"
+  | "Prowizja OTA"
+  | "Inne";
+
 export type CostSetting = {
   id: string;
   unitId?: string;
@@ -462,6 +478,14 @@ export type CostSetting = {
   unit: "miesiąc" | "rok" | "pobyt" | "noc" | "% przychodu";
   notes?: string;
   active: boolean;
+  kind?: "operating" | "commission";
+  category?: CostCategory;
+  currency?: Currency;
+  source?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  platform?: Channel;
+  allocation?: "equal" | "revenue";
 };
 
 export type PlatformImport = {
