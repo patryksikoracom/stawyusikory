@@ -67,18 +67,42 @@ try {
     sourceConnections: [], payments: [], invoices: [], checklistItems: [], issues: [], messages: [], auditLog: [],
     settings: { organizationName: "Test", timezone: "Europe/Warsaw", cleaningContactName: "", cleaningPhone: "", defaultCheckIn: "16:00", defaultCheckOut: "11:00", aiApprovalRequired: true },
   };
-  const firstCommit = await userClient.rpc("replace_operational_state", { p_expected_version: 0, p_state: state });
+  const firstRequestId = crypto.randomUUID();
+  const firstCommit = await userClient.rpc("replace_operational_state_v2", {
+    p_expected_version: 0,
+    p_state: state,
+    p_request_id: firstRequestId,
+    p_client_sent_at: new Date().toISOString(),
+    p_tab_id: "integration-session-a",
+  });
   if (firstCommit.error) throw firstCommit.error;
   assert(Number(firstCommit.data) === 1, "Initial state version was not created.");
 
-  const staleCommit = await userClient.rpc("replace_operational_state", { p_expected_version: 0, p_state: state });
+  const staleRequestId = crypto.randomUUID();
+  const staleCommit = await userClient.rpc("replace_operational_state_v2", {
+    p_expected_version: 0,
+    p_state: state,
+    p_request_id: staleRequestId,
+    p_client_sent_at: new Date().toISOString(),
+    p_tab_id: "integration-session-b",
+  });
   console.log("Integration: stale-write result", { code: staleCommit.error?.code ?? null, returnedVersion: staleCommit.data ?? null });
   assert(!staleCommit.error && Number(staleCommit.data) < 0, "Stale write was not rejected without raising a database error.");
 
-  const records = await userClient.from("operational_records").select("entity_type,entity_id");
+  const [records, writeTelemetry] = await Promise.all([
+    userClient.from("operational_records").select("entity_type,entity_id"),
+    userClient
+      .from("audit_events")
+      .select("entity_id,action,payload")
+      .eq("entity_type", "state_write")
+      .in("entity_id", [firstRequestId, staleRequestId]),
+  ]);
   if (records.error) throw records.error;
+  if (writeTelemetry.error) throw writeTelemetry.error;
   assert(records.data.some((record) => record.entity_type === "units" && record.entity_id === "test-unit"), "Normalized records were not persisted.");
-  console.log("Supabase integration test passed: Auth, RLS, record persistence and conflict protection.");
+  assert(writeTelemetry.data.some((event) => event.entity_id === firstRequestId && event.action === "committed"), "Successful write telemetry is missing.");
+  assert(writeTelemetry.data.some((event) => event.entity_id === staleRequestId && event.action === "conflict"), "Conflict telemetry is missing.");
+  console.log("Supabase integration test passed: Auth, RLS, record persistence, two-session conflict protection and write telemetry.");
 } finally {
   console.log("Integration: cleaning temporary data…");
   await userClient.auth.signOut().catch(() => undefined);

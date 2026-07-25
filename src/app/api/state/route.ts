@@ -5,6 +5,9 @@ import { createClient } from "@/lib/supabase/server";
 const payloadSchema = z.object({
   data: z.record(z.string(), z.unknown()),
   expectedVersion: z.number().int().nonnegative(),
+  requestId: z.string().trim().min(8).max(128),
+  clientSentAt: z.iso.datetime(),
+  tabId: z.string().trim().min(8).max(128),
 });
 
 const entityTypes = [
@@ -134,9 +137,12 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "Dane demonstracyjne zostały zablokowane przed zapisem do chmury." }, { status: 422 });
   }
 
-  const { data, error } = await result.supabase!.rpc("replace_operational_state", {
+  const { data, error } = await result.supabase!.rpc("replace_operational_state_v2", {
     p_expected_version: parsed.data.expectedVersion,
     p_state: parsed.data.data,
+    p_request_id: parsed.data.requestId,
+    p_client_sent_at: parsed.data.clientSentAt,
+    p_tab_id: parsed.data.tabId,
   });
   if (error) {
     if (error.code === "40001" || error.message.includes("Wersja danych uległa zmianie")) {
@@ -146,11 +152,22 @@ export async function PUT(request: Request) {
   }
   const committedVersion = Number(data);
   if (committedVersion < 0) {
+    const currentVersion = -committedVersion - 1;
     return NextResponse.json({
       error: "Dane zmieniły się na innym urządzeniu. Odśwież aplikację.",
-      currentVersion: -committedVersion - 1,
+      requestId: parsed.data.requestId,
+      expectedVersion: parsed.data.expectedVersion,
+      currentVersion,
+      detectedAt: new Date().toISOString(),
     }, { status: 409 });
   }
   const workflowSyncWarning = await syncCommunicationRows(result.supabase!, result.organizationId, parsed.data.data);
-  return NextResponse.json({ ok: true, version: committedVersion, workflowSyncWarning });
+  return NextResponse.json({
+    ok: true,
+    requestId: parsed.data.requestId,
+    expectedVersion: parsed.data.expectedVersion,
+    version: committedVersion,
+    savedAt: new Date().toISOString(),
+    workflowSyncWarning,
+  });
 }
