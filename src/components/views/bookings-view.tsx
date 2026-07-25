@@ -6,7 +6,7 @@ import { useAppStore } from "@/components/layout/app-store";
 import { Badge, Button, Card, Field, inputClass } from "@/components/ui/primitives";
 import { Icon, type IconName } from "@/components/ui/icons";
 import type { Booking, MessageRecord, PaymentTransaction, ScheduledMessage, WorkflowStatus } from "@/lib/types";
-import { bookingQualityScore, canClose, canConfirm, getBookingConflicts, getBookingDataIssues, getNextAction, leadTimeDays, nightsBetween, unitName } from "@/lib/workflow/rules";
+import { canClose, canConfirm, getBookingConflicts, getBookingDataIssues, getNextAction, nightsBetween, unitName } from "@/lib/workflow/rules";
 import { NewBookingDialog } from "@/components/bookings/new-booking-dialog";
 import { formatPolishDate, todayInPoland } from "@/lib/date";
 import { DepartureDebriefSheet } from "@/components/departures/departure-debrief-sheet";
@@ -43,6 +43,7 @@ export function BookingsView({ initialId, initialView = "list" }: { initialId?: 
   const selected = activeBookings.find((booking) => booking.id === selectedId) ?? rows[0];
   const future = activeBookings.filter((item) => item.checkOut >= todayInPoland() && item.workflowStatus !== "Anulowana").length;
   const unsettled = activeBookings.filter((item) => ["Do uzupełnienia", "Do dopłaty", "Częściowo"].includes(item.paymentStatus)).length;
+  const incomplete = activeBookings.filter((item) => item.needsReview || getBookingDataIssues(data, item).length > 0).length;
   const years = Array.from(new Set(activeBookings.map((item) => item.checkIn.slice(0, 4)))).sort((a, b) => b.localeCompare(a));
 
   function changeView(mode: "list" | "sheet") {
@@ -61,7 +62,7 @@ export function BookingsView({ initialId, initialView = "list" }: { initialId?: 
     <section className="animate-rise-2 grid gap-3 sm:grid-cols-3">
       <Summary label="Wszystkie rezerwacje" value={activeBookings.length} note={`${future} nadchodzących`} icon="booking" />
       <Summary label="Do rozliczenia" value={unsettled} note="wymagają sprawdzenia" icon="wallet" warn={unsettled > 0} />
-      <Summary label="Wartość rezerwacji" value={money(activeBookings.reduce((sum, item) => sum + (item.grossPrice ?? 0), 0))} note="brutto w bazie" icon="spark" />
+      <Summary label="Dane do uzupełnienia" value={incomplete} note="bez udawania wyniku finansowego" icon="warning" warn={incomplete > 0} />
     </section>
 
     <Card className="animate-rise-3 overflow-hidden">
@@ -120,12 +121,16 @@ function BookingCommandCenter({ booking }: { booking: Booking }) {
   const tasks = data.tasks.filter((item) => item.bookingId === booking.id);
   const debrief = data.departureDebriefs.find((item) => item.bookingId === booking.id);
   const issues = getBookingDataIssues(data, booking);
-  const quality = bookingQualityScore(data, booking);
   const conflicts = getBookingConflicts(data.bookings, data.blocks, booking);
   const confirmState = canConfirm(data, booking);
   const closeState = canClose(data, booking);
   const commission = importMatch?.commission ?? 0;
   const payout = importMatch?.payout ?? ((booking.grossPrice ?? 0) - commission);
+  const bookingFinance = calculateBookingFinance(booking, data.payments);
+  const balanceLabel = bookingFinance.balanceStatus === "overpaid" ? "Nadpłata" : "Pozostało";
+  const balanceValue = bookingFinance.balanceStatus === "overpaid"
+    ? bookingFinance.overpayment
+    : bookingFinance.amountDue;
 
   function changeStatus(status: WorkflowStatus) {
     setStatusError("");
@@ -137,7 +142,7 @@ function BookingCommandCenter({ booking }: { booking: Booking }) {
   return <div className="min-w-0">
     <div className="border-b border-[#e3dccf] p-5 sm:p-6">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between"><div><div className="mb-2 flex flex-wrap items-center gap-2"><Badge tone={booking.platform === "Booking" ? "lake" : booking.platform === "Airbnb" ? "bad" : "good"}>{booking.platform}</Badge><Badge tone={importMatch ? "good" : "warn"}>{importMatch ? "Dane OTA" : "Ręczny wpis"}</Badge>{booking.needsReview ? <Badge tone="warn">Wymaga uzupełnienia</Badge> : null}{conflicts.length ? <Badge tone="bad">Konflikt terminu</Badge> : null}</div><h2 className="font-display text-[30px] font-semibold leading-tight tracking-[-.03em] sm:text-[36px]">{booking.guestLabel}</h2><p className="mt-1 text-sm font-semibold text-[#68756f]">{booking.platformReservationNo || booking.id} · utworzona {shortDate(booking.bookingDate)}</p></div><div className="relative flex items-center gap-2"><Button variant="secondary" onClick={() => setTab("Wiadomości")}><Icon className="size-4" name="message"/>Napisz</Button><Button onClick={() => setActions((value) => !value)}><Icon className="size-4" name="more"/>Akcje</Button>{actions ? <div className="absolute right-0 top-12 z-20 w-52 rounded-2xl border border-[#d7cfc0] bg-white p-2 shadow-xl"><button className="w-full rounded-xl px-3 py-2 text-left text-sm font-bold hover:bg-[#f1eee6]" onClick={() => { setEditing(true); setActions(false); }}>Edytuj rezerwację</button><button className="w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-[#9b4029] hover:bg-[#f9dfd7]" onClick={() => { if (window.confirm("Anulować tę rezerwację? Termin zostanie zwolniony.")) cancelBooking(booking.id); setActions(false); }}>Anuluj rezerwację</button></div> : null}</div></div>
-      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><DataPoint icon="calendar" label="Pobyt" value={`${shortDate(booking.checkIn)} – ${shortDate(booking.checkOut)}`} sub={`${nightsBetween(booking.checkIn, booking.checkOut)} nocy`} /><DataPoint icon="home" label="Domek" value={unitName(data.units, booking.unitId)} sub={`${booking.adults + booking.children} gości`} /><DataPoint icon="wallet" label="Wartość" value={money(booking.grossPrice)} sub={booking.paymentStatus} /><DataPoint icon="clock" label="Wyprzedzenie" value={`${leadTimeDays(booking) ?? "—"} dni`} sub={`jakość danych ${quality.score}%`} /></div>
+      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5"><DataPoint icon="calendar" label="Pobyt" value={`${shortDate(booking.checkIn)} – ${shortDate(booking.checkOut)}`} sub={`${nightsBetween(booking.checkIn, booking.checkOut)} nocy`} /><DataPoint icon="home" label="Domek" value={unitName(data.units, booking.unitId)} sub={`${booking.adults + booking.children} gości`} /><DataPoint icon="wallet" label="Wartość pobytu" value={money(bookingFinance.bookingValue ?? undefined, bookingFinance.currency ?? undefined)} sub="uzgodniona cena"/><DataPoint icon="plug" label="Zaksięgowano od gościa" value={money(bookingFinance.guestPaidNet, bookingFinance.currency ?? undefined)} sub="wpłaty − zwroty"/><DataPoint icon="warning" label={balanceLabel} value={money(balanceValue ?? undefined, bookingFinance.currency ?? undefined)} sub={`dane ${bookingFinance.perspectives.receivables.completeness==="complete"?"pełne":bookingFinance.perspectives.receivables.completeness==="partial"?"częściowe":"niedostępne"}`}/></div>
     </div>
 
     <div className="overflow-x-auto border-b border-[#e3dccf] px-4 sm:px-6"><nav className="flex min-w-max gap-1">{tabs.map((item) => <button className={`border-b-2 px-3 py-3.5 text-sm font-black transition ${tab === item ? "border-[#174d3b] text-[#174d3b]" : "border-transparent text-[#737e77] hover:text-[#314b41]"}`} key={item} onClick={() => setTab(item)}>{item}{item === "Zadania" && tasks.length ? <span className="ml-2 rounded-full bg-[#ece7dd] px-2 py-0.5 text-[10px]">{tasks.length}</span> : null}</button>)}</nav></div>
@@ -199,7 +204,7 @@ function Payments({ booking, commission, payout }: { booking: Booking; commissio
   }
   return <div className="grid gap-5 lg:grid-cols-3">
     <Metric label="Wartość pobytu" value={money(finance.bookingValue ?? undefined, finance.currency ?? undefined)} note="uzgodniona wartość rezerwacji"/>
-    <Metric label="Wpłacono od gościa" value={money(finance.guestPaidNet, finance.currency ?? undefined)} note={`wpłaty i zaliczki ${money(finance.guestPayments, finance.currency ?? undefined)} · zwroty ${money(finance.guestRefunds, finance.currency ?? undefined)}`}/>
+    <Metric label="Zaksięgowano od gościa" value={money(finance.guestPaidNet, finance.currency ?? undefined)} note={`wpłaty i zaliczki ${money(finance.guestPayments, finance.currency ?? undefined)} · zwroty ${money(finance.guestRefunds, finance.currency ?? undefined)}`}/>
     <Metric label={balanceLabel} value={money(balanceValue ?? undefined, finance.currency ?? undefined)} note={balanceNote}/>
     {finance.perspectives.receivables.completeness !== "complete" ? <div className="rounded-2xl border border-[#ecd39b] bg-[#fbf0d3] p-4 text-xs font-bold leading-5 text-[#745815] lg:col-span-3"><p className="font-black">Rozliczenie jest {finance.perspectives.receivables.completeness === "unavailable" ? "niedostępne" : "częściowe"}.</p><p className="mt-1">{finance.issues.slice(0, 4).map((issue) => financeIssueLabel(issue.code)).join(" ")}</p></div> : null}
     {booking.openingPaidAmount != null ? <div className="rounded-2xl border border-[#d9d1c1] bg-[#f3f0e8] p-4 text-xs leading-5 text-[#596a62] lg:col-span-3"><strong className="font-black text-[#304d40]">Saldo otwarcia: {money(finance.openingPaid, finance.currency ?? undefined)}.</strong> Źródło: {finance.openingPaidSource ?? "nie zapisano"}.</div> : null}
