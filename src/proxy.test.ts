@@ -42,4 +42,27 @@ describe("auth proxy", () => {
     expect(response.headers.get("set-cookie")).toContain("sb-test-auth-token=");
     expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
   });
+
+  it("expires a stale session cookie when auth returns no user without a refresh error", async () => {
+    vi.mocked(createMiddlewareClient).mockReturnValue({
+      client: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: null },
+          error: null,
+        }),
+      },
+      flushCookies: vi.fn().mockResolvedValue(undefined),
+    } as unknown as ReturnType<typeof createMiddlewareClient>);
+    const request = new NextRequest("https://stawyusikory.vercel.app/dashboard", {
+      headers: {
+        cookie: "sb-test-auth-token=stale",
+      },
+    });
+
+    const response = await proxy(request);
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("set-cookie")).toContain("sb-test-auth-token=");
+    expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
+  });
 });

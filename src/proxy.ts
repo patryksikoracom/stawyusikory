@@ -60,7 +60,7 @@ export async function proxy(request: NextRequest) {
   }
   const isLogin = request.nextUrl.pathname === "/login";
   const isPublicAuth = isLogin || request.nextUrl.pathname === "/auth/callback";
-  if (!user && !isPublicAuth) return redirectToLogin(request);
+  if (!user && !isPublicAuth) return redirectToLogin(request, authCookieNames);
   if (user && isLogin) return NextResponse.redirect(new URL("/dashboard", request.url));
   return response;
 }
