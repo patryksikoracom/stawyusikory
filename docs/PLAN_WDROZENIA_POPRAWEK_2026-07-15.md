@@ -88,52 +88,60 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 - [x] Dostępność pomniejszana wyłącznie o nieanulowane bloki `Serwis` i `Remont`, z deduplikacją nakładających się blokad.
 - [x] Dashboard i Finanse pokazują okres, kompletność, źródło oraz przyczynę niepełnych danych.
 
-**Status PR-5 (2026-07-19): zaakceptowany przez właściciela do publikacji online.** 100 testów, lint, TypeScript, build oraz test preview Dashboardu i Finansów na desktopie i telefonie przeszły bez błędów konsoli. PR-6a jest następną nierozpoczętą paczką.
+**Status PR-5 (2026-07-19): zaakceptowany przez właściciela do publikacji online.** 100 testów, lint, TypeScript, build oraz test preview Dashboardu i Finansów na desktopie i telefonie przeszły bez błędów konsoli. PR-6a–PR-6c wykonano i opublikowano jako drafty #5–#7 w dniu 25.07.2026.
 
 #### 2.2 PR-6a — saldo gościa i cztery perspektywy
 
-- [ ] **Sprzedaż:** wartość aktywnych rezerwacji według okresu pobytu.
-- [ ] **Należności:** wartość pobytu, zaksięgowane wpłaty gościa, zwroty, saldo i nadpłata.
-- [ ] **Cashflow:** wyłącznie zaksięgowane transakcje według daty zdarzenia.
-- [ ] **Wynik zarządczy:** osobna perspektywa, której wejścia nie zmieniają salda gościa.
-- [ ] Wpłaty gościa liczyć jako `Wpłata + Zaliczka − Zwrot`; nie dodawać `Prowizji`, `Kosztu` ani `Wypłaty OTA`.
-- [ ] Nie obcinać nadpłaty do zera; saldo ujemne nazwać nadpłatą.
-- [ ] Opening balance uwzględniać jako jawne saldo otwarcia z pochodzeniem, nie anonimową wpłatę.
-- [ ] Brak ceny, konflikt waluty albo nieuzgodniona wypłata dają stan `częściowe/brak danych`, nie zero.
-- [ ] Jedna funkcja salda zasila szczegół rezerwacji, Finanse, alerty i eksport.
-- [ ] Fixture'y: częściowa wpłata, pełna wpłata, zwrot, nadpłata, prowizja, koszt, direct, OTA, PLN/EUR.
+- [x] **Sprzedaż:** wartość aktywnych rezerwacji według okresu pobytu.
+- [x] **Należności:** wartość pobytu, zaksięgowane wpłaty gościa, zwroty, saldo i nadpłata.
+- [x] **Cashflow:** wyłącznie zaksięgowane transakcje według daty zdarzenia.
+- [x] **Wynik zarządczy:** osobna perspektywa, której wejścia nie zmieniają salda gościa.
+- [x] Wpłaty gościa liczyć jako `Wpłata + Zaliczka − Zwrot`; nie dodawać `Prowizji`, `Kosztu` ani `Wypłaty OTA`.
+- [x] Nie obcinać nadpłaty do zera; saldo ujemne nazwać nadpłatą.
+- [x] Opening balance uwzględniać jako jawne saldo otwarcia z pochodzeniem, nie anonimową wpłatę.
+- [x] Brak ceny, konflikt waluty albo nieuzgodniona wypłata dają stan `częściowe/brak danych`, nie zero.
+- [x] Jedna funkcja salda zasila szczegół rezerwacji, Finanse, alerty i eksport.
+- [x] Fixture'y: częściowa wpłata, pełna wpłata, zwrot, nadpłata, prowizja, koszt, direct, OTA, PLN/EUR.
 
 **Akceptacja PR-6a:** pobyt 550 PLN z zaliczką 300 PLN pokazuje saldo 250 PLN; prowizja i sprzątanie nie zmieniają salda; wpłata 600 PLN pokazuje nadpłatę 50 PLN; wszystkie miejsca używają identycznego wyniku.
 
+**Status PR-6a (2026-07-25): wykonany, zweryfikowany i opublikowany jako draft PR #5.**
+
 #### 2.3 PR-6b — koszty, prowizje i wynik zarządczy
 
-- [ ] Rozdzielić koszt faktyczny od modelowanego i pokazać źródło każdej pozycji.
-- [ ] Nie dublować kosztu z ledgerem i masterem kosztów.
-- [ ] Modelować koszt stały per miesiąc/rok, zmienny per pobyt/noc/osobonoc oraz procent od właściwej podstawy.
-- [ ] Sprzątanie traktować jako koszt per pobyt, chyba że fakt stanowi inaczej.
-- [ ] Prowizję opisać przez platformę, domek/listing, okres obowiązywania, typ stawki i źródło.
-- [ ] Prowizja faktyczna z rozliczenia/importu ma pierwszeństwo; reguła procentowa jest jawną estymacją.
-- [ ] Energia, woda i szambo mogą używać modelu dopiero po zapisaniu założenia i sposobu pomiaru.
-- [ ] Nie obcinać stratnego miesiąca ani ujemnego wyniku do zera.
-- [ ] Dla YTD użyć okresu do bieżącej daty; pełny rok przyszły nazwać planem/prognozą.
-- [ ] Koszty wspólne mają jawną regułę alokacji między domki.
+- [x] Rozdzielić koszt faktyczny od modelowanego i pokazać źródło każdej pozycji.
+- [x] Nie dublować kosztu z ledgerem i masterem kosztów.
+- [x] Modelować koszt stały per miesiąc/rok, zmienny per pobyt/noc/osobonoc oraz procent od właściwej podstawy.
+- [x] Sprzątanie traktować jako koszt per pobyt, chyba że fakt stanowi inaczej.
+- [x] Prowizję opisać przez platformę, domek/listing, okres obowiązywania, typ stawki i źródło.
+- [x] Prowizja faktyczna z rozliczenia/importu ma pierwszeństwo; reguła procentowa jest jawną estymacją.
+- [x] Energia, woda i szambo mogą używać modelu dopiero po zapisaniu założenia i sposobu pomiaru.
+- [x] Nie obcinać stratnego miesiąca ani ujemnego wyniku do zera.
+- [x] Dla YTD użyć okresu do bieżącej daty; pełny rok przyszły nazwać planem/prognozą.
+- [x] Koszty wspólne mają jawną regułę alokacji między domki.
 
 **Akceptacja PR-6b:** ręcznie policzony rok i miesiąc zgadzają się z systemem; koszt ma oznaczenie fakt/model; strata jest widoczna; brak prowizji w direct nie jest błędem kompletności.
 
+**Status PR-6b (2026-07-25): wykonany, zweryfikowany i opublikowany jako draft PR #6.**
+
 #### 2.4 PR-6c — prezentacja, dowody i eksport
 
-- [ ] W szczególe rezerwacji pokazać z równą wagą: `wartość pobytu`, `zaksięgowano od gościa`, `pozostało/nadpłata`.
-- [ ] Prowizję i wypłatę OTA pokazać w osobnej sekcji tylko dla kanału, którego dotyczą.
-- [ ] Filtr okresu: dziś / 14 dni / miesiąc / YTD / własny.
-- [ ] Każda karta: definicja, okres, ostatnia aktualizacja, źródło, waluta i kompletność.
-- [ ] Rozdzielić alert operacyjny od KPI strategicznego.
-- [ ] Kliknięcie liczby otwiera rekordy będące podstawą obliczenia.
-- [ ] Dashboard, Finanse, szczegół rezerwacji i CSV używają wspólnych nazw oraz wartości.
-- [ ] Globalna historyczna wartość rezerwacji nie jest prezentowana jako bieżący wynik finansowy.
+- [x] W szczególe rezerwacji pokazać z równą wagą: `wartość pobytu`, `zaksięgowano od gościa`, `pozostało/nadpłata`.
+- [x] Prowizję i wypłatę OTA pokazać w osobnej sekcji tylko dla kanału, którego dotyczą.
+- [x] Filtr okresu: dziś / 14 dni / miesiąc / YTD / własny.
+- [x] Każda karta: definicja, okres, ostatnia aktualizacja, źródło, waluta i kompletność.
+- [x] Rozdzielić alert operacyjny od KPI strategicznego.
+- [x] Kliknięcie liczby otwiera rekordy będące podstawą obliczenia.
+- [x] Dashboard, Finanse, szczegół rezerwacji i CSV używają wspólnych nazw oraz wartości.
+- [x] Globalna historyczna wartość rezerwacji nie jest prezentowana jako bieżący wynik finansowy.
 
 **Akceptacja PR-6c:** użytkownik potrafi wskazać, która liczba jest sprzedażą, należnością, gotówką i wynikiem; eksport pozwala odtworzyć karty; wartości PLN/EUR nie są łączone bez kursu.
 
+**Status PR-6c (2026-07-25): wykonany, zweryfikowany i opublikowany jako draft PR #7.** Końcowa walidacja stosu: 137/137 testów, lint, TypeScript, build 28 tras oraz smoke test desktop 1440 px i mobile 390 px bez poziomego overflow.
+
 **Akceptacja etapu 2:** zestaw fixture’ów finansowych ma ręcznie policzone oczekiwane wyniki; księgowość/właściciel zatwierdza słownik; pulpit i Finanse pokazują te same liczby dla tego samego okresu i definicji.
+
+**Stan bramki Etapu 2:** implementacja i walidacja techniczna są zakończone. Pozostaje ręczne porównanie jednego zamkniętego miesiąca oraz akceptacja nazw i definicji przez właściciela/księgowość.
 
 ### Etap 3 — niezawodny zapis i wielosesyjność (5–8 dni)
 
