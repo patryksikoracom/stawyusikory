@@ -539,11 +539,26 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       blocks: current.blocks.map((item) => item.id === block.id ? block : item),
       auditLog: [audit("block", block.id, "updated", block.reason), ...current.auditLog],
     })),
-    addPayment: (payment) => mutate((current) => ({
-      ...current,
-      payments: [payment, ...current.payments],
-      auditLog: [audit("payment", payment.id, "created", `${payment.type}: ${payment.amount} PLN`), ...current.auditLog],
-    })),
+    addPayment: (payment) => mutate((current) => {
+      const booking = current.bookings.find((item) => item.id === payment.bookingId);
+      const normalizedPayment = {
+        ...payment,
+        currency: payment.currency ?? booking?.currency,
+      };
+      return {
+        ...current,
+        payments: [normalizedPayment, ...current.payments],
+        auditLog: [
+          audit(
+            "payment",
+            payment.id,
+            "created",
+            `${payment.type}: ${payment.amount} ${normalizedPayment.currency ?? "bez waluty"}`,
+          ),
+          ...current.auditLog,
+        ],
+      };
+    }),
     addInvoice: (invoice) => mutate((current) => ({
       ...current,
       invoices: [invoice, ...current.invoices],

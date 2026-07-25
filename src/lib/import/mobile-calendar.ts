@@ -154,6 +154,8 @@ function fullExport(records: string[][]): ImportPreview {
       importRef: { source: "mobile-calendar", key: externalId },
       importWarnings: warnings,
       openingPaidAmount: paymentStatus === "Opłacone" ? grossPrice : paymentStatus === "Zaliczka" ? depositAmount : 0,
+      openingPaidCurrency: currency,
+      openingPaidSource: `Eksport Mobile-Calendar · ${get(record, "Data edycji") || get(record, "Data dodania") || "data nieznana"}`,
       version: 1,
     };
     rows.push(booking);
@@ -210,6 +212,7 @@ export function parseMobileCalendar(raw: string): ImportPreview {
       children,
       guestLabel,
       grossPrice: Number.isFinite(price) && price > 0 ? price : undefined,
+      currency: "PLN",
       pricingMode: "manual",
       commission: Number.isFinite(commission) && commission >= 0 ? commission : undefined,
       payout: Number.isFinite(payout) && payout >= 0 ? payout : undefined,
@@ -219,6 +222,9 @@ export function parseMobileCalendar(raw: string): ImportPreview {
       createdBy: "Import Mobile-Calendar",
       historicalImport: checkOut <= today,
       needsReview: true,
+      openingPaidAmount: paymentStatus === "Opłacone" && Number.isFinite(price) && price > 0 ? price : undefined,
+      openingPaidCurrency: paymentStatus === "Opłacone" && Number.isFinite(price) && price > 0 ? "PLN" : undefined,
+      openingPaidSource: paymentStatus === "Opłacone" && Number.isFinite(price) && price > 0 ? `Import Mobile-Calendar #${reservationNo}` : undefined,
       version: 1,
     });
   });

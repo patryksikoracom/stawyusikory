@@ -17,6 +17,11 @@ function booking(overrides: Partial<Booking> = {}): Booking {
     adults: 2,
     children: 0,
     guestLabel: "Test",
+    grossPrice: 1000,
+    currency: "PLN",
+    openingPaidAmount: 1000,
+    openingPaidCurrency: "PLN",
+    openingPaidSource: "Fixture testowy",
     paymentStatus: "Opłacone",
     workflowStatus: "Potwierdzona",
     createdBy: "test",
@@ -54,8 +59,8 @@ describe("alerty powłoki aplikacji", () => {
       }],
       bookings: [
         booking({ id: "review", needsReview: true }),
-        booking({ id: "payment-1", paymentStatus: "Do dopłaty" }),
-        booking({ id: "payment-2", paymentStatus: "Częściowo" }),
+        booking({ id: "payment-1", paymentStatus: "Do dopłaty", openingPaidAmount: 300 }),
+        booking({ id: "payment-2", paymentStatus: "Częściowo", openingPaidAmount: 500 }),
       ],
       tasks: [{
         id: "blocked",

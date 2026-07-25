@@ -6,7 +6,7 @@ import { defaultAutomationRules, defaultMessageTemplates, reconcileScheduledMess
 const booking: Booking = {
   id: "COMM-1", bookingDate: "2026-07-01", source: "test", platform: "Bezpośrednio", unitId: "domek-rybaka",
   checkIn: "2026-08-10", checkOut: "2026-08-13", adults: 2, children: 0, guestLabel: "Anna Kowalska",
-  grossPrice: 1200, paymentStatus: "Do dopłaty", workflowStatus: "Potwierdzona", createdBy: "test",
+  grossPrice: 1200, currency: "PLN", paymentStatus: "Do dopłaty", workflowStatus: "Potwierdzona", createdBy: "test",
 };
 
 function fixture(overrides: Partial<AppData> = {}): AppData {
