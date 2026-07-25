@@ -47,13 +47,14 @@ Priorytet nie wynika z atrakcyjności funkcji. Liczą się: waga problemu, częs
 
 | Kolejność | ID | Pomysł | Status | Priorytet | Najbliższy krok |
 |---:|---|---|---|---|---|
-| 1 | POM-005 | Szybka wycena i zapis rezerwacji podczas rozmowy z gościem | Gotowy do realizacji | P1 — teraz | Przejść z tatą 10 rzeczywistych zapytań telefonicznych i zmierzyć zgodność ceny, czas wyceny oraz brakujące pola. |
+| 1 | POM-008 | Mobilny kalendarz dostępności jako ekran startowy operatora | Gotowy do realizacji | P1 — teraz | Przetestować prototyp na telefonie taty z jego powiększonym tekstem i przejść wybór zakresu dwoma tapnięciami. |
 | 2 | POM-006 | Cennik zgodny z Mobile Calendar: sezony, święta i długie weekendy | Do walidacji | P1 — teraz | Wyeksportować lub sfotografować obowiązujące stawki i porównać 10 terminów z kalkulatorem Stawy OS. |
-| 3 | POM-004 | Czytelny stan obiektu: kto jest i co wydarzy się następne | Gotowy do realizacji | P1 — teraz | Sprawdzić prototyp kart domków na rzeczywistym tygodniu rezerwacji, w tym zmianę gości tego samego dnia. |
+| 3 | POM-005 | Szybka wycena i zapis rezerwacji podczas rozmowy z gościem | Gotowy do realizacji | P1 — teraz | Przejść z tatą 10 rzeczywistych zapytań telefonicznych i zmierzyć zgodność ceny, czas wyceny oraz brakujące pola. |
 | 4 | POM-007 | E-mail z aplikacji: szablon, zatwierdzenie, wysyłka i status | Do walidacji | P1 — teraz | Zebrać używane szablony i ustalić, które wiadomości Mobile Calendar wysyła, z jakiego adresu oraz z jakim potwierdzeniem. |
-| 5 | POM-001 | Ogólny rejestr faktycznych kosztów | Do pilotażu | P1 — teraz | Wprowadzić ręcznie koszty jednego zamkniętego miesiąca i porównać sumę z rachunkami. |
-| 6 | POM-002 | Odczyty liczników i koszt energii | Do pilotażu | P2 — następne | Zapisać 2–3 kolejne odczyty jednego licznika ze zdjęciami i ręcznie potwierdzonymi wartościami. |
-| 7 | POM-003 | Rejestr zdarzeń operacyjnych, np. wcześniejszy wyjazd | Do walidacji | P3 — później | Zebrać pięć rzeczywistych przykładów i sprawdzić, których nie obsługuje już podsumowanie pobytu, zadanie lub usterka. |
+| 5 | POM-004 | Czytelny stan obiektu: kto jest i co wydarzy się następne | Gotowy do realizacji | P1 — teraz | Po kalendarzu sprawdzić karty domków na rzeczywistym tygodniu, w tym zmianę gości tego samego dnia. |
+| 6 | POM-001 | Ogólny rejestr faktycznych kosztów | Do pilotażu | P1 — teraz | Wprowadzić ręcznie koszty jednego zamkniętego miesiąca i porównać sumę z rachunkami. |
+| 7 | POM-002 | Odczyty liczników i koszt energii | Do pilotażu | P2 — następne | Zapisać 2–3 kolejne odczyty jednego licznika ze zdjęciami i ręcznie potwierdzonymi wartościami. |
+| 8 | POM-003 | Rejestr zdarzeń operacyjnych, np. wcześniejszy wyjazd | Do walidacji | P3 — później | Zebrać pięć rzeczywistych przykładów i sprawdzić, których nie obsługuje już podsumowanie pobytu, zadanie lub usterka. |
 
 ---
 
@@ -248,6 +249,12 @@ Zebrać pięć rzeczywistych przykładów zdarzeń, które warto zachować. Dla 
 
 Chcę otworzyć aplikację i od razu zobaczyć stan każdego obiektu: czy jest zajęty, kto teraz w nim mieszka, jak długo jeszcze zostaje oraz kto przyjeżdża następny. Przydałoby się też przypomnienie w stylu „jutro przyjeżdża ta osoba”.
 
+### Kontekst z testu taty — 2026-07-25
+
+Tata potwierdził wartość tych informacji, lecz ustawił je niżej od kalendarza dostępności. Podczas rozmowy z klientem najpierw musi zobaczyć wolne terminy i wycenę. Brief operacyjny, zadania i statystyki mogą być w osobnym widoku albo pod kalendarzem.
+
+POM-004 pozostaje P1, ale nie powinien zajmować miejsca nad kalendarzem na ekranie startowym operatora. Pierwszeństwo ma POM-008.
+
 ### Problem i oczekiwany efekt
 
 Sam komunikat „Zajęty do…” odpowiada tylko na część pytania. W bieżącej pracy potrzebna jest odpowiedź możliwa do odczytania w kilka sekund:
@@ -339,6 +346,17 @@ Próba powinna obejmować domek wolny, pobyt wielodniowy, przyjazd jutro oraz wy
 
 Podczas rozmowy telefonicznej tata chce zaznaczyć domek i zakres dat, natychmiast podać klientowi cenę, zdecydować o rabacie, a następnie zapisać rezerwację wraz z danymi klienta, źródłem rezerwacji i kwotą do zapłaty.
 
+### Kontekst z testu taty — 2026-07-25
+
+- Termin ma być wybrany bezpośrednio na wizualnym kalendarzu, a nie przez dwa oderwane pola dat.
+- Standardowe godziny są ustawieniem obiektu: check-in od 16:00, check-out do 11:00. Nie zajmują miejsca w szybkim formularzu.
+- Formularz ma obsługiwać dorosłych, dzieci, zwierzęta i dodatkowe usługi.
+- Czapla nie przyjmuje zwierząt.
+- Rybak przyjmuje zwierzęta za 100 PLN za jedno zwierzę za cały pobyt.
+- Cena końcowa może użyć rabatu kwotowego albo procentowego.
+- Domyślna zaliczka wynosi 33%, ale operator może ustawić inną wartość, np. 50%, dla konkretnej rezerwacji.
+- Po zapisie aplikacja ma pokazać rzeczywisty stan synchronizacji z Mobile Calendar/Booking/Airbnb/Aloha Camp, a nie zakładać, że sam lokalny zapis bezpiecznie zablokował termin.
+
 ### Problem i oczekiwany efekt
 
 Operator nie może w trakcie rozmowy przechodzić przez wiele ekranów ani ręcznie liczyć stawek dla kolejnych nocy. Potrzebuje jednego, krótkiego przepływu:
@@ -365,10 +383,11 @@ Docelowo wycena ma być możliwa w kilkadziesiąt sekund, a pełny zapis rezerwa
 
 #### Etap A — szybka wycena bez utraty danych
 
-- wybór domku oraz dat przyjazdu i wyjazdu;
+- wizualny wybór domku oraz dat przyjazdu i wyjazdu z kalendarza;
 - natychmiastowa informacja o dostępności lub konflikcie;
 - cena z cennika: suma, średnia cena za noc i rozbicie według zastosowanych sezonów;
 - ostrzeżenie o minimalnej długości pobytu;
+- standardowe godziny pobierane z ustawień i ukryte w szybkim przepływie;
 - możliwość przejścia z wyceny do formularza rezerwacji bez ponownego wpisywania danych;
 - brak zapisu rezerwacji, jeżeli operator tylko sprawdza cenę.
 
@@ -378,7 +397,11 @@ Docelowo wycena ma być możliwa w kilkadziesiąt sekund, a pełny zapis rezerwa
 - operator może podać cenę końcową;
 - system pokazuje wartość i procent rabatu albo dopłaty;
 - ręczna zmiana wymaga krótkiego powodu, np. stały klient, ostatnia chwila, barter albo indywidualne ustalenie;
-- zapis obejmuje co najmniej: termin, domek, osoby, imię i nazwisko lub nazwę rezerwacji, kontakt, kanał zawarcia, cenę, walutę i status płatności;
+- zwierzęta i dodatkowe usługi są osobnymi pozycjami ceny;
+- reguła domku blokuje zwierzę w Czapli, a dla Rybaka liczy 100 PLN za każde zwierzę za pobyt;
+- zapis obejmuje co najmniej: termin, domek, dorosłych, dzieci, zwierzęta, imię i nazwisko lub nazwę rezerwacji, kontakt, kanał zawarcia, cenę, walutę, zaliczkę i status płatności;
+- operator wybiera zaliczkę procentową lub kwotową, a system pokazuje zaliczkę i pozostałe saldo;
+- opcjonalny adres i dane do dokumentu sprzedaży są w rozwijanej sekcji, a nie w ścieżce podstawowej;
 - rezerwacja utworzona w pilocie ma czytelny stan „wymaga potwierdzenia w źródle nadrzędnym”, dopóki Mobile Calendar/OTA pozostaje źródłem prawdy.
 
 ### Walidacja
@@ -394,6 +417,9 @@ Docelowo wycena ma być możliwa w kilkadziesiąt sekund, a pełny zapis rezerwa
 - 10/10 wycen bez rabatu odpowiada zatwierdzonemu cennikowi.
 - Każda noc ma możliwą do wskazania regułę lub cenę bazową.
 - Rabat nie nadpisuje po cichu ceny z cennika i ma zapisany powód.
+- Cena pokazuje osobno noclegi, zwierzęta, inne usługi, rabat i wartość końcową.
+- Czapla blokuje zwykły zapis rezerwacji ze zwierzęciem; Rybak nalicza właściwą opłatę per zwierzę za pobyt.
+- Domyślna zaliczka 33% i ręczna zmiana, np. do 50%, są liczone od ceny końcowej.
 - Konflikt jest widoczny przed przedstawieniem terminu jako dostępnego.
 - Tata potrafi samodzielnie podać cenę w mniej niż 30 sekund i zapisać kompletną rezerwację w mniej niż dwie minuty.
 - W pilocie lokalny zapis nie udaje potwierdzenia w OTA.
@@ -420,6 +446,18 @@ Docelowo wycena ma być możliwa w kilkadziesiąt sekund, a pełny zapis rezerwa
 
 Tata ma w Mobile Calendar stawki zależne od domku, sezonu, świąt i długich weekendów. Po wybraniu zakresu aplikacja ma podać właściwą cenę za cały pobyt.
 
+### Kontekst z testu taty — 2026-07-25
+
+- Wysoki sezon został określony jako 15 czerwca–15 września.
+- Poza tym zakresem obowiązuje niższa cena.
+- Święta w wysokim sezonie są około 10% droższe.
+- Święta i długie weekendy poza wysokim sezonem mają być według rozmowy około 10% droższe od ceny wysokiego sezonu.
+- Standardowy minimalny pobyt to cztery doby.
+- Rzadki krótszy pobyt może być rozliczany jak 3,5 doby.
+- Zwierzę w Rybaku kosztuje 100 PLN za sztukę za pobyt; Czapla nie przyjmuje zwierząt.
+
+„Około 10%” oraz reguła 3,5 doby nie są jeszcze wystarczająco precyzyjne do implementacji. Trzeba ustalić dokładne kwoty/procenty, zaokrąglenie i oddzielić faktyczne noce od minimalnej podstawy cenowej.
+
 ### Problem i oczekiwany efekt
 
 Silnik kalkulacji istnieje, ale jego wynik będzie wiarygodny dopiero po przeniesieniu i zatwierdzeniu prawdziwych stawek. Błędna albo niepełna reguła cenowa może spowodować podanie klientowi złej ceny.
@@ -441,9 +479,11 @@ Efektem ma być wersjonowany cennik, w którym dla każdej nocy można wskazać 
 - kategoria sezonu lub wyjątku;
 - cena za noc i waluta;
 - minimalna długość pobytu;
+- minimalna podstawa cenowa dla audytowanego wyjątku;
 - źródło oraz data weryfikacji;
 - jawne pierwszeństwo reguł przy nakładaniu się sezonu, święta, promocji lub wyjątku;
 - test terminu przecinającego dwie różne reguły;
+- osobne pozycje ceny dla zwierząt i usług dodatkowych;
 - historia zmiany cennika albo co najmniej data obowiązywania, aby nowa cena nie przepisywała wcześniejszych rezerwacji.
 
 ### Walidacja
@@ -465,6 +505,10 @@ Przenieść do „Gotowy do realizacji”, gdy istnieje kompletna tabela obowią
 - Czy stawki różnych domków są zawsze niezależne?
 - Jak traktować rezerwację złożoną przed zmianą cennika?
 - Które święta i długie weekendy są wyjątkami względem zwykłego sezonu?
+- Czy dokładna dopłata świąteczna wynosi 10%, czy jest ręcznie ustalaną kwotą?
+- Jak zaokrąglać procentową dopłatę?
+- Czy 3,5 doby jest minimalną podstawą ceny dla każdego pobytu krótszego niż cztery doby?
+- Czy sprzątanie jest dopłatą dla gościa, kosztem wewnętrznym czy dwiema różnymi pozycjami?
 
 ### Zależności i miejsce w planie
 
@@ -486,6 +530,18 @@ Przenieść do „Gotowy do realizacji”, gdy istnieje kompletna tabela obowią
 
 Tata korzysta z gotowych szablonów i wysyła e-maile bezpośrednio z Mobile Calendar. Pierwsza wersja Stawy OS przeznaczona do zastąpienia tego narzędzia również musi umożliwiać wysyłkę z poziomu aplikacji, a nie tylko kopiowanie treści do osobnego programu pocztowego.
 
+### Kontekst z testu taty — 2026-07-25
+
+Pierwszy zakres wiadomości powinien odwzorować obecną sekwencję:
+
+1. po potwierdzeniu rezerwacji: obiekt, termin, cena, zaliczka, termin płatności, numer konta i warunki;
+2. po zaksięgowaniu zaliczki: regulamin, zasady pobytu, łowisko, atrakcje i inne informacje;
+3. dwa dni przed przyjazdem: przypomnienie tylko wtedy, gdy pozostało saldo;
+4. przed przyjazdem: trasa, godziny, zasady odbioru kluczy i kontakt;
+5. wewnętrzna kopia lub informacja dla wybranego operatora.
+
+Tata preferuje automatyczną wysyłkę, ale wdrożenie ma przejść przez etapy: szkic → ręczne zatwierdzenie → ręczna wysyłka ze statusem → dopiero potem automatyczna wysyłka osobno zatwierdzonego szablonu.
+
 ### Problem i oczekiwany efekt
 
 Sam szablon lub przycisk „wyślij” nie wystarczają. Operator musi wiedzieć, do kogo, z jakiego adresu i jaka wersja treści została wysłana oraz czy dostawca przyjął wiadomość. Ponowienie po błędzie nie może tworzyć duplikatu.
@@ -505,16 +561,18 @@ Efektem ma być prosty przepływ: wybierz szablon → sprawdź odbiorcę i treś
 #### Etap A — biblioteka wiadomości operatora
 
 - zinwentaryzować aktualne szablony Mobile Calendar;
-- wybrać minimalnie: potwierdzenie rezerwacji, informację o płatności i wiadomość przed przyjazdem;
+- wybrać minimalnie: potwierdzenie i prośbę o zaliczkę, potwierdzenie zaliczki z materiałami pobytowymi, przypomnienie o dopłacie i wiadomość przed przyjazdem;
 - przypisać język i wersję;
 - dodać zatwierdzony adres nadawcy oraz możliwość odpowiedzi;
-- przed wysyłką pokazać odbiorcę, temat, treść, termin, domek, cenę i aktualność danych;
+- skonfigurować listę operatorów, którzy mogą otrzymać kopię;
+- przed wysyłką pokazać odbiorcę, kopię, temat, treść, termin, domek, cenę, zaliczkę, saldo i aktualność danych;
 - każda ręczna korekta jest widoczna w finalnej wersji wiadomości.
 
 #### Etap B — produkcyjna dostawa
 
 - wybrać dostawcę i rozdzielić środowisko testowe od produkcyjnego;
 - wysyłać tylko po jawnej akcji operatora lub odrębnie zatwierdzonej regule;
+- nie wysyłać potwierdzenia przed potwierdzeniem zapisu rezerwacji w źródle;
 - użyć klucza idempotencji, aby retry nie wysłał duplikatu;
 - zapisać identyfikator i status dostawcy: kolejka, wysłana, dostarczona, błąd albo odrzucona;
 - ograniczony retry z alertem dla niedostarczonej wiadomości ważnej operacyjnie;
@@ -545,3 +603,71 @@ Efektem ma być prosty przepływ: wybierz szablon → sprawdź odbiorcę i treś
 - Etap 7 / PR-12 dla dostawcy, idempotencji, retry, statusów i monitoringu.
 - Zweryfikowany kontakt gościa oraz aktualna rezerwacja.
 - Kontrolowany pilot przed rezygnacją z Mobile Calendar.
+
+---
+
+## POM-008 — Mobilny kalendarz dostępności jako ekran startowy operatora
+
+**Data dodania:** 2026-07-25<br>
+**Status:** Gotowy do realizacji<br>
+**Priorytet:** P1 — teraz<br>
+**Źródło:** test aplikacji przez tatę na telefonie
+
+### Oryginalna potrzeba
+
+Tata korzysta z aplikacji na telefonie przez około 99% czasu i ma powiększony tekst systemowy ze względu na wzrok. Po otwarciu obecnego Dashboardu widzi głównie powitanie oraz fragment informacji o pobytach. Podczas telefonu od klienta potrzebuje natychmiast zobaczyć kalendarz, zajęte terminy, wolne luki i rozpocząć wycenę.
+
+### Problem i oczekiwany efekt
+
+Obecna hierarchia odpowiada na pytania zarządcze przed pytaniem operacyjnym. Powiększony tekst dodatkowo spycha potrzebne dane poniżej pierwszego ekranu.
+
+Ekran startowy roli operatora ma od razu pokazać wizualną dostępność Czapli i Rybaka. Wybór początku i końca pobytu bezpośrednio na kalendarzu otwiera wycenę oraz kartę rezerwacji.
+
+### Co już istnieje
+
+- Osobny widok kalendarza z osią rezerwacji.
+- Mobilna agenda siedmiu dni.
+- Kliknięcie wolnego dnia może rozpocząć nową rezerwację.
+- Formularz potrafi przyjąć wstępnie wybrany domek i datę.
+- Dashboard jest obecnie ekranem startowym i eksponuje powitanie, brief oraz KPI.
+- W wielu miejscach występuje bardzo mały tekst operacyjny, który wymaga testu z realnym powiększeniem taty.
+
+### Najmniejszy sensowny zakres
+
+- rola `manager/operator` po zalogowaniu trafia na kalendarz, nie ogólny Dashboard;
+- kalendarz jest widoczny bez przewijania przez powitanie i statystyki;
+- Czapla i Rybak są widoczne w jednym kontekście;
+- bieżące pobyty, przyszłe rezerwacje i wolne luki są czytelne tekstowo, nie tylko kolorami;
+- dzisiaj i najbliższe dni mają jasny punkt odniesienia;
+- dwa tapnięcia wybierają początek i koniec pobytu;
+- wybrany zakres pozostaje widoczny i otwiera POM-005 z zachowanymi datami;
+- duże pola dotykowe i brak krytycznych elementów mniejszych niż tekst możliwy do przeczytania przez tatę;
+- brief „Dzisiaj”, zadania i statystyki są poniżej kalendarza albo w osobnej zakładce;
+- stan oraz czas ostatniej synchronizacji są widoczne przed uznaniem terminu za bezpiecznie dostępny.
+
+### Walidacja
+
+1. Użyć rzeczywistego telefonu taty i jego ustawienia wielkości tekstu.
+2. Otworzyć aplikację podczas symulowanej rozmowy.
+3. Znaleźć trzy wolne zakresy dla obu domków.
+4. Wybrać zakres dwoma tapnięciami i przejść do wyceny.
+5. Powtórzyć przy powiększeniu do 200%, w pionie i bez obracania telefonu.
+6. Sprawdzić przypadki: pobyt trwający, wyjazd dzisiaj, zmiana gości, długa rezerwacja, blokada i błąd synchronizacji.
+
+### Kryteria akceptacji
+
+- Po otwarciu aplikacji tata widzi dostępność bez przewijania przez powitanie i KPI.
+- Potrafi wskazać, czy każdy domek jest wolny w danym terminie bez otwierania osobnych kart.
+- Wybór zakresu wymaga najwyżej dwóch tapnięć na kalendarzu i jednego przejścia do karty.
+- Powiększony tekst nie ukrywa dat, nazwy domku, stanu dostępności, ceny ani głównej akcji.
+- Informacja nie zależy wyłącznie od koloru.
+- Interfejs pozostaje użyteczny przy powiększeniu/zoomie do 200% na telefonie taty.
+- Stan synchronizacji jest odróżniony od lokalnego zapisu.
+
+### Zależności i miejsce w planie
+
+- PR-9a dla startu zależnego od roli operatora.
+- PR-10a dla dostępności, powiększonego tekstu, dialogów i pól dotykowych.
+- PR-10d dla kalendarza i wyboru zakresu na telefonie.
+- POM-005 dla wyceny i zapisu po wyborze terminu.
+- PR-7/PR-8 i Etap 7 dla uczciwego stanu konfliktu oraz synchronizacji.

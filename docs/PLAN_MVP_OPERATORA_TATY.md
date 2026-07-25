@@ -4,7 +4,8 @@
 **Data:** 25 lipca 2026<br>
 **Właściciel potrzeby:** tata — operator obiektu<br>
 **Właściciel produktu:** Patryk<br>
-**Powiązane pomysły:** POM-004, POM-005, POM-006, POM-007
+**Powiązane pomysły:** POM-004, POM-005, POM-006, POM-007, POM-008<br>
+**Raport użytkownika:** `RAPORT_Z_PRZEJSCIA_TATY_MOBILE_2026-07-25.md`
 
 ## Cel
 
@@ -12,13 +13,17 @@ Przygotować Stawy OS do codziennej pracy taty bez rozszerzania trwających PR-�
 
 MVP ma umożliwić operatorowi:
 
-1. zobaczyć kalendarz wszystkich rezerwacji;
-2. podczas rozmowy wybrać domek i zakres oraz szybko podać cenę;
-3. zastosować kontrolowany rabat;
-4. zapisać imię i nazwisko lub nazwę rezerwacji, kontakt, źródło, cenę i płatność;
-5. zobaczyć na ekranie „Dzisiaj”, kto jest w każdym domku i do kiedy;
-6. wybrać, poprawić i wysłać e-mail z poziomu aplikacji;
-7. pracować na własnym koncie z uprawnieniami operatora, bez pełnych uprawnień właściciela.
+1. po otwarciu aplikacji na telefonie od razu zobaczyć dostępność w kalendarzu;
+2. korzystać z kalendarza przy powiększonym tekście ustawionym ze względu na wzrok;
+3. podczas rozmowy wybrać domek i zakres bezpośrednio na kalendarzu oraz szybko podać cenę;
+4. zastosować kontrolowany rabat kwotowy albo procentowy;
+5. dodać osoby, dzieci, zwierzęta, usługi i zaliczkę;
+6. zapisać imię i nazwisko lub nazwę rezerwacji, kontakt, źródło, cenę i płatność;
+7. zobaczyć rzeczywisty stan synchronizacji z Mobile Calendar/OTA;
+8. wybrać, poprawić i wysłać e-mail z poziomu aplikacji;
+9. uruchomić właściwe przygotowanie przyjazdu, sprzątanie i procedurę małoletnich;
+10. zobaczyć niżej lub osobno brief „Dzisiaj”, zadania i statystyki;
+11. pracować na własnym koncie z uprawnieniami operatora, bez pełnych uprawnień właściciela.
 
 ## Najważniejsza decyzja operacyjna
 
@@ -36,13 +41,22 @@ Do czasu spełnienia bramki go-live:
 
 | Potrzeba | Stan obecny | Najważniejsza luka |
 |---|---|---|
-| kalendarz rezerwacji | istnieje oś czasu i agenda mobilna | docelowy punkt startu, wybór zakresu i pełny test operatora są w PR-10d |
+| mobilny ekran startowy | Dashboard eksponuje powitanie, pobyty i KPI | tata potrzebuje kalendarza jako pierwszego widoku; POM-008 |
+| dostępność wzrokowa | część UI używa drobnego tekstu i gęstych kart | test na telefonie taty z jego powiększonym tekstem; PR-10a |
+| kalendarz rezerwacji | istnieje oś czasu i agenda mobilna | wizualny wybór całego zakresu i pełny test operatora są w PR-10d |
 | dane klienta | formularz zapisuje nazwę, telefon i e-mail | pełna osoba/CRM jest później; MVP może użyć istniejącej etykiety gościa |
 | źródło rezerwacji | istnieje wybór kanału i numer zewnętrzny | trzeba zachować rozdział kanału zawarcia od źródła odkrycia |
 | szybka wycena | `quoteStay` liczy każdą noc według reguł | prawdziwe stawki Mobile Calendar nie są jeszcze uzgodnione |
 | rabat | można ręcznie zmienić cenę | brakuje jawnej wartości/procentu rabatu oraz powodu |
+| godziny | formularz pyta o przyjazd i wyjazd | standard 16:00/11:00 ma pochodzić z ustawień i nie obciążać szybkiej ścieżki |
+| zwierzęta | brak reguły rezerwacyjnej i ceny | Czapla bez zwierząt; Rybak 100 PLN za zwierzę za pobyt |
+| minimum pobytu | cennik obsługuje `minNights` | trzeba doprecyzować 4 doby i wyjątkową minimalną podstawę 3,5 doby |
+| zaliczka | formularz ma kwotę i termin zadatku | domyślne 33%, opcjonalne 50%, saldo i dokładny termin pierwszej wpłaty |
 | ekran „Dzisiaj” | dane bieżących pobytów istnieją | karta stanu nie pokazuje jeszcze pełnej informacji wymaganej przez POM-004 |
 | szablony wiadomości | istnieją szkice, wersje i zatwierdzenie | brak produkcyjnej wysyłki e-mail oraz statusu dostawcy |
+| płatność przed przyjazdem | wspólny silnik salda istnieje | pełna wpłata D-2, przypomnienie i czytelna bramka wydania klucza |
+| przygotowanie przyjazdu | zadania i checklisty istnieją | informacja po zaliczce, plan tygodnia i odświeżenie po ponad 7 dniach |
+| małoletni | zakres PR-9c jest zaplanowany | najpierw zatwierdzony SOP, później ewentualny formularz online i właściwy podpis |
 | import Mobile Calendar | istnieje import CSV z podglądem | import nie oznacza bezpiecznego przejęcia zapisu ani synchronizacji OTA |
 | konto taty | można zaprosić administratora lub viewer | brakuje docelowej roli manager/operator z właściwym zakresem |
 
@@ -58,14 +72,18 @@ Przed decyzją o rezygnacji z Mobile Calendar:
 4. zabezpieczyć cennik, szablony i historię potrzebną operacyjnie;
 5. wskazać procedurę ręcznego działania w razie awarii Stawy OS.
 
+Osobną bramką P0 jest posiadanie i stosowanie zatwierdzonych Standardów Ochrony Małoletnich. Aplikacja może wspierać ich wykonanie, ale brak funkcji w aplikacji nie może opóźniać wdrożenia wymaganej procedury organizacyjnej.
+
 ### P1 — zakres wydania dla taty
 
 1. rola operatora i bezpieczny dostęp;
-2. POM-005 — wycena i szybki zapis podczas rozmowy;
-3. POM-006 — zgodny, zatwierdzony cennik;
-4. POM-004 — stan domków i goście na ekranie „Dzisiaj”;
-5. POM-007 — e-mail wysyłany z aplikacji;
-6. uzgodnienie danych, shadow mode i rollback.
+2. POM-008 — kalendarz jako dostępny mobilny ekran startowy;
+3. POM-006 — zgodny, zatwierdzony cennik i reguły wyjątków;
+4. POM-005 — wycena i szybki zapis podczas rozmowy;
+5. POM-007 — zaliczka, sekwencja e-mail i wysyłka z aplikacji;
+6. przygotowanie przyjazdu: sprzątanie, płatność i procedura małoletnich;
+7. POM-004 — stan domków i goście na ekranie „Dzisiaj”, poniżej kalendarza lub osobno;
+8. uzgodnienie danych, shadow mode i rollback.
 
 Wszystkie te elementy są P1, lecz kolejność wykonania wynika z zależności. Wysoka wartość e-maila nie pozwala ominąć poprawności kontaktu, uprawnień, idempotencji ani testów dostawcy.
 
@@ -97,13 +115,16 @@ Wszystkie te elementy są P1, lecz kolejność wykonania wynika z zależności. 
 | 1 | PR-7 | jawne konflikty i wielosesyjność | bez nowego UI operatora |
 | 2 | PR-8a… | bezpieczne komendy domenowe dla zapisów | bez pełnej przebudowy wszystkich domen naraz |
 | 3 | PR-9a | rola `manager/operator`, macierz `read/write/PII/finance/send/export` | bez przyznawania tacie pełnego `owner` |
-| 4 | PR-10b | POM-004: stan domków, bieżący i następny gość | bez push notifications w pierwszym kroku |
-| 5 | PR-10c | POM-005 i POM-006: szybki wpis, cena z cennika, rabat i saldo | bez pełnego CRM i pól marketingowych |
-| 6 | PR-10d | prosty wybór zakresu i bezpieczny kalendarz desktop/mobile | bez publikacji cen lub dostępności do OTA |
-| 7 | PR-11c | trzy zatwierdzone szablony e-mail v1 i ich wersje | bez udawania faktycznej dostawy |
-| 8 | PR-12 / Etap 7 | dostawca e-mail, statusy, retry, gateway OTA, shadow mode i rollback | bez przełączenia przed spełnieniem bramki |
+| 4 | PR-9c / SOP | zatwierdzona procedura małoletnich i minimalny dowód wykonania | bez zgadywania formularza, danych i rodzaju podpisu |
+| 5 | PR-10a | powiększony tekst, pola dotykowe i mobilny fundament POM-008 | bez przebudowy wszystkich widoków w jednym PR |
+| 6 | PR-10d | POM-008: ekran startowy operatora, dwa tapnięcia i kalendarz desktop/mobile | bez publikacji cen lub dostępności do OTA |
+| 7 | PR-10c | POM-005 i POM-006: szybki wpis, cena, zwierzęta, usługi, rabat, zaliczka i saldo | bez pełnego CRM i pól marketingowych |
+| 8 | PR-11c | zatwierdzona sekwencja szablonów e-mail v1 i ich wersje | bez udawania faktycznej dostawy |
+| 9 | PR-12 / Etap 7 | dostawca e-mail, statusy, retry, gateway OTA, shadow mode i rollback | bez przełączenia przed spełnieniem bramki |
+| 10 | PR-9b | informacja dla sprzątania po zaliczce i odświeżenie po długiej przerwie | bez ujawniania cen i pełnego PII |
+| 11 | PR-10b | POM-004: stan domków, bieżący i następny gość | bez umieszczania briefu nad kalendarzem operatora |
 
-PR-10b, PR-10c i PR-10d pozostają osobnymi paczkami. Ich kolejność może zostać potwierdzona po PR-8, ale nie wolno scalać ich w jeden duży PR tylko po to, aby szybciej nazwać całość MVP.
+Numery PR-ów opisują istniejące paczki, a tabela pokazuje priorytet wartości dla toru operatora. Po PR-8 trzeba potwierdzić techniczną kolejność zależności. PR-10a–PR-10d pozostają osobnymi paczkami i nie wolno scalać ich w jeden duży PR tylko po to, aby szybciej nazwać całość MVP.
 
 ## Inwentaryzacja Mobile Calendar przed implementacją
 
@@ -120,9 +141,12 @@ PR-10b, PR-10c i PR-10d pozostają osobnymi paczkami. Ich kolejność może zost
 
 - stawka bazowa każdego domku;
 - sezon niski, średni i wysoki;
+- potwierdzenie wysokiego sezonu 15 czerwca–15 września;
 - święta i długie weekendy;
+- dokładna dopłata zamiast „około 10%” oraz sposób zaokrąglenia;
 - promocje oraz wyjątki;
-- minimalne długości pobytu;
+- standardowe minimum czterech dób i zasada wyjątkowej podstawy 3,5 doby;
+- polityka zwierząt: Czapla bez zwierząt, Rybak 100 PLN za sztukę za pobyt;
 - opłata za sprzątanie i inne dopłaty;
 - reguły zależne od liczby osób, dnia tygodnia lub długości pobytu;
 - daty obowiązywania oraz przykładowe wyceny kontrolne.
@@ -136,12 +160,23 @@ PR-10b, PR-10c i PR-10d pozostają osobnymi paczkami. Ich kolejność może zost
 - sposób raportowania błędu lub dostarczenia;
 - informacja, czy Mobile Calendar przechowuje historię wysłanych wiadomości.
 
+### Proces i zgodność
+
+- domyślne godziny 16:00/11:00 i sposób zatwierdzania wyjątku;
+- domyślna zaliczka 33%, wariant 50% i termin pierwszej płatności;
+- pełna płatność D-2 i zasada wydania klucza;
+- zasady anulowania, no-show, zmiany terminu i zwrotu zaliczki;
+- aktualne Standardy Ochrony Małoletnich oraz używany druk;
+- osoba odpowiedzialna za SOP i przygotowanie osób wydających klucze;
+- dokładna reguła odświeżenia domku po długiej przerwie.
+
 ## Plan wykonania
 
 ### Faza 0 — zapis planu
 
 - utrzymać rejestr pomysłów jako jedno źródło prawdy dla intake;
-- powiązać POM-004–POM-007 z master planem;
+- powiązać POM-004–POM-008 z master planem;
+- zachować pełne ustalenia z testu w `RAPORT_Z_PRZEJSCIA_TATY_MOBILE_2026-07-25.md`;
 - nie zmieniać kodu w ramach samego zapisu planu.
 
 ### Faza 1 — dane i ciągłość
@@ -159,19 +194,23 @@ PR-10b, PR-10c i PR-10d pozostają osobnymi paczkami. Ich kolejność może zost
 
 ### Faza 3 — codzienna obsługa rezerwacji
 
-- wdrożyć POM-004 w PR-10b;
-- wdrożyć minimalny przepływ POM-005 w PR-10c;
+- wdrożyć mobilny fundament dostępności i POM-008;
 - przepisać i zatwierdzić stawki POM-006;
 - poprawić wybór terminu i kalendarz w PR-10d;
+- wdrożyć minimalny przepływ POM-005 w PR-10c;
+- dodać zwierzęta, usługi, rabat i zaliczkę bez rozbudowywania pełnego CRM;
+- wdrożyć POM-004 niżej lub w osobnym widoku, bez przesuwania kalendarza;
 - przejść 10 kontrolnych rozmów/wycen z tatą.
 
 ### Faza 4 — komunikacja
 
-- zatwierdzić trzy szablony e-mail v1 w PR-11c;
+- zatwierdzić sekwencję e-mail v1: rezerwacja i zaliczka, potwierdzenie zaliczki, przypomnienie o saldzie oraz przyjazd;
 - podłączyć dostawcę w kontrolowanej części Etapu 7;
 - rozpocząć od adresów kontrolnych;
 - sprawdzić edycję, odpowiedź, retry, status i kill switch;
 - dopiero potem dopuścić ręczną wysyłkę do prawdziwego gościa.
+
+Równolegle zatwierdzić SOP małoletnich przed projektowaniem formularza online i określić, czy w ogóle jest wymagany podpis oraz jakiego rodzaju. Po zaliczce uruchamiać tygodniowy plan sprzątania i propozycję kontroli odświeżającej po ponad siedmiu dniach od ostatniego potwierdzonego sprzątania lub kontroli.
 
 ### Faza 5 — pilot i przełączenie
 
@@ -187,24 +226,32 @@ PR-10b, PR-10c i PR-10d pozostają osobnymi paczkami. Ich kolejność może zost
 MVP można uznać za gotowe do codziennej pracy taty, gdy:
 
 1. tata loguje się na własne konto operatora i nie ma zbędnych uprawnień;
-2. na telefonie oraz desktopie widzi prawidłowy kalendarz;
-3. 10/10 kontrolnych wycen zgadza się ze sprawdzonym cennikiem;
-4. cenę da się podać w mniej niż 30 sekund;
-5. rezerwację z kontaktem, źródłem, ceną i statusem płatności da się zapisać w mniej niż dwie minuty;
-6. ręczny rabat pokazuje cenę z cennika, cenę końcową i powód;
-7. ekran „Dzisiaj” pokazuje pełną nazwę bieżącego gościa, termin wyjazdu i następny przyjazd;
-8. trzy szablony e-mail można edytować i wysłać z aplikacji;
-9. status wysyłki pochodzi od dostawcy, a retry nie tworzy duplikatu;
-10. przez minimum 14 dni nie ma niewyjaśnionych różnic między Stawy OS a źródłami rezerwacji;
-11. istnieje sprawdzony eksport, procedura awaryjna i rollback;
-12. Patryk oraz tata osobno zatwierdzają przełączenie.
+2. na jego telefonie i z jego ustawieniem tekstu kalendarz jest pierwszym użytecznym ekranem;
+3. przy powiększeniu do 200% nie znikają daty, domek, cena ani główna akcja;
+4. zakres można wybrać wizualnie dwoma tapnięciami;
+5. 10/10 kontrolnych wycen zgadza się ze sprawdzonym cennikiem;
+6. cenę da się podać w mniej niż 30 sekund;
+7. rezerwację z kontaktem, źródłem, osobami, zwierzętami, ceną, zaliczką i płatnością da się zapisać w mniej niż dwie minuty;
+8. ręczny rabat pokazuje cenę z cennika, cenę końcową i powód;
+9. reguły Czapli/Rybaka, minimum pobytu i standardowe godziny działają zgodnie z zatwierdzoną polityką;
+10. ekran „Dzisiaj” pokazuje pełną nazwę bieżącego gościa, termin wyjazdu i następny przyjazd, ale nie zasłania kalendarza;
+11. zatwierdzoną sekwencję e-mail można edytować i wysłać z aplikacji;
+12. status wysyłki pochodzi od dostawcy, a retry nie tworzy duplikatu;
+13. saldo D-2 i bramka wydania klucza są jednoznaczne;
+14. procedura małoletnich ma zatwierdzony SOP, minimalny zapis i przeszkolone osoby;
+15. sprzątanie otrzymuje właściwą informację po zaliczce i propozycję odświeżenia po długiej przerwie;
+16. przez minimum 14 dni nie ma niewyjaśnionych różnic między Stawy OS a źródłami rezerwacji;
+17. istnieje sprawdzony eksport, procedura awaryjna i rollback;
+18. Patryk oraz tata osobno zatwierdzają przełączenie.
 
-Niespełnienie któregokolwiek z punktów 8–11 blokuje rezygnację z narzędzia, które nadal obsługuje odpowiednią funkcję.
+Niespełnienie któregokolwiek z punktów 11–17 blokuje rezygnację z narzędzia, które nadal obsługuje odpowiednią funkcję.
 
 ## Miary pilota
 
 - czas do podania ceny;
 - czas do zapisania kompletnej rezerwacji;
+- liczba pomyłek lub blokad spowodowanych powiększonym tekstem;
+- liczba tapnięć od otwarcia aplikacji do wyceny;
 - liczba powrotów do Mobile Calendar podczas rozmowy;
 - liczba ręcznych korekt ceny;
 - liczba brakujących lub niezrozumiałych pól;
