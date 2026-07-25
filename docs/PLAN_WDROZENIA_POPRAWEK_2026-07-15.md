@@ -4,6 +4,8 @@
 
 > Aktualizacja 20.07.2026: włączono ustalenia z `RAPORT_Z_PRZEJSCIA_PRZEZ_APLIKACJE_2026-07-19.md`. Finansowe elementy weszły do PR-6a–PR-6c. Pozostałe wymagania zostały przypisane do PR-9a–PR-9c, PR-10a–PR-10e, PR-11a–PR-11d i Etapu 7 bez omijania wcześniejszych bramek architektonicznych.
 
+> Aktualizacja 25.07.2026: włączono test taty na telefonie z `RAPORT_Z_PRZEJSCIA_TATY_MOBILE_2026-07-25.md`. Dla roli operatora kalendarz dostępności jest ważniejszy od Dashboardu i briefu „Dzisiaj”. Dodano powiększony tekst, wizualny wybór zakresu, reguły godzin/zwierząt/minimum pobytu, zaliczkę, sekwencję e-mail, sprzątanie po zaliczce oraz granicę prawną procedury małoletnich.
+
 ## Cel
 
 Doprowadzić aplikację od kontrolowanego pilota do wiarygodnego systemu operacyjnego, bez rozwijania warstwy wzrostu na niepewnych danych i bez przełączania źródła prawdy przed sprawdzonym gatewayem OTA.
@@ -147,11 +149,13 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 
 #### 3.1 Doraźnie, przed większą migracją
 
-- [ ] Usunąć automatyczne mutacje przy samym otwarciu pulpitu albo zapisywać je idempotentną komendą serwerową.
-- [ ] Dodać identyfikator żądania, użytkownika, wersję oczekiwaną/aktualną i czas zapisu do telemetryki.
-- [ ] Koordynować karty przez `BroadcastChannel`; po konflikcie nie nadpisywać lokalnego stanu.
-- [ ] Pokazać użytkownikowi konflikt z wyborem: odśwież, skopiuj zmiany, porównaj.
-- [ ] Dodać test równoległych zapisów w dwóch sesjach.
+- [x] Usunąć automatyczne mutacje przy samym otwarciu pulpitu albo zapisywać je idempotentną komendą serwerową.
+- [x] Dodać identyfikator żądania, użytkownika, wersję oczekiwaną/aktualną i czas zapisu do telemetryki.
+- [x] Koordynować karty przez `BroadcastChannel`; po konflikcie nie nadpisywać lokalnego stanu.
+- [x] Pokazać użytkownikowi konflikt z wyborem: odśwież, skopiuj zmiany, porównaj.
+- [x] Dodać test równoległych zapisów w dwóch sesjach.
+
+**Status PR-7 (2026-07-25): wdrożony i zweryfikowany lokalnie.** Przechodzi 144/144 testów, lint, TypeScript, build 28 tras oraz smoke test desktop/mobile. Test dwóch sesji obejmuje zatrzymanie PUT, zachowanie lokalnej zmiany i spóźnione porównanie. Migracja telemetryczna i rozszerzony `test:integration` są gotowe, ale przed publikacją muszą zostać uruchomione wyłącznie na dedykowanym projekcie Supabase.
 
 #### 3.2 Docelowo
 
@@ -165,6 +169,48 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 - [ ] Audit event w tej samej transakcji co zmiana.
 - [ ] Snapshot pozostawić tylko jako backup/eksport, nie główną ścieżkę CRUD.
 - [ ] Plan migracji i rollbacku z porównaniem liczby/haszy rekordów.
+
+**PR-8a — pierwszy wycinek wykonany lokalnie 25.07.2026:**
+
+- [x] `PATCH /api/tasks/:id` aktualizuje istniejące zadanie bez pełnego `PUT /api/state`.
+- [x] Zod oraz niezależne inwarianty Postgresa walidują komendę.
+- [x] `record_version` i optimistic locking dotyczą jednego zadania.
+- [x] Audit event powstaje w tej samej transakcji co zmiana.
+- [x] Globalna wersja jest zwiększana bez warunku, aby stary pełny snapshot nie nadpisał komendy domenowej.
+- [x] Test klienta potwierdza brak pełnego `PUT` po zmianie zadania.
+- [x] Test integracyjny zawiera 100 równoległych aktualizacji różnych zadań i konflikt tego samego zadania.
+- [ ] Uruchomić próbę 100 aktualizacji na dedykowanym Supabase; jedyny dostępny projekt jest operacyjny i nie został użyty do testu destrukcyjnego.
+
+**Status PR-8a:** implementacja lokalna, 152/152 testy, lint, TypeScript, build i smoke desktop/mobile przechodzą. Publikacja jest zablokowana do czasu zastosowania migracji i przejścia testu integracyjnego na odizolowanej bazie.
+
+**PR-8b — checklista rekordowa wykonana lokalnie 25.07.2026:**
+
+- [x] `PATCH /api/checklist-items/:id` aktualizuje jeden punkt bez pełnego `PUT /api/state`.
+- [x] Zod i Postgres niezależnie walidują komendę oraz powiązane zadanie.
+- [x] `record_version` i optimistic locking dotyczą jednego punktu checklisty.
+- [x] Audit event powstaje w tej samej transakcji, a czas ukończenia pochodzi z serwera.
+- [x] Dwa szybkie kliknięcia nie cofają nowszego stanu po starszej odpowiedzi.
+- [x] Zewnętrzny commit podczas oczekującej komendy powoduje odłożone, bezpieczne odświeżenie.
+- [x] Test klienta potwierdza brak pełnego `PUT` po zmianie checklisty.
+- [x] Test integracyjny zawiera 100 równoległych aktualizacji różnych punktów i konflikt tego samego punktu.
+- [ ] Uruchomić próbę na dedykowanym Supabase; dostępny jest tylko projekt operacyjny bez gałęzi testowej.
+
+**Status PR-8b:** implementacja lokalna, 162/162 testy, lint, TypeScript, build 30 tras oraz read-only smoke test `/tasks` na desktopie i 390 px przechodzą. Migracja nie została zastosowana do projektu operacyjnego.
+
+**PR-8c — transakcyjne utworzenie agregatu rezerwacji wykonane lokalnie 25.07.2026:**
+
+- [x] `POST /api/bookings` tworzy rezerwację bez pełnego `PUT /api/state`.
+- [x] Rezerwacja, kontakt/zgody, 5 zadań workflow, checklista sprzątania i szkice komunikacji zapisują się w jednej transakcji.
+- [x] Zod i Postgres niezależnie walidują dane oraz relacje agregatu.
+- [x] Blokada transakcyjna per domek serializuje równoległe próby i zapobiega double-bookingowi.
+- [x] Kontrola dostępności uwzględnia aktywne rezerwacje, blokady oraz konflikt godzin na granicy pobytów.
+- [x] Powtórzenie tego samego `requestId` jest idempotentne i nie duplikuje rekordów.
+- [x] Audit event, globalna wersja-fence i rekordy wykonawcze `scheduled_messages` powstają w tej samej transakcji.
+- [x] Test klienta potwierdza 5 zadań, 4 punkty checklisty, 8 szkiców wiadomości i brak pełnego `PUT`.
+- [x] Test integracyjny zawiera commit, replay, konflikt ID, konflikt blokady/godzin i dwie równoległe próby tego samego terminu.
+- [ ] Uruchomić pełną próbę na dedykowanym Supabase; projekt operacyjny nie został użyty do destrukcyjnego testu.
+
+**Status PR-8c:** implementacja lokalna przechodzi 174/174 testy automatyczne, lint, TypeScript, build 31 tras oraz read-only smoke test `/bookings` i formularza na desktopie/390 px. Migracja nie została zastosowana do projektu operacyjnego.
 
 **Akceptacja etapu 3:** 100 równoległych, kontrolowanych aktualizacji różnych rekordów bez konfliktu globalnego; konflikt tego samego rekordu nie traci danych i daje czytelny wynik 409; brak pełnego delete/reinsert przy pojedynczej zmianie.
 
@@ -195,6 +241,9 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 - [ ] Stan domku wyliczać jako `goście`, `wyjazd dzisiaj`, `do sprzątania`, `w toku`, `gotowy`, `zablokowany usterką`.
 - [ ] `Gotowy` wynika z pełnej checklisty; awaryjne nadpisanie właściciela wymaga powodu i audytu.
 - [ ] Zachować zgłaszanie usterki z oceną ryzyka przed kolejnym pobytem.
+- [ ] Po zaksięgowaniu zaliczki umieścić pobyt w planie sprzątania na najbliższy tydzień, zgodnie z regułą i preferencją operatora.
+- [ ] Jeżeli od ostatniego potwierdzonego sprzątania lub kontroli gotowości minęło ponad siedem dni, zaproponować odświeżenie przed przyjazdem; sama luka między rezerwacjami nie jest dowodem potrzeby.
+- [ ] Osoba wydająca klucze widzi tylko niezbędne potwierdzenia: właściwy pobyt, gotowość, bramkę płatności i wykonanie wymaganej procedury, bez pełnych finansów i CRM.
 
 #### 4.3 PR-9c — procedura ochrony małoletnich
 
@@ -204,6 +253,9 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 - [ ] Nie przechowywać kopii dokumentów ani dodatkowych danych dziecka bez odrębnej, udokumentowanej potrzeby i retencji.
 - [ ] Nie łączyć procedury z marketingiem, ankietą satysfakcji ani zgodą na media.
 - [ ] Dodać kontrolowaną ścieżkę reakcji i audyt dla wyniku wymagającego działania.
+- [ ] SOP określa pełną i skróconą wersję standardów, sposób udostępnienia, przygotowanie personelu, właściciela przeglądu oraz pisemny zapis wniosków z okresowej oceny.
+- [ ] Formularz online powstaje dopiero po zatwierdzeniu SOP, minimalnego zakresu danych, retencji i dostępu.
+- [ ] Nie zakładać, że dowolny podpis DocuSign jest równoważny podpisowi własnoręcznemu; wymagana forma i poziom podpisu podlegają osobnej walidacji prawnej.
 
 **Akceptacja etapu 4:** użytkownik organizacji A nie może odczytać ani zmienić organizacji B; cleaning wykonuje pełny turnover bez finansów/marketingu/pełnego PII; viewer nie zapisuje ani nie wysyła; stan gotowości ma dowód; procedura małoletnich zapisuje tylko zatwierdzone minimum.
 
@@ -216,6 +268,9 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 - [ ] Testy klawiatury dla nowej rezerwacji, edycji, anulowania, płatności i profilu gościa.
 - [ ] Paginacja/wirtualizacja listy rezerwacji i CRM.
 - [ ] Minimalny tekst krytyczny 12–14 px; informacja nie zależy wyłącznie od koloru.
+- [ ] Dla toru operatora treść podstawowa ma docelowo co najmniej 16 px i musi działać przy powiększeniu tekstu/zoomie do 200%.
+- [ ] Wykonać test na rzeczywistym telefonie taty z jego ustawieniem tekstu; test samej szerokości 390 px nie wystarcza.
+- [ ] Główne kontrolki dotykowe mają duże cele, a powiększenie nie ukrywa dat, ceny, nazwy domku ani akcji kontynuacji.
 - [ ] Ujednolicić nazwy statusów oraz odmianę liczebników.
 - [ ] Budżet wydajności: LCP, INP, liczba elementów DOM, czas otwarcia rezerwacji.
 
@@ -227,6 +282,7 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 - [ ] Same-day turnover wyraźnie pokazuje dostępne okno i ryzyko.
 - [ ] Kliknięcie zdarzenia otwiera właściwą akcję, nie tylko ogólny rekord.
 - [ ] Dane niezbędne do decyzji są czytelne w 5 sekund na desktopie i telefonie.
+- [ ] Dla roli operatora agenda „Dzisiaj” znajduje się pod kalendarzem albo w osobnej zakładce; nie zajmuje miejsca nad dostępnością.
 
 #### 5.3 PR-10c — formularz, lista i szczegół rezerwacji
 
@@ -239,10 +295,18 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 - [ ] Rozdzielić w formularzu: kanał zawarcia, sposób kontaktu i opcjonalne źródło odkrycia.
 - [ ] Pola OTA, prowizji, zadatku i dzieci pokazywać warunkowo.
 - [ ] Minimalny szybki wpis obejmuje termin, domek, osoby, nazwę, kontakt, kanał, cenę/status; pełny CRM jest później.
+- [ ] Standardowe godziny check-in 16:00 i check-out 11:00 pobierać z ustawień obiektu i ukryć w szybkim formularzu; wyjątek jest jawną korektą zależną od gotowości.
+- [ ] Dodać liczbę zwierząt i regułę per domek: Czapla bez zwierząt, Rybak 100 PLN za sztukę za pobyt, po zatwierdzeniu aktualnej polityki.
+- [ ] Pokazać osobno noclegi, zwierzęta, usługi, cenę z cennika, rabat kwotowy/procentowy i cenę końcową.
+- [ ] Domyślna zaliczka wynosi 33% ceny końcowej; operator może ją zmienić per rezerwacja, np. do 50%, z widoczną kwotą i pozostałym saldem.
+- [ ] Standardowe minimum czterech dób i wyjątek rozliczany według minimalnej podstawy nie mogą zmieniać faktycznych dat pobytu; reguła 3,5 doby wymaga zatwierdzenia przed implementacją.
+- [ ] Opcjonalny adres i dane do dokumentu sprzedaży umieścić w rozwijanej sekcji, nie w podstawowej ścieżce telefonu.
 - [ ] Usunąć automatyczne zadanie `Content` dla każdego pobytu; zastąpić ręczną akcją `okazja na content`.
 
 #### 5.4 PR-10d — kalendarz operacyjny
 
+- [ ] Rola `manager/operator` po zalogowaniu trafia do kalendarza, nie do ogólnego Dashboardu.
+- [ ] Na telefonie kalendarz jest widoczny przed powitaniem, KPI, zadaniami i briefem operacyjnym.
 - [ ] Domyślny zakres 42 dni: 7 dni wstecz, dzisiaj, 34 dni naprzód.
 - [ ] `Dzisiaj` ustawia bieżący dzień około 1/4–1/3 szerokości, zachowując kontekst poprzedniego pobytu.
 - [ ] Nawigacja zakresu i przewijanie osi są sprzężone; użytkownik nie zarządza dwoma niezależnymi stanami.
@@ -251,6 +315,8 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 - [ ] Drag na desktopie, dwa tapnięcia na dotyku i pola od/do dla klawiatury tworzą ten sam szkic terminu.
 - [ ] Konflikt/blokada są sprawdzane przed otwarciem lub zatwierdzeniem formularza.
 - [ ] Mobilna agenda jasno pokazuje zakres i pozwala łatwo zmienić tydzień.
+- [ ] Dwa tapnięcia na wizualnej dostępności zachowują początek, koniec i domek oraz otwierają wycenę bez ponownego wpisywania dat.
+- [ ] Widoczny stan synchronizacji odróżnia lokalny zapis od potwierdzonej blokady Mobile Calendar/OTA.
 
 #### 5.5 PR-10e — przegląd roku i luki
 
@@ -291,6 +357,9 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 
 - [ ] Dodać preferowany język gościa `pl/de/en`; nie zgadywać go wyłącznie z kraju.
 - [ ] Wersjonować szablony potwierdzenia, płatności, przed przyjazdem, kontroli po przyjeździe, wyjazdu i opinii.
+- [ ] Dla MVP taty odwzorować kolejno: potwierdzenie i prośbę o zaliczkę, potwierdzenie zaliczki z materiałami pobytowymi, przypomnienie o saldzie D-2 oraz trasę i informacje przed przyjazdem.
+- [ ] Szablon potwierdzenia zawiera obiekt, termin, cenę, zaliczkę, termin, konto i warunki; numer konta jest wersjonowaną konfiguracją, nie tekstem kopiowanym do wielu szablonów.
+- [ ] Pozwolić wybrać operatorów otrzymujących kopię wiadomości bez ujawniania listy gości.
 - [ ] Dodać zatwierdzoną instrukcję dojazdu per język, z ostrzeżeniem przed niewłaściwą trasą.
 - [ ] Dobierać kanał do celu i źródła rezerwacji: SMS, e-mail albo OTA; nie dublować bez jawnej reguły.
 - [ ] Opcjonalny krótki SMS kierujący do ważnego e-maila jest osobną, jawną regułą z limitem, nie automatycznym duplikatem każdej wiadomości.
@@ -298,6 +367,8 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 - [ ] Reguły opinii są zależne od polityki kanału Booking/Airbnb/direct.
 - [ ] Zapisać statusy szkicu i zatwierdzenia; nie oznaczać `wysłana/dostarczona` bez odpowiedzi dostawcy.
 - [ ] Szkice mogą powstawać automatycznie, ale produkcyjna dostawa pozostaje zablokowana do Etapu 7.
+- [ ] Automatyzację wdrażać per szablon: szkic → ręczne zatwierdzenie → ręczna wysyłka ze statusem → dopiero potem jawnie zatwierdzony auto-send.
+- [ ] Zmiana terminu, ceny, obiektu, odbiorcy lub języka po zatwierdzeniu cofa wiadomość do sprawdzenia.
 
 #### 6.4 PR-11d — insighty, reklamy i eksperymenty
 
@@ -320,6 +391,7 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 #### 7.1 Gateway OTA
 
 - [ ] Zrealizować spike Mobile-Calendar Premium vs Beds24 na kopii danych.
+- [ ] Potwierdzić synchronizację co najmniej z Booking, Airbnb i Aloha Camp oraz właściciela każdego konta; nie zakładać jej na podstawie samego widoku Mobile Calendar.
 - [ ] Macierz pól: rezerwacja, gość, cena, prowizja, płatność, blokada, status, wiadomość, webhook.
 - [ ] Test dla obu domków i obu głównych kanałów:
   1. nowa rezerwacja;
@@ -344,6 +416,8 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 - [ ] Retry ma limit, backoff i alert do właściciela dla wiadomości ważnej operacyjnie.
 - [ ] Zmiana terminu, kontaktu lub języka po zatwierdzeniu cofa wiadomość do sprawdzenia.
 - [ ] Osobno przetestować potwierdzenie, płatność, dojazd, sprzątanie i opinię w każdym używanym kanale.
+- [ ] Nie wysyłać potwierdzenia rezerwacji przed potwierdzeniem zapisu w źródle nadrzędnym.
+- [ ] Przypomnienie D-2 powstaje tylko dla rzeczywistego salda > 0; pełna wpłata nie tworzy wiadomości.
 
 #### 7.3 Dalsze integracje
 

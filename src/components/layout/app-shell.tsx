@@ -80,7 +80,16 @@ function NavItem({ href, label, icon, compact = false }: { href: string; label: 
 }
 
 function ShellInner({ children, identity }: { children: React.ReactNode; identity: AppIdentity }) {
-  const { data, dataStatus, syncMode, lastSavedAt, retryDataLoad } = useAppStore();
+  const {
+    copyConflictChanges,
+    data,
+    dataStatus,
+    lastSavedAt,
+    reloadAfterConflict,
+    retryDataLoad,
+    syncConflict,
+    syncMode,
+  } = useAppStore();
   const pathname = usePathname();
   const [showNew, setShowNew] = useState(false);
   const [showAlerts, setShowAlerts] = useState(false);
@@ -88,6 +97,7 @@ function ShellInner({ children, identity }: { children: React.ReactNode; identit
   const [showSearch, setShowSearch] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
+  const [showConflictComparison, setShowConflictComparison] = useState(false);
   const [query, setQuery] = useState("");
   const dataReady = dataStatus === "ready";
   const { label: syncLabel, body: syncBody } = syncCopy(syncMode, lastSavedAt);
@@ -119,6 +129,19 @@ function ShellInner({ children, identity }: { children: React.ReactNode; identit
     setShowNew(false);
     setToast("Rezerwacja dodana. Utworzyłem też zadania operacyjne.");
     window.setTimeout(() => setToast(""), 4200);
+  }
+
+  async function copyLocalConflictChanges() {
+    const copied = await copyConflictChanges();
+    setToast(copied
+      ? "Skopiowano niezapisane zmiany do schowka."
+      : "Przeglądarka zablokowała kopiowanie. Użyj porównania przed odświeżeniem.");
+    window.setTimeout(() => setToast(""), 5200);
+  }
+
+  function confirmConflictReload() {
+    const confirmed = window.confirm("Wczytać aktualną wersję z chmury? Niezapisane zmiany w tej karcie zostaną zastąpione. Najpierw możesz je skopiować.");
+    if (confirmed) reloadAfterConflict();
   }
 
   return (
@@ -182,6 +205,14 @@ function ShellInner({ children, identity }: { children: React.ReactNode; identit
       {showNew && dataReady ? <NewBookingDialog onClose={() => setShowNew(false)} onAdded={added} /> : null}
       {showSearch ? <div className="fixed inset-0 z-50 bg-[#102c24]/65 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowSearch(false); }}><section className="mx-auto mt-[8vh] max-w-2xl rounded-[22px] border border-[#d7cfc0] bg-[#fffdf8] p-4 shadow-2xl"><div className="flex gap-2"><div className="relative flex-1"><Icon className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[#728078]" name="search"/><input autoFocus className="min-h-12 w-full rounded-xl border border-[#cbc3b4] bg-white pl-10 pr-4 text-sm outline-none focus:border-[#317a78]" placeholder="Gość, numer rezerwacji lub domek…" value={query} onChange={(event) => setQuery(event.target.value)} /></div><Button aria-label="Zamknij wyszukiwanie" variant="secondary" onClick={() => setShowSearch(false)}><Icon className="size-4" name="close"/></Button></div><div className="mt-3 grid gap-1">{searchResults.map((booking) => <Link className="flex items-center justify-between rounded-xl p-3 hover:bg-[#f1eee6]" href={`/bookings/${booking.id}`} key={booking.id} onClick={() => setShowSearch(false)}><span><span className="block text-sm font-black">{booking.guestLabel}</span><span className="text-xs text-[#6b7771]">{unitName(data.units, booking.unitId)} · {formatPolishDate(booking.checkIn)} – {formatPolishDate(booking.checkOut)}</span></span><Icon className="size-4" name="arrow"/></Link>)}{query.length >= 2 && !searchResults.length ? <p className="p-6 text-center text-sm font-bold text-[#6b7771]">Brak wyników.</p> : null}</div></section></div> : null}
       {showMore ? <div className="fixed inset-0 z-50 bg-[#102c24]/65 p-4 backdrop-blur-sm lg:hidden" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowMore(false); }}><section className="absolute inset-x-3 bottom-3 rounded-[24px] border border-[#d7cfc0] bg-[#fffdf8] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl"><div className="flex items-center justify-between px-1 pb-3"><h2 className="font-display text-2xl font-semibold">Wszystkie moduły</h2><button aria-label="Zamknij" className="grid size-9 place-items-center rounded-xl border" onClick={() => setShowMore(false)}><Icon className="size-4" name="close"/></button></div><div className="grid grid-cols-2 gap-2">{[primaryNav[3], primaryNav[4], secondaryNav[1], secondaryNav[2], { href: "/media", label: "Media i zgody", icon: "guest" as const }].map((item) => <Link className="flex items-center gap-3 rounded-2xl border border-[#ded7ca] bg-white p-3 text-sm font-black" href={item.href} key={item.href} onClick={() => setShowMore(false)}><span className="grid size-9 place-items-center rounded-xl bg-[#e5ead7]"><Icon className="size-4" name={item.icon}/></span>{item.label}</Link>)}</div></section></div> : null}
+      {syncConflict ? <div className="fixed inset-0 z-[80] flex items-end justify-center bg-[#102c24]/75 p-0 backdrop-blur-sm sm:items-center sm:p-5" role="alertdialog" aria-modal="true" aria-labelledby="sync-conflict-title" aria-describedby="sync-conflict-body">
+        <section className="max-h-[94vh] w-full max-w-2xl overflow-y-auto rounded-t-[28px] border border-[#e4c8bc] bg-[#fffdf8] p-5 shadow-2xl sm:rounded-[28px] sm:p-7">
+          <div className="flex items-start gap-4"><span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[#f8ddd3] text-[#9b4029]"><Icon className="size-5" name="warning"/></span><div><p className="text-[11px] font-black uppercase tracking-[.17em] text-[#a05742]">Zapis zatrzymany bez utraty danych</p><h2 className="mt-1 font-display text-3xl font-semibold" id="sync-conflict-title">Inna karta zapisała nowszą wersję</h2><p className="mt-2 text-sm leading-6 text-[#65736d]" id="sync-conflict-body">Twoje lokalne zmiany zostały zachowane na tym ekranie i nie będą automatycznie nadpisane. Skopiuj je, porównaj zakres albo świadomie wczytaj wersję z chmury.</p></div></div>
+          <div className="mt-5 grid gap-2 rounded-2xl border border-[#e4d8ca] bg-[#f7f2e9] p-4 text-xs text-[#607069] sm:grid-cols-2"><p><span className="block font-black text-[#314b41]">Wersja przy edycji</span>{syncConflict.expectedVersion}</p><p><span className="block font-black text-[#314b41]">Aktualna wersja chmury</span>{syncConflict.currentVersion ?? "sprawdzanie…"}</p><p className="sm:col-span-2"><span className="block font-black text-[#314b41]">Identyfikator żądania</span><span className="break-all font-mono">{syncConflict.requestId ?? "zmiana wykryta między kartami"}</span></p></div>
+          {showConflictComparison ? <div className="mt-4 rounded-2xl border border-[#d7d1c5] bg-white p-4"><div className="grid grid-cols-[1fr_auto_auto] gap-x-4 gap-y-2 text-xs"><p className="font-black text-[#314b41]">Obszar</p><p className="font-black text-[#314b41]">Tutaj</p><p className="font-black text-[#314b41]">Chmura</p>{syncConflict.changes.map((change) => <div className="col-span-3 grid grid-cols-subgrid border-t border-[#eee8de] pt-2" key={String(change.key)}><p className="font-bold">{change.label}</p><p>{change.localChanges}</p><p>{change.remoteChanges ?? "…"}</p></div>)}</div>{!syncConflict.changes.length ? <p className="text-sm text-[#65736d]">Nie wykryto różnic w obsługiwanych obszarach. Możesz bezpiecznie wczytać aktualną wersję.</p> : null}<p className="mt-3 text-[11px] leading-5 text-[#758078]">Liczby oznaczają dodane, usunięte lub zmienione rekordy względem wersji, od której zaczęła się edycja.</p></div> : null}
+          <div className="mt-6 grid gap-2 sm:grid-cols-3"><Button variant="secondary" onClick={() => setShowConflictComparison((value) => !value)}>{showConflictComparison ? "Ukryj porównanie" : "Porównaj zmiany"}</Button><Button variant="secondary" onClick={() => void copyLocalConflictChanges()}>Skopiuj moje zmiany</Button><Button onClick={confirmConflictReload}>Wczytaj z chmury</Button></div>
+        </section>
+      </div> : null}
       {toast ? <div className="fixed bottom-24 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-xl bg-[#18332c] px-4 py-3 text-sm font-bold text-white shadow-2xl lg:bottom-6"><span className="grid size-6 place-items-center rounded-full bg-[#4d986b]"><Icon className="size-4" name="check" /></span>{toast}</div> : null}
     </div>
   );

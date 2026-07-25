@@ -38,6 +38,12 @@ import { defaultAutomationRules, defaultMessageTemplates, reconcileScheduledMess
 import { guestInsightAfterDeparture, repairTaskForIssue } from "@/lib/workflow/departures";
 import { downloadEncryptedJson, downloadPricingAnalysisDataset } from "@/lib/security/data-exports";
 import { isTrashExpired, trashExpiryDate } from "@/lib/booking-trash";
+import type { BookingAggregate } from "@/lib/domain/booking-command";
+import {
+  conflictBackup,
+  summarizeSyncChanges,
+  type SyncConflict,
+} from "@/lib/sync/state-conflict";
 
 export type SyncMode = "checking" | "cloud" | "local" | "error" | "conflict";
 export type DataStatus = "loading" | "ready" | "error";
@@ -46,8 +52,11 @@ type AppStore = {
   data: AppData;
   dataStatus: DataStatus;
   syncMode: SyncMode;
+  syncConflict?: SyncConflict;
   lastSavedAt?: string;
   retryDataLoad: () => void;
+  copyConflictChanges: () => Promise<boolean>;
+  reloadAfterConflict: () => void;
   addBooking: (booking: Booking, contact?: ContactConsent) => void;
   updateBooking: (booking: Booking) => void;
   cancelBooking: (bookingId: string) => void;
@@ -88,7 +97,23 @@ type AppStore = {
 const StoreContext = createContext<AppStore | null>(null);
 const storageKey = "stawy-u-sikory-app-data-v3";
 const oldStorageKey = "stawy-u-sikory-app-data-v2";
+const syncChannelName = "stawy-os-state-sync-v1";
 const cloudConfigured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+
+type StateCommittedMessage = {
+  type: "state-committed";
+  tabId: string;
+  requestId: string;
+  version: number;
+  savedAt: string;
+};
+
+type CloudStatePayload = {
+  data?: Partial<AppData> | null;
+  updatedAt?: string;
+  version?: number;
+  quarantinedDemo?: boolean;
+};
 
 export function clearPersistedAppData() {
   if (typeof window === "undefined") return;
@@ -103,7 +128,7 @@ function uid(prefix: string) {
   return `${prefix}-${value}`;
 }
 
-function defaultChecklist(tasks: OpsTask[]) {
+function defaultChecklist(tasks: OpsTask[]): TaskChecklistItem[] {
   const labels = [
     "Pościel i ręczniki",
     "Łazienka i kuchnia",
@@ -138,7 +163,10 @@ function normalizeData(parsed?: Partial<AppData> | null, fallback: AppData = ini
     })),
     guests: parsed?.guests ?? fallback.guests,
     consents: parsed?.consents ?? fallback.consents,
-    tasks,
+    tasks: tasks.map((task) => ({
+      ...task,
+      version: task.version ?? 1,
+    })),
     media: parsed?.media ?? fallback.media,
     blocks: parsed?.blocks ?? fallback.blocks,
     rates,
@@ -155,7 +183,10 @@ function normalizeData(parsed?: Partial<AppData> | null, fallback: AppData = ini
     } : { ...connection, coverage: connection.importUrl ? connection.coverage : 0, lastSyncAt: connection.lastSyncAt === "demo" ? undefined : connection.lastSyncAt, staleAfterMinutes: connection.staleAfterMinutes ?? 240 }),
     payments: parsed?.payments ?? fallback.payments,
     invoices: parsed?.invoices ?? fallback.invoices,
-    checklistItems: parsed?.checklistItems ?? defaultChecklist(tasks),
+    checklistItems: (parsed?.checklistItems ?? defaultChecklist(tasks)).map((item) => ({
+      ...item,
+      version: item.version ?? 1,
+    })),
     issues: parsed?.issues ?? fallback.issues,
     messages: parsed?.messages ?? fallback.messages,
     departureDebriefs: parsed?.departureDebriefs ?? fallback.departureDebriefs,
@@ -247,6 +278,71 @@ function audit(entityType: string, entityId: string, action: string, summary: st
   };
 }
 
+function bookingAggregate(
+  current: AppData,
+  booking: Booking,
+  contact: ContactConsent | undefined,
+  createdAt: string,
+): BookingAggregate {
+  const committedBooking = { ...booking, version: 1, updatedAt: createdAt };
+  const tasks = createTasksForBooking(committedBooking).map((task) => ({
+    ...task,
+    version: 1,
+    updatedAt: createdAt,
+  }));
+  const checklistItems = defaultChecklist(tasks).map((item) => ({
+    ...item,
+    version: 1,
+    updatedAt: createdAt,
+  }));
+  const candidate: AppData = {
+    ...current,
+    bookings: [committedBooking, ...current.bookings],
+    consents: contact ? [contact, ...current.consents] : current.consents,
+    tasks: [...tasks, ...current.tasks],
+    checklistItems: [...checklistItems, ...current.checklistItems],
+  };
+  const scheduledMessages = reconcileScheduledMessages(candidate)
+    .filter((message) => message.bookingId === booking.id);
+  return { booking: committedBooking, contact, tasks, checklistItems, scheduledMessages };
+}
+
+function mergeBookingAggregate(current: AppData, aggregate: BookingAggregate): AppData {
+  const bookingId = aggregate.booking.id;
+  const taskIds = new Set(aggregate.tasks.map((task) => task.id));
+  const checklistIds = new Set(aggregate.checklistItems.map((item) => item.id));
+  const messageIds = new Set(aggregate.scheduledMessages.map((message) => message.id));
+  return {
+    ...current,
+    bookings: [aggregate.booking, ...current.bookings.filter((booking) => booking.id !== bookingId)],
+    consents: aggregate.contact
+      ? [aggregate.contact, ...current.consents.filter((contact) => contact.bookingId !== bookingId)]
+      : current.consents.filter((contact) => contact.bookingId !== bookingId),
+    tasks: [...aggregate.tasks, ...current.tasks.filter((task) => !taskIds.has(task.id) && task.bookingId !== bookingId)],
+    checklistItems: [
+      ...aggregate.checklistItems,
+      ...current.checklistItems.filter((item) => !checklistIds.has(item.id) && !taskIds.has(item.taskId)),
+    ],
+    scheduledMessages: [
+      ...aggregate.scheduledMessages,
+      ...current.scheduledMessages.filter((message) => !messageIds.has(message.id) && message.bookingId !== bookingId),
+    ].sort((a, b) => a.dueAt.localeCompare(b.dueAt)),
+  };
+}
+
+function removeBookingAggregate(current: AppData, aggregate: BookingAggregate): AppData {
+  const bookingId = aggregate.booking.id;
+  const taskIds = new Set(aggregate.tasks.map((task) => task.id));
+  return {
+    ...current,
+    bookings: current.bookings.filter((booking) => booking.id !== bookingId),
+    consents: current.consents.filter((contact) => contact.bookingId !== bookingId),
+    tasks: current.tasks.filter((task) => task.bookingId !== bookingId),
+    checklistItems: current.checklistItems.filter((item) => !taskIds.has(item.taskId)),
+    scheduledMessages: current.scheduledMessages.filter((message) => message.bookingId !== bookingId),
+  };
+}
+
 export function AppStoreProvider({ children }: { children: ReactNode }) {
   // Pierwszy render musi być identyczny na serwerze i w przeglądarce. Właściwy
   // stan lokalny lub chmurowy jest pobierany zaraz po zamontowaniu komponentu.
@@ -254,13 +350,55 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [dataStatus, setDataStatus] = useState<DataStatus>("loading");
   const [hydrated, setHydrated] = useState(false);
   const [syncMode, setSyncMode] = useState<SyncMode>("checking");
+  const [syncConflict, setSyncConflict] = useState<SyncConflict>();
   const [lastSavedAt, setLastSavedAt] = useState<string>();
   const [loadRequest, setLoadRequest] = useState(0);
+  const latestData = useRef(data);
   const dataReady = useRef(false);
   const cloudReady = useRef(false);
   const stateVersion = useRef(0);
+  const taskRecordVersions = useRef<Map<string, number>>(new Map());
+  const checklistRecordVersions = useRef<Map<string, number>>(new Map());
+  const pendingRecordCommands = useRef(0);
+  const reloadAfterRecordCommands = useRef(false);
+  const baseData = useRef<AppData>(cloudConfigured ? emptyCloudData() : normalizeData());
+  const localRevision = useRef(0);
+  const savedRevision = useRef(0);
+  const tabId = useRef(uid("TAB"));
+  const syncChannel = useRef<BroadcastChannel | null>(null);
+  const conflictGeneration = useRef(0);
   const skipNextCloudSave = useRef(false);
   const cloudSaveQueue = useRef<Promise<void>>(Promise.resolve());
+
+  const compareConflictWithCloud = useCallback(async (
+    conflict: Omit<SyncConflict, "changes">,
+    localData: AppData,
+    generation: number,
+  ) => {
+    try {
+      const response = await fetch("/api/state", { cache: "no-store" });
+      if (!response.ok) throw new Error("comparison failed");
+      const payload = await response.json() as CloudStatePayload;
+      const remoteData = payload.data ? normalizeData(payload.data, emptyCloudData()) : emptyCloudData();
+      if (conflictGeneration.current !== generation) return;
+      setSyncConflict({
+        ...conflict,
+        currentVersion: payload.version ?? conflict.currentVersion,
+        remoteSavedAt: payload.updatedAt ?? conflict.remoteSavedAt,
+        changes: summarizeSyncChanges(baseData.current, localData, remoteData),
+      });
+    } catch {
+      if (conflictGeneration.current !== generation) return;
+      setSyncConflict({
+        ...conflict,
+        changes: summarizeSyncChanges(baseData.current, localData),
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    latestData.current = data;
+  }, [data]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -268,7 +406,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         clearPersistedAppData();
         setData(emptyCloudData());
       } else {
-        setData(readLocalData());
+        const localData = readLocalData();
+        taskRecordVersions.current = new Map(localData.tasks.map((task) => [task.id, task.version ?? 1]));
+        checklistRecordVersions.current = new Map(localData.checklistItems.map((item) => [item.id, item.version ?? 1]));
+        setData(localData);
         dataReady.current = true;
         setDataStatus("ready");
         setSyncMode("local");
@@ -279,6 +420,49 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (!hydrated || !cloudConfigured || typeof BroadcastChannel === "undefined") return;
+    const channel = new BroadcastChannel(syncChannelName);
+    syncChannel.current = channel;
+    channel.onmessage = (event: MessageEvent<StateCommittedMessage>) => {
+      const message = event.data;
+      if (!message || message.type !== "state-committed" || message.tabId === tabId.current) return;
+      const hasLegacyLocalChanges = localRevision.current !== savedRevision.current;
+      if (!hasLegacyLocalChanges && pendingRecordCommands.current > 0) {
+        reloadAfterRecordCommands.current = true;
+        return;
+      }
+      if (!hasLegacyLocalChanges && cloudReady.current) {
+        dataReady.current = false;
+        cloudReady.current = false;
+        setDataStatus("loading");
+        setSyncMode("checking");
+        setLoadRequest((request) => request + 1);
+        return;
+      }
+      cloudReady.current = false;
+      const conflict = {
+        source: "another-tab" as const,
+        detectedAt: new Date().toISOString(),
+        expectedVersion: stateVersion.current,
+        currentVersion: message.version,
+        requestId: message.requestId,
+        remoteSavedAt: message.savedAt,
+      };
+      const generation = ++conflictGeneration.current;
+      setSyncMode("conflict");
+      setSyncConflict({
+        ...conflict,
+        changes: summarizeSyncChanges(baseData.current, latestData.current),
+      });
+      void compareConflictWithCloud(conflict, latestData.current, generation);
+    };
+    return () => {
+      channel.close();
+      if (syncChannel.current === channel) syncChannel.current = null;
+    };
+  }, [compareConflictWithCloud, hydrated]);
+
+  useEffect(() => {
     if (!hydrated || !cloudConfigured) return;
     let active = true;
     async function loadCloud() {
@@ -286,19 +470,22 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         const response = await fetch("/api/state", { cache: "no-store" });
         if (!active) return;
         if (response.ok) {
-          const payload = await response.json() as {
-            data?: Partial<AppData> | null;
-            updatedAt?: string;
-            version?: number;
-            quarantinedDemo?: boolean;
-          };
+          const payload = await response.json() as CloudStatePayload;
+          const loadedData = payload.data ? normalizeData(payload.data, emptyCloudData()) : emptyCloudData();
           stateVersion.current = payload.version ?? 0;
+          taskRecordVersions.current = new Map(loadedData.tasks.map((task) => [task.id, task.version ?? 1]));
+          checklistRecordVersions.current = new Map(loadedData.checklistItems.map((item) => [item.id, item.version ?? 1]));
+          conflictGeneration.current += 1;
+          baseData.current = loadedData;
+          localRevision.current = 0;
+          savedRevision.current = 0;
           skipNextCloudSave.current = true;
-          setData(payload.data ? normalizeData(payload.data, emptyCloudData()) : emptyCloudData());
+          setData(loadedData);
           cloudReady.current = true;
           dataReady.current = true;
           setDataStatus("ready");
           setSyncMode("cloud");
+          setSyncConflict(undefined);
           setLastSavedAt(payload.updatedAt);
           return;
         }
@@ -327,44 +514,100 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       skipNextCloudSave.current = false;
       return;
     }
+    if (localRevision.current === savedRevision.current) return;
+    const revisionToSave = localRevision.current;
     const timeout = window.setTimeout(() => {
       // Zmiany mogą pojawić się, gdy poprzedni PUT nadal trwa. Kolejka gwarantuje,
       // że każda operacja odczyta wersję dopiero po zakończeniu poprzedniej.
       cloudSaveQueue.current = cloudSaveQueue.current.then(async () => {
         if (!cloudReady.current) return;
+        const requestId = typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : uid("REQ");
+        const clientSentAt = new Date().toISOString();
+        const expectedVersion = stateVersion.current;
         try {
           const response = await fetch("/api/state", {
             method: "PUT",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ data, expectedVersion: stateVersion.current }),
+            body: JSON.stringify({
+              data,
+              expectedVersion,
+              requestId,
+              clientSentAt,
+              tabId: tabId.current,
+            }),
           });
           if (response.status === 409) {
             // Konflikt wymaga świadomego przeładowania danych. Bez tej blokady
             // każda kolejna lokalna mutacja ponawiała ten sam błędny zapis.
+            const payload = await response.json().catch(() => ({})) as {
+              currentVersion?: number;
+              requestId?: string;
+              detectedAt?: string;
+            };
             cloudReady.current = false;
             setSyncMode("conflict");
+            const conflict = {
+              source: "server-rejection",
+              detectedAt: payload.detectedAt ?? new Date().toISOString(),
+              expectedVersion,
+              currentVersion: payload.currentVersion,
+              requestId: payload.requestId ?? requestId,
+            } as const;
+            const generation = ++conflictGeneration.current;
+            setSyncConflict({
+              ...conflict,
+              changes: summarizeSyncChanges(baseData.current, latestData.current),
+            });
+            void compareConflictWithCloud(conflict, latestData.current, generation);
             return;
           }
           if (!response.ok) throw new Error("save failed");
-          const payload = await response.json() as { version?: number };
-          if (typeof payload.version === "number") stateVersion.current = payload.version;
+          const payload = await response.json() as { version?: number; savedAt?: string };
+          if (typeof payload.version === "number") {
+            stateVersion.current = payload.version;
+            // Legacy PUT replaces every record and assigns the committed global
+            // version. Keep migrated record locks aligned until this path is gone.
+            taskRecordVersions.current = new Map(data.tasks.map((task) => [task.id, payload.version!]));
+            checklistRecordVersions.current = new Map(data.checklistItems.map((item) => [item.id, payload.version!]));
+          }
+          savedRevision.current = Math.max(savedRevision.current, revisionToSave);
+          baseData.current = data;
           setSyncMode("cloud");
-          setLastSavedAt(new Date().toISOString());
+          const savedAt = payload.savedAt ?? new Date().toISOString();
+          setLastSavedAt(savedAt);
+          if (typeof payload.version === "number") {
+            syncChannel.current?.postMessage({
+              type: "state-committed",
+              tabId: tabId.current,
+              requestId,
+              version: payload.version,
+              savedAt,
+            } satisfies StateCommittedMessage);
+          }
         } catch {
           setSyncMode("error");
         }
       });
     }, 700);
     return () => window.clearTimeout(timeout);
-  }, [data, dataStatus, hydrated]);
+  }, [compareConflictWithCloud, data, dataStatus, hydrated]);
 
   const mutate = useCallback((fn: (current: AppData) => AppData) => {
     if (!dataReady.current) return;
-    setData(fn);
+    setData((current) => {
+      const next = fn(current);
+      if (next !== current) localRevision.current += 1;
+      return next;
+    });
   }, []);
 
-  const retryDataLoad = useCallback(() => {
-    if (!cloudConfigured) return;
+  const finishRecordCommand = useCallback(() => {
+    pendingRecordCommands.current = Math.max(0, pendingRecordCommands.current - 1);
+    if (pendingRecordCommands.current > 0 || !reloadAfterRecordCommands.current) return;
+    reloadAfterRecordCommands.current = false;
+    if (!cloudReady.current) return;
     dataReady.current = false;
     cloudReady.current = false;
     setDataStatus("loading");
@@ -372,25 +615,371 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setLoadRequest((request) => request + 1);
   }, []);
 
+  const createBooking = useCallback((booking: Booking, contact?: ContactConsent) => {
+    if (!dataReady.current) return;
+    const clientSentAt = new Date().toISOString();
+    const aggregate = bookingAggregate(latestData.current, booking, contact, clientSentAt);
+
+    if (!cloudConfigured) {
+      mutate((current) => ({
+        ...mergeBookingAggregate(current, aggregate),
+        auditLog: [
+          audit("booking", booking.id, "created", `Dodano rezerwację ${booking.guestLabel}`),
+          ...current.auditLog,
+        ],
+      }));
+      return;
+    }
+    if (!cloudReady.current) return;
+
+    const requestId = typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : uid("REQ");
+    for (const task of aggregate.tasks) taskRecordVersions.current.set(task.id, 1);
+    for (const item of aggregate.checklistItems) checklistRecordVersions.current.set(item.id, 1);
+    pendingRecordCommands.current += 1;
+    setData((current) => mergeBookingAggregate(current, aggregate));
+
+    cloudSaveQueue.current = cloudSaveQueue.current.then(async () => {
+      if (!cloudReady.current) {
+        finishRecordCommand();
+        return;
+      }
+      try {
+        const response = await fetch("/api/bookings", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            aggregate,
+            requestId,
+            clientSentAt,
+            tabId: tabId.current,
+          }),
+        });
+        if (!response.ok) {
+          setData((current) => removeBookingAggregate(current, aggregate));
+          for (const task of aggregate.tasks) taskRecordVersions.current.delete(task.id);
+          for (const item of aggregate.checklistItems) checklistRecordVersions.current.delete(item.id);
+          cloudReady.current = false;
+          setSyncMode(response.status === 409 ? "conflict" : "error");
+          if (response.status === 409) {
+            const payload = await response.json().catch(() => ({})) as {
+              requestId?: string;
+              detectedAt?: string;
+            };
+            setSyncConflict({
+              source: "server-rejection",
+              detectedAt: payload.detectedAt ?? new Date().toISOString(),
+              expectedVersion: stateVersion.current,
+              requestId: payload.requestId ?? requestId,
+              changes: summarizeSyncChanges(baseData.current, latestData.current),
+            });
+          }
+          return;
+        }
+
+        const payload = await response.json() as {
+          aggregate: BookingAggregate;
+          stateVersion: number;
+          savedAt?: string;
+        };
+        stateVersion.current = payload.stateVersion;
+        for (const task of payload.aggregate.tasks) {
+          taskRecordVersions.current.set(task.id, task.version ?? 1);
+        }
+        for (const item of payload.aggregate.checklistItems) {
+          checklistRecordVersions.current.set(item.id, item.version ?? 1);
+        }
+        setData((current) => mergeBookingAggregate(current, payload.aggregate));
+        baseData.current = mergeBookingAggregate(baseData.current, payload.aggregate);
+        setSyncMode("cloud");
+        const savedAt = payload.savedAt ?? new Date().toISOString();
+        setLastSavedAt(savedAt);
+        syncChannel.current?.postMessage({
+          type: "state-committed",
+          tabId: tabId.current,
+          requestId,
+          version: payload.stateVersion,
+          savedAt,
+        } satisfies StateCommittedMessage);
+      } catch {
+        // Nie wycofujemy zapisu przy niejednoznacznym błędzie sieci: transakcja
+        // mogła dojść do bazy. Ponowne pobranie rozstrzygnie stan bez duplikacji.
+        cloudReady.current = false;
+        setSyncMode("error");
+      } finally {
+        finishRecordCommand();
+      }
+    });
+  }, [finishRecordCommand, mutate]);
+
+  const updateTask = useCallback((task: OpsTask) => {
+    if (!dataReady.current) return;
+    if (!cloudConfigured) {
+      mutate((current) => ({
+        ...current,
+        tasks: current.tasks.map((item) => item.id === task.id ? task : item),
+        auditLog: [audit("task", task.id, "updated", `${task.title}: ${task.status}`), ...current.auditLog],
+      }));
+      return;
+    }
+    if (!cloudReady.current) return;
+
+    const currentTask = latestData.current.tasks.find((item) => item.id === task.id);
+    if (!currentTask) return;
+    const expectedRecordVersion = taskRecordVersions.current.get(task.id) ?? currentTask.version ?? 1;
+    const requestId = typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : uid("REQ");
+    const clientSentAt = new Date().toISOString();
+    const optimisticTask = {
+      ...task,
+      version: expectedRecordVersion + 1,
+      updatedAt: clientSentAt,
+    };
+
+    taskRecordVersions.current.set(task.id, expectedRecordVersion + 1);
+    pendingRecordCommands.current += 1;
+    setData((current) => ({
+      ...current,
+      tasks: current.tasks.map((item) => item.id === task.id ? optimisticTask : item),
+    }));
+
+    cloudSaveQueue.current = cloudSaveQueue.current.then(async () => {
+      if (!cloudReady.current) {
+        finishRecordCommand();
+        return;
+      }
+      try {
+        const response = await fetch(`/api/tasks/${encodeURIComponent(task.id)}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            task: optimisticTask,
+            expectedRecordVersion,
+            requestId,
+            clientSentAt,
+            tabId: tabId.current,
+          }),
+        });
+        if (response.status === 409) {
+          const payload = await response.json().catch(() => ({})) as {
+            currentRecordVersion?: number;
+            detectedAt?: string;
+            requestId?: string;
+          };
+          cloudReady.current = false;
+          setSyncMode("conflict");
+          setSyncConflict({
+            source: "server-rejection",
+            detectedAt: payload.detectedAt ?? new Date().toISOString(),
+            expectedVersion: expectedRecordVersion,
+            currentVersion: payload.currentRecordVersion,
+            requestId: payload.requestId ?? requestId,
+            changes: summarizeSyncChanges(baseData.current, latestData.current),
+          });
+          return;
+        }
+        if (!response.ok) throw new Error("task command failed");
+        const payload = await response.json() as {
+          task: OpsTask;
+          recordVersion: number;
+          stateVersion: number;
+          savedAt?: string;
+        };
+        taskRecordVersions.current.set(
+          task.id,
+          Math.max(taskRecordVersions.current.get(task.id) ?? 1, payload.recordVersion),
+        );
+        stateVersion.current = payload.stateVersion;
+        const committedTask = {
+          ...payload.task,
+          version: payload.recordVersion,
+        };
+        setData((current) => ({
+          ...current,
+          tasks: current.tasks.map((item) => item.id === task.id && (item.version ?? 1) <= payload.recordVersion
+            ? committedTask
+            : item),
+        }));
+        baseData.current = {
+          ...baseData.current,
+          tasks: baseData.current.tasks.map((item) => item.id === task.id ? committedTask : item),
+        };
+        setSyncMode("cloud");
+        const savedAt = payload.savedAt ?? new Date().toISOString();
+        setLastSavedAt(savedAt);
+        syncChannel.current?.postMessage({
+          type: "state-committed",
+          tabId: tabId.current,
+          requestId,
+          version: payload.stateVersion,
+          savedAt,
+        } satisfies StateCommittedMessage);
+      } catch {
+        // Zachowujemy optymistyczną zmianę na ekranie, ale nie udajemy, że
+        // została zsynchronizowana. Ponowne pobranie przywróci stan z chmury.
+        cloudReady.current = false;
+        setSyncMode("error");
+      } finally {
+        finishRecordCommand();
+      }
+    });
+  }, [finishRecordCommand, mutate]);
+
+  const updateChecklistItem = useCallback((item: TaskChecklistItem) => {
+    if (!dataReady.current) return;
+    if (!cloudConfigured) {
+      mutate((current) => ({
+        ...current,
+        checklistItems: current.checklistItems.map((candidate) => candidate.id === item.id ? item : candidate),
+        auditLog: [audit("checklist", item.id, item.done ? "completed" : "reopened", item.label), ...current.auditLog],
+      }));
+      return;
+    }
+    if (!cloudReady.current) return;
+
+    const currentItem = latestData.current.checklistItems.find((candidate) => candidate.id === item.id);
+    if (!currentItem) return;
+    const expectedRecordVersion = checklistRecordVersions.current.get(item.id) ?? currentItem.version ?? 1;
+    const requestId = typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : uid("REQ");
+    const clientSentAt = new Date().toISOString();
+    const optimisticItem = {
+      ...item,
+      completedAt: item.done ? item.completedAt ?? clientSentAt : undefined,
+      version: expectedRecordVersion + 1,
+      updatedAt: clientSentAt,
+    };
+
+    checklistRecordVersions.current.set(item.id, expectedRecordVersion + 1);
+    pendingRecordCommands.current += 1;
+    setData((current) => ({
+      ...current,
+      checklistItems: current.checklistItems.map((candidate) => candidate.id === item.id ? optimisticItem : candidate),
+    }));
+
+    cloudSaveQueue.current = cloudSaveQueue.current.then(async () => {
+      if (!cloudReady.current) {
+        finishRecordCommand();
+        return;
+      }
+      try {
+        const response = await fetch(`/api/checklist-items/${encodeURIComponent(item.id)}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            item: optimisticItem,
+            expectedRecordVersion,
+            requestId,
+            clientSentAt,
+            tabId: tabId.current,
+          }),
+        });
+        if (response.status === 409) {
+          const payload = await response.json().catch(() => ({})) as {
+            currentRecordVersion?: number;
+            detectedAt?: string;
+            requestId?: string;
+          };
+          cloudReady.current = false;
+          setSyncMode("conflict");
+          setSyncConflict({
+            source: "server-rejection",
+            detectedAt: payload.detectedAt ?? new Date().toISOString(),
+            expectedVersion: expectedRecordVersion,
+            currentVersion: payload.currentRecordVersion,
+            requestId: payload.requestId ?? requestId,
+            changes: summarizeSyncChanges(baseData.current, latestData.current),
+          });
+          return;
+        }
+        if (!response.ok) throw new Error("checklist command failed");
+        const payload = await response.json() as {
+          item: TaskChecklistItem;
+          recordVersion: number;
+          stateVersion: number;
+          savedAt?: string;
+        };
+        checklistRecordVersions.current.set(
+          item.id,
+          Math.max(checklistRecordVersions.current.get(item.id) ?? 1, payload.recordVersion),
+        );
+        stateVersion.current = payload.stateVersion;
+        const committedItem = {
+          ...payload.item,
+          version: payload.recordVersion,
+        };
+        setData((current) => ({
+          ...current,
+          checklistItems: current.checklistItems.map((candidate) => candidate.id === item.id && (candidate.version ?? 1) <= payload.recordVersion
+            ? committedItem
+            : candidate),
+        }));
+        baseData.current = {
+          ...baseData.current,
+          checklistItems: baseData.current.checklistItems.map((candidate) => candidate.id === item.id ? committedItem : candidate),
+        };
+        setSyncMode("cloud");
+        const savedAt = payload.savedAt ?? new Date().toISOString();
+        setLastSavedAt(savedAt);
+        syncChannel.current?.postMessage({
+          type: "state-committed",
+          tabId: tabId.current,
+          requestId,
+          version: payload.stateVersion,
+          savedAt,
+        } satisfies StateCommittedMessage);
+      } catch {
+        cloudReady.current = false;
+        setSyncMode("error");
+      } finally {
+        finishRecordCommand();
+      }
+    });
+  }, [finishRecordCommand, mutate]);
+
+  const retryDataLoad = useCallback(() => {
+    if (!cloudConfigured) return;
+    conflictGeneration.current += 1;
+    dataReady.current = false;
+    cloudReady.current = false;
+    setDataStatus("loading");
+    setSyncMode("checking");
+    setLoadRequest((request) => request + 1);
+  }, []);
+
+  const reloadAfterConflict = useCallback(() => {
+    if (!cloudConfigured) return;
+    conflictGeneration.current += 1;
+    dataReady.current = false;
+    cloudReady.current = false;
+    setDataStatus("loading");
+    setSyncMode("checking");
+    setLoadRequest((request) => request + 1);
+  }, []);
+
+  const copyConflictChanges = useCallback(async () => {
+    if (!syncConflict || !navigator.clipboard?.writeText) return false;
+    try {
+      await navigator.clipboard.writeText(conflictBackup(latestData.current, syncConflict));
+      return true;
+    } catch {
+      return false;
+    }
+  }, [syncConflict]);
+
   const value = useMemo<AppStore>(() => ({
     data,
     dataStatus,
     syncMode,
+    syncConflict,
     lastSavedAt,
     retryDataLoad,
-    addBooking: (booking, contact) => mutate((current) => {
-      const tasks = createTasksForBooking(booking);
-      const next: AppData = {
-        ...current,
-        bookings: [{ ...booking, version: 1, updatedAt: new Date().toISOString() }, ...current.bookings],
-        consents: contact ? [contact, ...current.consents] : current.consents,
-        tasks: [...tasks, ...current.tasks],
-        checklistItems: [...defaultChecklist(tasks), ...current.checklistItems],
-        auditLog: [audit("booking", booking.id, "created", `Dodano rezerwację ${booking.guestLabel}`), ...current.auditLog],
-      };
-      next.scheduledMessages = reconcileScheduledMessages(next);
-      return next;
-    }),
+    copyConflictChanges,
+    reloadAfterConflict,
+    addBooking: createBooking,
     updateBooking: (booking) => mutate((current) => {
       const next: AppData = {
         ...current,
@@ -456,16 +1045,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       next.scheduledMessages = reconcileScheduledMessages(next);
       return next;
     }),
-    updateTask: (task) => mutate((current) => ({
-      ...current,
-      tasks: current.tasks.map((item) => item.id === task.id ? task : item),
-      auditLog: [audit("task", task.id, "updated", `${task.title}: ${task.status}`), ...current.auditLog],
-    })),
-    toggleChecklistItem: (item) => mutate((current) => ({
-      ...current,
-      checklistItems: current.checklistItems.map((candidate) => candidate.id === item.id ? item : candidate),
-      auditLog: [audit("checklist", item.id, item.done ? "completed" : "reopened", item.label), ...current.auditLog],
-    })),
+    updateTask,
+    toggleChecklistItem: updateChecklistItem,
     addIssue: (issue) => mutate((current) => ({
       ...current,
       issues: [issue, ...current.issues],
@@ -660,7 +1241,20 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       setData(normalizeData());
       clearPersistedAppData();
     },
-  }), [data, dataStatus, lastSavedAt, mutate, retryDataLoad, syncMode]);
+  }), [
+    copyConflictChanges,
+    createBooking,
+    data,
+    dataStatus,
+    lastSavedAt,
+    mutate,
+    reloadAfterConflict,
+    retryDataLoad,
+    syncConflict,
+    syncMode,
+    updateChecklistItem,
+    updateTask,
+  ]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }

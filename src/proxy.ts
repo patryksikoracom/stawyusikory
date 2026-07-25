@@ -1,5 +1,17 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isInvalidRefreshTokenError, isSupabaseAuthCookie } from "@/lib/supabase/auth-errors";
+
+function redirectToLogin(request: NextRequest, clearInvalidSession = false) {
+  const response = NextResponse.redirect(new URL("/login", request.url));
+  if (clearInvalidSession) {
+    request.cookies
+      .getAll()
+      .filter(({ name }) => isSupabaseAuthCookie(name))
+      .forEach(({ name }) => response.cookies.delete(name));
+  }
+  return response;
+}
 
 export async function proxy(request: NextRequest) {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
@@ -19,10 +31,18 @@ export async function proxy(request: NextRequest) {
       },
     },
   });
-  const { data: { user } } = await supabase.auth.getUser();
+  let user = null;
+  try {
+    const { data, error } = await supabase.auth.getUser();
+    if (isInvalidRefreshTokenError(error)) return redirectToLogin(request, true);
+    user = data.user;
+  } catch (error) {
+    if (isInvalidRefreshTokenError(error)) return redirectToLogin(request, true);
+    throw error;
+  }
   const isLogin = request.nextUrl.pathname === "/login";
   const isPublicAuth = isLogin || request.nextUrl.pathname === "/auth/callback";
-  if (!user && !isPublicAuth) return NextResponse.redirect(new URL("/login", request.url));
+  if (!user && !isPublicAuth) return redirectToLogin(request);
   if (user && isLogin) return NextResponse.redirect(new URL("/dashboard", request.url));
   return response;
 }

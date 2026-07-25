@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useAppStore } from "@/components/layout/app-store";
 import { Badge, Card } from "@/components/ui/primitives";
 import { Icon, type IconName } from "@/components/ui/icons";
@@ -9,7 +9,6 @@ import { dashboardMetrics, unitName } from "@/lib/workflow/rules";
 import type { Booking, OpsTask } from "@/lib/types";
 import { formatPolishDate, todayInPoland } from "@/lib/date";
 import { DepartureDebriefSheet } from "@/components/departures/departure-debrief-sheet";
-import { departurePromptQueue } from "@/lib/workflow/departures";
 import { MetricContext } from "@/components/metrics/metric-context";
 import {
   calculateCommercialMetrics,
@@ -40,7 +39,7 @@ function currencyValues(metrics: CurrencyMetric[], key: "adr" | "revPar") {
 }
 
 export function DashboardView() {
-  const { data, lastSavedAt, updateTask, prepareDepartureDebriefs, markDeparturePrompted } = useAppStore();
+  const { data, lastSavedAt, updateTask } = useAppStore();
   const [departureId, setDepartureId] = useState<string>();
   const today = isoToday();
   const metrics = dashboardMetrics(data);
@@ -68,16 +67,6 @@ export function DashboardView() {
   });
   const urgentCount=priorityTasks.filter((task)=>task.priority==="Wysoki").length;
   const todayDepartures = data.bookings.filter((booking) => booking.workflowStatus !== "Anulowana" && booking.checkOut === today);
-  const departureKey = todayDepartures.map((item) => item.id).join("|");
-  useEffect(() => { if (departureKey) prepareDepartureDebriefs(departureKey.split("|")); }, [departureKey, prepareDepartureDebriefs]);
-  useEffect(() => {
-    if (departureId) return;
-    const now = new Date().toISOString();
-    const pending = departurePromptQueue(data.bookings, data.departureDebriefs, today, now)[0];
-    if (!pending) return;
-    const timer = window.setTimeout(() => { markDeparturePrompted(pending.id); setDepartureId(pending.id); }, 0);
-    return () => window.clearTimeout(timer);
-  }, [data.bookings, data.departureDebriefs, departureId, markDeparturePrompted, today]);
   const selectedDeparture = todayDepartures.find((item) => item.id === departureId);
 
   return (
@@ -102,7 +91,7 @@ export function DashboardView() {
       </section>
 
       {todayDepartures.length ? <section className="animate-rise-3 overflow-hidden rounded-[22px] border border-[#d8c9ad] bg-[#f6edda] shadow-[0_16px_45px_rgba(84,66,30,.08)]">
-        <div className="flex flex-col gap-3 border-b border-[#dfd0b6] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6"><div><p className="text-[11px] font-black uppercase tracking-[.18em] text-[#887334]">Moment prawdy</p><h2 className="font-display text-2xl font-semibold">Wyjazdy dzisiaj</h2><p className="mt-1 text-sm text-[#6f6756]">Zamknij pobyt, zapisz słowa gościa i nie zgub żadnej usterki.</p></div><Badge tone={todayDepartures.some((booking) => data.departureDebriefs.find((item) => item.bookingId === booking.id)?.status === "Oczekuje") ? "warn" : "good"}>{todayDepartures.filter((booking) => data.departureDebriefs.find((item) => item.bookingId === booking.id)?.status === "Oczekuje").length} do rozmowy</Badge></div>
+        <div className="flex flex-col gap-3 border-b border-[#dfd0b6] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6"><div><p className="text-[11px] font-black uppercase tracking-[.18em] text-[#887334]">Moment prawdy</p><h2 className="font-display text-2xl font-semibold">Wyjazdy dzisiaj</h2><p className="mt-1 text-sm text-[#6f6756]">Zamknij pobyt, zapisz słowa gościa i nie zgub żadnej usterki.</p></div><Badge tone={todayDepartures.some((booking) => !["Ukończony", "Pominięty"].includes(data.departureDebriefs.find((item) => item.bookingId === booking.id)?.status ?? "")) ? "warn" : "good"}>{todayDepartures.filter((booking) => !["Ukończony", "Pominięty"].includes(data.departureDebriefs.find((item) => item.bookingId === booking.id)?.status ?? "")).length} do rozmowy</Badge></div>
         <div className="grid gap-3 p-4 lg:grid-cols-2">{todayDepartures.map((booking, index) => { const debrief = data.departureDebriefs.find((item) => item.bookingId === booking.id); const cleaning = data.tasks.find((item) => item.bookingId === booking.id && item.type === "Sprzątanie"); const next = data.bookings.filter((item) => item.unitId === booking.unitId && item.checkIn >= booking.checkOut && item.id !== booking.id && item.workflowStatus !== "Anulowana").sort((a,b) => a.checkIn.localeCompare(b.checkIn))[0]; const faults = data.issues.filter((item) => item.bookingId === booking.id && item.status !== "Rozwiązane").length; return <button key={booking.id} className="group rounded-2xl border border-[#ddcfb7] bg-[#fffdf8] p-4 text-left transition hover:-translate-y-0.5 hover:border-[#9cad70] hover:shadow-lg" onClick={() => setDepartureId(booking.id)}><div className="flex items-start justify-between gap-3"><div><p className="font-display text-xl font-semibold">{booking.guestLabel}</p><p className="mt-0.5 text-xs font-bold text-[#6d756d]">{unitName(data.units, booking.unitId)} · do {booking.departureTime || data.settings.defaultCheckOut}</p></div><Badge tone={debrief?.status === "Ukończony" ? "good" : debrief?.status === "Pominięty" ? "neutral" : "warn"}>{debrief?.status || "Oczekuje"}</Badge></div><div className="mt-4 grid grid-cols-2 gap-2 text-xs"><DepartureFact label="Sprzątanie" value={cleaning?.status || "brak zadania"}/><DepartureFact label="Płatność" value={booking.paymentStatus}/><DepartureFact label="Następny przyjazd" value={next ? formatDay(next.checkIn) : "brak"}/><DepartureFact label="Usterki" value={faults ? `${faults} otwarte` : "brak"}/></div><span className="mt-4 inline-flex items-center gap-1 text-xs font-black text-[#2d6954]">{debrief?.status === "Ukończony" ? "Otwórz podsumowanie" : `Rozpocznij · ${index + 1}/${todayDepartures.length}`}<Icon className="size-3.5 transition group-hover:translate-x-0.5" name="arrow"/></span></button>; })}</div>
       </section> : null}
 
