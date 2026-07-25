@@ -235,4 +235,93 @@ describe("AppStoreProvider w trybie chmurowym", () => {
     expect(store?.syncMode).toBe("cloud");
     expect(store?.syncConflict).toBeUndefined();
   });
+
+  it("aktualizuje zadanie komendą rekordową bez pełnego PUT stanu", async () => {
+    vi.useFakeTimers();
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "test-anon-key");
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        clear: vi.fn(),
+        getItem: vi.fn(() => null),
+        key: vi.fn(() => null),
+        length: 0,
+        removeItem: vi.fn(),
+        setItem: vi.fn(),
+      },
+    });
+
+    const task = {
+      id: "TASK-RECORD-1",
+      bookingId: "BOOKING-1",
+      type: "Sprzątanie" as const,
+      priority: "Wysoki" as const,
+      status: "Do zrobienia" as const,
+      owner: "Tata",
+      title: "Przygotuj domek",
+      version: 3,
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: { tasks: [task] }, version: 8 }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          task: {
+            ...task,
+            status: "W toku",
+            version: 4,
+            updatedAt: "2026-07-25T20:00:01.000Z",
+          },
+          recordVersion: 4,
+          stateVersion: 9,
+          savedAt: "2026-07-25T20:00:01.000Z",
+        }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { AppStoreProvider, useAppStore } = await import("./app-store");
+    let store: ReturnType<typeof useAppStore> | undefined;
+
+    function Probe() {
+      store = useAppStore();
+      const current = store.data.tasks[0];
+      return (
+        <button onClick={() => current && store?.updateTask({ ...current, status: "W toku" })}>
+          Rozpocznij zadanie
+        </button>
+      );
+    }
+
+    render(<AppStoreProvider><Probe /></AppStoreProvider>);
+    await act(async () => {
+      vi.advanceTimersByTime(0);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Rozpocznij zadanie" }));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      vi.advanceTimersByTime(800);
+      await Promise.resolve();
+    });
+
+    expect(store?.data.tasks[0]).toMatchObject({ status: "W toku", version: 4 });
+    expect(fetchMock).toHaveBeenCalledWith("/api/tasks/TASK-RECORD-1", expect.objectContaining({
+      method: "PATCH",
+    }));
+    expect(fetchMock.mock.calls.filter(([, options]) => options?.method === "PUT")).toHaveLength(0);
+    const commandBody = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(commandBody).toMatchObject({
+      expectedRecordVersion: 3,
+      task: { id: "TASK-RECORD-1", status: "W toku", version: 4 },
+    });
+  });
 });

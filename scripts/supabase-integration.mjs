@@ -63,7 +63,17 @@ try {
 
   const state = {
     units: [{ id: "test-unit", name: "Test", maxPeople: 2, bedrooms: 1, defaultCleaningCost: 0, notes: "" }],
-    bookings: [], guests: [], consents: [], tasks: [], media: [], blocks: [], rates: [], imports: [],
+    bookings: [], guests: [], consents: [],
+    tasks: Array.from({ length: 100 }, (_, index) => ({
+      id: `test-task-${index}`,
+      bookingId: `test-booking-${index}`,
+      type: "Sprzątanie",
+      priority: "Średni",
+      status: "Do zrobienia",
+      owner: "Integration",
+      title: `Task ${index}`,
+    })),
+    media: [], blocks: [], rates: [], imports: [],
     sourceConnections: [], payments: [], invoices: [], checklistItems: [], issues: [], messages: [], auditLog: [],
     settings: { organizationName: "Test", timezone: "Europe/Warsaw", cleaningContactName: "", cleaningPhone: "", defaultCheckIn: "16:00", defaultCheckOut: "11:00", aiApprovalRequired: true },
   };
@@ -89,20 +99,59 @@ try {
   console.log("Integration: stale-write result", { code: staleCommit.error?.code ?? null, returnedVersion: staleCommit.data ?? null });
   assert(!staleCommit.error && Number(staleCommit.data) < 0, "Stale write was not rejected without raising a database error.");
 
-  const [records, writeTelemetry] = await Promise.all([
-    userClient.from("operational_records").select("entity_type,entity_id"),
+  console.log("Integration: running 100 parallel record-level task updates…");
+  const taskCommits = await Promise.all(state.tasks.map((task, index) => userClient.rpc("update_operational_task", {
+    p_organization_id: ownOrg,
+    p_task_id: task.id,
+    p_expected_record_version: 1,
+    p_task: { ...task, status: "W toku" },
+    p_request_id: crypto.randomUUID(),
+    p_client_sent_at: new Date().toISOString(),
+    p_tab_id: `integration-task-${index}`,
+  })));
+  for (const [index, commit] of taskCommits.entries()) {
+    if (commit.error) throw commit.error;
+    assert(commit.data?.status === "committed", `Parallel task ${index} was not committed.`);
+    assert(Number(commit.data?.recordVersion) === 2, `Parallel task ${index} received the wrong record version.`);
+  }
+
+  const sameTaskConflict = await userClient.rpc("update_operational_task", {
+    p_organization_id: ownOrg,
+    p_task_id: state.tasks[0].id,
+    p_expected_record_version: 1,
+    p_task: { ...state.tasks[0], status: "Zrobione" },
+    p_request_id: crypto.randomUUID(),
+    p_client_sent_at: new Date().toISOString(),
+    p_tab_id: "integration-task-conflict",
+  });
+  if (sameTaskConflict.error) throw sameTaskConflict.error;
+  assert(sameTaskConflict.data?.status === "conflict", "A stale update of the same task was not rejected.");
+  assert(Number(sameTaskConflict.data?.recordVersion) === 2, "The task conflict did not return the current record version.");
+
+  const [records, writeTelemetry, taskTelemetry] = await Promise.all([
+    userClient.from("operational_records").select("entity_type,entity_id,record_version,payload"),
     userClient
       .from("audit_events")
       .select("entity_id,action,payload")
       .eq("entity_type", "state_write")
       .in("entity_id", [firstRequestId, staleRequestId]),
+    userClient
+      .from("audit_events")
+      .select("entity_id,action,payload")
+      .eq("entity_type", "task")
+      .eq("action", "command_committed"),
   ]);
   if (records.error) throw records.error;
   if (writeTelemetry.error) throw writeTelemetry.error;
+  if (taskTelemetry.error) throw taskTelemetry.error;
   assert(records.data.some((record) => record.entity_type === "units" && record.entity_id === "test-unit"), "Normalized records were not persisted.");
+  const taskRecords = records.data.filter((record) => record.entity_type === "tasks");
+  assert(taskRecords.length === 100, "Not all task records survived parallel updates.");
+  assert(taskRecords.every((record) => Number(record.record_version) === 2 && record.payload.status === "W toku"), "Parallel task records have inconsistent versions or payloads.");
   assert(writeTelemetry.data.some((event) => event.entity_id === firstRequestId && event.action === "committed"), "Successful write telemetry is missing.");
   assert(writeTelemetry.data.some((event) => event.entity_id === staleRequestId && event.action === "conflict"), "Conflict telemetry is missing.");
-  console.log("Supabase integration test passed: Auth, RLS, record persistence, two-session conflict protection and write telemetry.");
+  assert(taskTelemetry.data.length === 100, "Task command audit is incomplete.");
+  console.log("Supabase integration test passed: Auth, RLS, record persistence, two-session protection, 100 parallel task updates and command audit.");
 } finally {
   console.log("Integration: cleaning temporary data…");
   await userClient.auth.signOut().catch(() => undefined);

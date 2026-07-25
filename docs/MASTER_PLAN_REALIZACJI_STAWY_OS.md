@@ -40,7 +40,8 @@ Commit, push i deployment są osobnymi decyzjami. Samo ukończenie lokalnej pacz
 | PR-6c / Etap 2.4 | **draft PR #7 opublikowany 25.07.2026** | wspólna prezentacja Dashboard/Finanse/rezerwacja/CSV, filtry okresu, kompletność, deep-linki i dowody |
 | Etap 2 jako całość | **implementacja gotowa do ręcznej akceptacji** | PR-5–PR-6c są zaimplementowane; 137 testów, lint, TypeScript, build i smoke test desktop/mobile przechodzą. Pozostaje akceptacja słownika przez właściciela/księgowość i scalenie stosu PR #5 → #6 → #7 |
 | PR-7 / Etap 3.1 | **wdrożony lokalnie 25.07.2026; gotowy do testu na dedykowanym Supabase** | brak zapisu przy samym otwarciu Dashboardu, request/user/version/time w audycie, `BroadcastChannel`, zachowanie lokalnych zmian i konflikt z porównaniem/kopią/odświeżeniem; 144 testy i smoke desktop/mobile przechodzą |
-| Etap 3 jako całość | **otwarty** | PR-7 zabezpiecza przejściowy zapis pełnego stanu; rekordowe komendy domenowe i próba 100 równoległych aktualizacji pozostają w PR-8a… |
+| PR-8a / Etap 3.2 | **wdrożony lokalnie 25.07.2026; gotowy do testu na dedykowanym Supabase** | pierwsza komenda rekordowa `PATCH /api/tasks/:id`, Zod i inwarianty bazy, `record_version`, audyt transakcyjny i brak pełnego `PUT` po zmianie zadania; 152 testy i smoke desktop/mobile przechodzą |
+| Etap 3 jako całość | **otwarty** | PR-7 zabezpiecza przejściowy zapis pełnego stanu; PR-8a rozpoczyna migrację zadaniami. Próba 100 równoległych aktualizacji jest przygotowana, ale wymaga odizolowanego Supabase; pozostałe domeny pozostają w PR-8b… |
 
 ## Bramka wydania: MVP operatora dla taty
 
@@ -73,7 +74,8 @@ Test taty z 25.07.2026 zmienia priorytet interfejsu operatora: kalendarz, wolne 
 | 7 | Etap 2 — finanse | **PR-6b — draft #6** | koszty faktyczne/modelowane, prowizje i wynik zarządczy | koszt nie zmienia salda gościa; strata i nadpłata nie są ukrywane |
 | 8 | Etap 2 — finanse | **PR-6c — draft #7** | prezentacja, dowody, kompletność i eksport finansowy | szczegół rezerwacji, Dashboard, Finanse i CSV są zgodne; testy automatyczne i przeglądarkowe przechodzą |
 | 9 | Etap 3 — wielosesyjność | **PR-7 — wdrożony lokalnie** | telemetryka, koordynacja kart, czytelny konflikt | testy lokalne przechodzą; przed publikacją uruchomić test integracyjny na dedykowanym Supabase |
-| 10 | Etap 3 — zapis domenowy | PR-8a… | komendy per domena i odejście od pełnego snapshotu | migracja etapami; każdy pod-PR osobno |
+| 10a | Etap 3 — zapis domenowy | **PR-8a — wdrożony lokalnie** | wersjonowana aktualizacja zadania bez pełnego snapshotu | przed publikacją migracja i test 100 rekordów na dedykowanym Supabase |
+| 10b | Etap 3 — zapis domenowy | PR-8b… | kolejne komendy per domena i odejście od pełnego snapshotu | migracja etapami; każdy pod-PR osobno |
 | 11 | Etap 4 — organizacje i role | PR-9a | active organization, role, RLS i izolacja PII/finansów | dwie organizacje i role przechodzą testy negatywne |
 | 12 | Etap 4 — operacje zespołu | PR-9b | zlecenia sprzątania, przyjęcie, checklisty per domek i eskalacja | sprzątająca wykonuje pełny turnover bez dostępu do PII/finansów |
 | 13 | Etap 4 — zgodność operacyjna | PR-9c | procedura małoletnich wynikająca z zatwierdzonego SOP i minimalizacja danych | zapisuje się wykonanie procedury, nie zbędne dane dziecka |
@@ -187,7 +189,28 @@ Zbudować jedno źródło prawdy dla wartości pobytu, wpłat gościa, zwrotów,
 - symulacja dwóch kart potwierdza brak PUT po zewnętrznym zapisie, zachowanie lokalnej zmiany i odporność na spóźnioną odpowiedź porównania;
 - migracja nie została zastosowana do produkcji. Przed publikacją należy uruchomić `npm run test:integration` wyłącznie na dedykowanym projekcie Supabase zgodnie z README.
 
-PR-7 nie zamyka Etapu 3: nadal zapisuje pełny stan. PR-8a… ma zastąpić tę ścieżkę komendami per domena i wersją per rekord.
+PR-7 nie zamyka Etapu 3: nadal zabezpiecza przejściowy zapis pełnego stanu. PR-8a rozpoczyna jego zastępowanie, a PR-8b… ma przenieść kolejne domeny na wersje per rekord.
+
+## Wdrożony lokalnie PR-8a — pierwsza komenda domenowa
+
+### Zakres
+
+- aktualizacja istniejącego zadania przechodzi przez `PATCH /api/tasks/:id`, a nie `PUT /api/state`;
+- payload jest walidowany przez Zod, a baza niezależnie sprawdza identyfikator, typ, priorytet, status i wymagane pola;
+- `record_version` blokuje wyłącznie konflikt tego samego zadania; aktualizacje różnych zadań nie porównują globalnej wersji;
+- globalna wersja organizacji jest nadal zwiększana bez warunku jako bariera bezpieczeństwa dla przejściowych zapisów pełnego stanu;
+- zmiana i audyt `command_committed` powstają w jednej transakcji, a konflikt zwraca aktualną wersję rekordu;
+- odczyt `/api/state` przekazuje rzeczywistą wersję zadania, a klient zachowuje optymistyczną zmianę i zatrzymuje zapis po konflikcie;
+- test integracyjny tworzy 100 zadań, aktualizuje je równolegle, sprawdza wersje/audyt i osobno odrzuca nieaktualny zapis tego samego zadania.
+
+### Walidacja
+
+- **152/152 testy automatyczne**, lint, TypeScript i build 29 tras przechodzą;
+- test przeglądarkowy `/tasks` na desktopie i 390 px przechodzi bez błędów konsoli, error overlay i poziomego overflow;
+- test klienta potwierdza `PATCH /api/tasks/:id` i zero `PUT /api/state` po zmianie zadania;
+- próba 100 równoległych zapisów jest zaimplementowana, ale nie została uruchomiona: dostępny jest wyłącznie projekt operacyjny, bez odizolowanej gałęzi/testowego Supabase.
+
+Przed publikacją należy utworzyć lub wskazać dedykowany projekt testowy, zastosować migracje, uruchomić `npm run test:integration`, a następnie wykonać migrację przed wdrożeniem kodu. PR-8a nie zamyka Etapu 3: tworzenie zadań, checklisty, rezerwacje, płatności i ustawienia nadal korzystają z przejściowej ścieżki pełnego stanu.
 
 ## Pełne przypisanie ustaleń z walkthrough
 
