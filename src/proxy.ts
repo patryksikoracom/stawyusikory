@@ -1,6 +1,6 @@
-import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isInvalidRefreshTokenError, isSupabaseAuthCookie } from "@/lib/supabase/auth-errors";
+import { createMiddlewareClient } from "@/lib/supabase/middleware-client";
 
 function redirectToLogin(request: NextRequest, clearInvalidSession = false) {
   const response = NextResponse.redirect(new URL("/login", request.url));
@@ -21,22 +21,27 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
   let response = NextResponse.next({ request });
-  const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
-    cookies: {
+  const { client: supabase, flushCookies } = createMiddlewareClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {
       getAll: () => request.cookies.getAll(),
-      setAll: (items) => {
+      setAll: (items, headers) => {
         items.forEach(({ name, value }) => request.cookies.set(name, value));
         response = NextResponse.next({ request });
         items.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+        Object.entries(headers).forEach(([name, value]) => response.headers.set(name, value));
       },
     },
-  });
+  );
   let user = null;
   try {
     const { data, error } = await supabase.auth.getUser();
+    await flushCookies();
     if (isInvalidRefreshTokenError(error)) return redirectToLogin(request, true);
     user = data.user;
   } catch (error) {
+    await flushCookies();
     if (isInvalidRefreshTokenError(error)) return redirectToLogin(request, true);
     throw error;
   }
