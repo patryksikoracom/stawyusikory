@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { GoTrueClient } from "@supabase/auth-js";
 import {
   applyServerStorage,
   createStorageFromOptions,
@@ -18,20 +18,19 @@ export function createMiddlewareClient(
     true,
   );
 
-  const client = createClient(supabaseUrl, supabaseKey, {
-    global: {
-      headers: {
-        "X-Client-Info": "stawy-os middleware",
-      },
+  const client = new GoTrueClient({
+    url: `${supabaseUrl}/auth/v1`,
+    headers: {
+      apikey: supabaseKey,
+      Authorization: `Bearer ${supabaseKey}`,
+      "X-Client-Info": "stawy-os middleware",
     },
-    auth: {
-      flowType: "pkce",
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-      persistSession: true,
-      skipAutoInitialize: true,
-      storage: storageState.storage,
-    },
+    flowType: "pkce",
+    autoRefreshToken: false,
+    detectSessionInUrl: false,
+    persistSession: true,
+    skipAutoInitialize: true,
+    storage: storageState.storage,
   });
 
   return {

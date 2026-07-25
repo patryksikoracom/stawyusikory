@@ -4,6 +4,9 @@ import { createMiddlewareClient } from "@/lib/supabase/middleware-client";
 
 function redirectToLogin(request: NextRequest, clearInvalidSession = false) {
   const response = NextResponse.redirect(new URL("/login", request.url));
+  response.headers.set("Cache-Control", "private, no-cache, no-store, must-revalidate, max-age=0");
+  response.headers.set("Expires", "0");
+  response.headers.set("Pragma", "no-cache");
   if (clearInvalidSession) {
     request.cookies
       .getAll()
@@ -21,7 +24,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
   let response = NextResponse.next({ request });
-  const { client: supabase, flushCookies } = createMiddlewareClient(
+  const { client: authClient, flushCookies } = createMiddlewareClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     {
@@ -36,7 +39,7 @@ export async function proxy(request: NextRequest) {
   );
   let user = null;
   try {
-    const { data, error } = await supabase.auth.getUser();
+    const { data, error } = await authClient.getUser();
     await flushCookies();
     if (isInvalidRefreshTokenError(error)) return redirectToLogin(request, true);
     user = data.user;
