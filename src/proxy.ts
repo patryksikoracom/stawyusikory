@@ -49,6 +49,14 @@ export async function proxy(request: NextRequest) {
   );
   let user = null;
   try {
+    const { error: initializeError } = await authClient.initialize();
+    if (initializeError) {
+      await flushCookies();
+      if (isInvalidRefreshTokenError(initializeError)) {
+        return redirectToLogin(request, authCookieNames);
+      }
+      throw initializeError;
+    }
     const { data, error } = await authClient.getUser();
     await flushCookies();
     if (isInvalidRefreshTokenError(error)) return redirectToLogin(request, authCookieNames);
