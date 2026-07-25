@@ -183,6 +183,35 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 
 **Status PR-8a:** implementacja lokalna, 152/152 testy, lint, TypeScript, build i smoke desktop/mobile przechodzą. Publikacja jest zablokowana do czasu zastosowania migracji i przejścia testu integracyjnego na odizolowanej bazie.
 
+**PR-8b — checklista rekordowa wykonana lokalnie 25.07.2026:**
+
+- [x] `PATCH /api/checklist-items/:id` aktualizuje jeden punkt bez pełnego `PUT /api/state`.
+- [x] Zod i Postgres niezależnie walidują komendę oraz powiązane zadanie.
+- [x] `record_version` i optimistic locking dotyczą jednego punktu checklisty.
+- [x] Audit event powstaje w tej samej transakcji, a czas ukończenia pochodzi z serwera.
+- [x] Dwa szybkie kliknięcia nie cofają nowszego stanu po starszej odpowiedzi.
+- [x] Zewnętrzny commit podczas oczekującej komendy powoduje odłożone, bezpieczne odświeżenie.
+- [x] Test klienta potwierdza brak pełnego `PUT` po zmianie checklisty.
+- [x] Test integracyjny zawiera 100 równoległych aktualizacji różnych punktów i konflikt tego samego punktu.
+- [ ] Uruchomić próbę na dedykowanym Supabase; dostępny jest tylko projekt operacyjny bez gałęzi testowej.
+
+**Status PR-8b:** implementacja lokalna, 162/162 testy, lint, TypeScript, build 30 tras oraz read-only smoke test `/tasks` na desktopie i 390 px przechodzą. Migracja nie została zastosowana do projektu operacyjnego.
+
+**PR-8c — transakcyjne utworzenie agregatu rezerwacji wykonane lokalnie 25.07.2026:**
+
+- [x] `POST /api/bookings` tworzy rezerwację bez pełnego `PUT /api/state`.
+- [x] Rezerwacja, kontakt/zgody, 5 zadań workflow, checklista sprzątania i szkice komunikacji zapisują się w jednej transakcji.
+- [x] Zod i Postgres niezależnie walidują dane oraz relacje agregatu.
+- [x] Blokada transakcyjna per domek serializuje równoległe próby i zapobiega double-bookingowi.
+- [x] Kontrola dostępności uwzględnia aktywne rezerwacje, blokady oraz konflikt godzin na granicy pobytów.
+- [x] Powtórzenie tego samego `requestId` jest idempotentne i nie duplikuje rekordów.
+- [x] Audit event, globalna wersja-fence i rekordy wykonawcze `scheduled_messages` powstają w tej samej transakcji.
+- [x] Test klienta potwierdza 5 zadań, 4 punkty checklisty, 8 szkiców wiadomości i brak pełnego `PUT`.
+- [x] Test integracyjny zawiera commit, replay, konflikt ID, konflikt blokady/godzin i dwie równoległe próby tego samego terminu.
+- [ ] Uruchomić pełną próbę na dedykowanym Supabase; projekt operacyjny nie został użyty do destrukcyjnego testu.
+
+**Status PR-8c:** implementacja lokalna przechodzi 174/174 testy automatyczne, lint, TypeScript, build 31 tras oraz read-only smoke test `/bookings` i formularza na desktopie/390 px. Migracja nie została zastosowana do projektu operacyjnego.
+
 **Akceptacja etapu 3:** 100 równoległych, kontrolowanych aktualizacji różnych rekordów bez konfliktu globalnego; konflikt tego samego rekordu nie traci danych i daje czytelny wynik 409; brak pełnego delete/reinsert przy pojedynczej zmianie.
 
 ### Etap 4 — multi-tenant, role i operacje zespołu (4–7 dni)

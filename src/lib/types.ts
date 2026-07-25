@@ -267,6 +267,8 @@ export type TaskChecklistItem = {
   label: string;
   done: boolean;
   completedAt?: string;
+  version?: number;
+  updatedAt?: string;
 };
 
 export type IssueReport = {

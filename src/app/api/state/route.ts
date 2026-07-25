@@ -90,7 +90,7 @@ export async function GET() {
       const type = record.entity_type as EntityType;
       if (!entityTypes.includes(type)) continue;
       if (type === "settings") state.settings = record.payload;
-      else if (type === "tasks") {
+      else if (type === "bookings" || type === "tasks" || type === "checklistItems") {
         (state[type] as unknown[]).push({
           ...(record.payload as Record<string, unknown>),
           version: record.record_version,
