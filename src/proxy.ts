@@ -2,17 +2,15 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isInvalidRefreshTokenError, isSupabaseAuthCookie } from "@/lib/supabase/auth-errors";
 import { createMiddlewareClient } from "@/lib/supabase/middleware-client";
 
-function redirectToLogin(request: NextRequest, clearInvalidSession = false) {
+function redirectToLogin(
+  request: NextRequest,
+  invalidSessionCookies: string[] = [],
+) {
   const response = NextResponse.redirect(new URL("/login", request.url));
   response.headers.set("Cache-Control", "private, no-cache, no-store, must-revalidate, max-age=0");
   response.headers.set("Expires", "0");
   response.headers.set("Pragma", "no-cache");
-  if (clearInvalidSession) {
-    request.cookies
-      .getAll()
-      .filter(({ name }) => isSupabaseAuthCookie(name))
-      .forEach(({ name }) => response.cookies.delete(name));
-  }
+  invalidSessionCookies.forEach((name) => response.cookies.delete(name));
   return response;
 }
 
@@ -23,6 +21,10 @@ export async function proxy(request: NextRequest) {
     }
     return NextResponse.next();
   }
+  const authCookieNames = request.cookies
+    .getAll()
+    .filter(({ name }) => isSupabaseAuthCookie(name))
+    .map(({ name }) => name);
   let response = NextResponse.next({ request });
   const { client: authClient, flushCookies } = createMiddlewareClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -41,11 +43,11 @@ export async function proxy(request: NextRequest) {
   try {
     const { data, error } = await authClient.getUser();
     await flushCookies();
-    if (isInvalidRefreshTokenError(error)) return redirectToLogin(request, true);
+    if (isInvalidRefreshTokenError(error)) return redirectToLogin(request, authCookieNames);
     user = data.user;
   } catch (error) {
     await flushCookies();
-    if (isInvalidRefreshTokenError(error)) return redirectToLogin(request, true);
+    if (isInvalidRefreshTokenError(error)) return redirectToLogin(request, authCookieNames);
     throw error;
   }
   const isLogin = request.nextUrl.pathname === "/login";
