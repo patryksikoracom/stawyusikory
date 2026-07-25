@@ -10,7 +10,15 @@ function redirectToLogin(
   response.headers.set("Cache-Control", "private, no-cache, no-store, must-revalidate, max-age=0");
   response.headers.set("Expires", "0");
   response.headers.set("Pragma", "no-cache");
-  invalidSessionCookies.forEach((name) => response.cookies.delete(name));
+  invalidSessionCookies.forEach((name) =>
+    response.cookies.set({
+      name,
+      value: "",
+      expires: new Date(0),
+      maxAge: 0,
+      path: "/",
+    }),
+  );
   return response;
 }
 
