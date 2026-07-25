@@ -99,7 +99,35 @@ export function buildPricingAnalysisDataset(data: AppData) {
       };
     }),
     rateRules: data.rates.map(({ id, unitId, dateFrom, dateTo, season, pricePerNight, minNights, active }) => ({ id, unitId, dateFrom, dateTo, season, pricePerNight, minNights, active })),
-    costSettings: data.costSettings.filter((item) => item.active).map(({ id, unitId, label, value, unit }) => ({ id, unitId, label, value, unit })),
+    costSettings: data.costSettings.filter((item) => item.active).map(({
+      id,
+      unitId,
+      label,
+      value,
+      unit,
+      kind,
+      category,
+      currency,
+      source,
+      dateFrom,
+      dateTo,
+      platform,
+      allocation,
+    }) => ({
+      id,
+      unitId,
+      label,
+      value,
+      unit,
+      kind,
+      category,
+      currency,
+      source,
+      dateFrom,
+      dateTo,
+      platform,
+      allocation,
+    })),
   };
 }
 
