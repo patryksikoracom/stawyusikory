@@ -19,6 +19,13 @@ import {
   type MetricMetadata,
 } from "@/lib/metrics/commercial";
 import { calculateBookingFinance } from "@/lib/metrics/finance";
+import {
+  createFinanceReport,
+  financeCompletenessLabel,
+  financeMetricValue,
+  financePeriodForPreset,
+  type FinanceReportMetric,
+} from "@/lib/metrics/finance-report";
 
 function isoToday() { return todayInPoland(); }
 function formatDay(date?: string) { return formatPolishDate(date, { year: false }); }
@@ -33,7 +40,7 @@ function currencyValues(metrics: CurrencyMetric[], key: "adr" | "revPar") {
 }
 
 export function DashboardView() {
-  const { data, updateTask, prepareDepartureDebriefs, markDeparturePrompted } = useAppStore();
+  const { data, lastSavedAt, updateTask, prepareDepartureDebriefs, markDeparturePrompted } = useAppStore();
   const [departureId, setDepartureId] = useState<string>();
   const today = isoToday();
   const metrics = dashboardMetrics(data);
@@ -44,6 +51,11 @@ export function DashboardView() {
     period: monthPeriodContaining(today) ?? { from: today, toExclusive: today },
     realizedToExclusive: today,
   }), [data.blocks, data.bookings, data.units, today]);
+  const financeReport = useMemo(() => createFinanceReport({
+    data,
+    period: financePeriodForPreset("month", today),
+    calculatedAt: lastSavedAt ?? today,
+  }), [data, lastSavedAt, today]);
   const active = data.bookings.filter((booking) => booking.workflowStatus !== "Anulowana" && booking.checkIn <= today && booking.checkOut > today);
   const arrivals = data.bookings.filter((booking) => booking.workflowStatus !== "Anulowana" && booking.checkIn >= today).sort((a, b) => a.checkIn.localeCompare(b.checkIn)).slice(0, 4);
   const departures = data.bookings.filter((booking) => booking.workflowStatus !== "Anulowana" && booking.checkOut >= today).sort((a, b) => a.checkOut.localeCompare(b.checkOut)).slice(0, 4);
@@ -115,6 +127,16 @@ export function DashboardView() {
         <PulseCard label="Jakość danych" value={`${metrics.dataQuality}%`} change={`${metrics.missingMarketingFields} pól do uzupełnienia`} tone="coral" legacyContext="Cały zbiór · rekordy operacyjne v1" />
       </section>
 
+      <Card className="animate-rise-3 overflow-hidden border-[#c7d3c2]">
+        <div className="flex flex-col gap-3 border-b border-[#dbe2d7] bg-[#f1f5eb] p-5 sm:flex-row sm:items-end sm:justify-between sm:p-6">
+          <div><p className="text-[11px] font-black uppercase tracking-[.18em] text-[#65794d]">Finanse · bieżący miesiąc</p><h2 className="font-display text-2xl font-semibold">Te same liczby, które otworzysz w Finansach</h2><p className="mt-1 text-xs text-[#66736c]">{financeReport.period.label} · waluty nigdy nie są łączone bez kursu.</p></div>
+          <Link className="inline-flex min-h-10 items-center gap-2 text-sm font-black text-[#24634e]" href="/finances">Otwórz dowody i eksport <Icon className="size-4" name="arrow"/></Link>
+        </div>
+        <div className="grid gap-px bg-[#e1e6dc] sm:grid-cols-2 xl:grid-cols-4">
+          {financeReport.metrics.map((metric)=><DashboardFinanceMetric key={metric.id} metric={metric}/>)}
+        </div>
+      </Card>
+
       <div className="grid gap-5 xl:grid-cols-[1.15fr_.85fr]">
         <Card className="animate-rise-2 overflow-hidden">
           <div className="flex items-center justify-between border-b border-[#e5ded1] p-5 sm:p-6"><div><p className="text-[11px] font-black uppercase tracking-[.18em] text-[#7d8d4c]">Rytm najbliższych dni</p><h2 className="font-display text-2xl font-semibold">Pobyty i zmiany</h2></div><Link className="inline-flex items-center gap-1 text-sm font-black text-[#24655a]" href="/calendar">Pełny kalendarz <Icon className="size-4" name="arrow" /></Link></div>
@@ -181,6 +203,10 @@ function HeroStat({ icon, label, value, note }: { icon: IconName; label: string;
 function PulseCard({ label, value, change, tone, metadata, issues, legacyContext }: { label: string; value: string; change: string; tone: "moss" | "lake" | "sun" | "coral"; metadata?: MetricMetadata; issues?: CommercialMetrics["issues"]; legacyContext?: string }) {
   const tones = { moss: "before:bg-[#9bac60]", lake: "before:bg-[#317a78]", sun: "before:bg-[#f0be55]", coral: "before:bg-[#e86e4e]" };
   return <div className={`relative overflow-hidden rounded-[18px] border border-[#d9d1c1] bg-[#fffdf8] p-5 shadow-[0_12px_35px_rgba(38,53,45,.05)] before:absolute before:inset-y-0 before:left-0 before:w-1 ${tones[tone]}`}><p className="text-[11px] font-black uppercase tracking-[.13em] text-[#77817c]">{label}</p><p className="mt-2 font-display text-[clamp(1.45rem,2vw,1.875rem)] font-semibold leading-tight tracking-[-.035em]">{value}</p><p className="mt-2 text-xs font-semibold text-[#64726c]">{change}</p>{metadata ? <MetricContext issues={issues} metadata={metadata} /> : legacyContext ? <p className="mt-3 border-t border-[#e8e1d5] pt-3 text-[10px] font-bold text-[#8a7460]">{legacyContext}</p> : null}</div>;
+}
+
+function DashboardFinanceMetric({metric}:{metric:FinanceReportMetric}) {
+  return <Link className="group bg-[#fffdf8] p-4 transition hover:bg-white sm:p-5" href={`/finances#${metric.id}`}><div className="flex items-start justify-between gap-3"><p className="text-[10px] font-black uppercase tracking-[.13em] text-[#77817c]">{metric.label}</p><Badge tone={metric.completeness==="complete"?"good":metric.completeness==="partial"?"warn":"bad"}>{financeCompletenessLabel(metric.completeness)}</Badge></div><p className="mt-2 break-words font-display text-2xl font-semibold leading-tight">{financeMetricValue(metric)}</p><p className="mt-2 line-clamp-2 text-xs leading-5 text-[#64726c]">{metric.definition}</p><span className="mt-3 inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-[.1em] text-[#2f6954]">Pokaż rekordy <Icon className="size-3 transition group-hover:translate-x-0.5" name="arrow"/></span></Link>;
 }
 
 function ScheduleColumn({ label, icon, bookings, dateKey, data, reverse = false }: { label: string; icon: IconName; bookings: Booking[]; dateKey: "checkIn" | "checkOut"; data: ReturnType<typeof useAppStore>["data"]; reverse?: boolean }) {

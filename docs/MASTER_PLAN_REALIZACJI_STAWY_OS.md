@@ -35,7 +35,10 @@ Commit, push i deployment są osobnymi decyzjami. Samo ukończenie lokalnej pacz
 | PR-4 / Etap 1.3 | **zaakceptowany 17.07.2026 z wyjątkiem HIBP** | invitation-only, brak domyślnego `owner`, kontrola `disable_signup`; preview desktop/mobile zweryfikowane; właściciel jawnie zaakceptował pozostawienie HIBP do czasu planu Pro |
 | Etap 1 jako całość | **warunkowo zamknięty 17.07.2026** | wszystkie zmiany możliwe na obecnym planie są wdrożone; jedyny przyjęty wyjątek to płatna ochrona HIBP |
 | PR-5 / Etap 2.1 | **zaakceptowany do publikacji 19.07.2026** | wspólny silnik okresów i KPI, osobne PLN/EUR, metadane jakości; testy lokalne i preview desktop/mobile zakończone powodzeniem |
-| Etap 2 jako całość | w toku | PR-5 zaakceptowany; następna paczka to PR-6a. Ustalenia finansowe z walkthrough zostały włączone do PR-6a–PR-6c, a pozostałe potrzeby przypisano do późniejszych paczek bez zmiany kolejności etapów |
+| PR-6a / Etap 2.2 | **draft PR #5 opublikowany 25.07.2026** | jedno saldo gościa i rozłączne perspektywy sprzedaży, należności, cashflow i wyniku; fixture'y finansowe przechodzą |
+| PR-6b / Etap 2.3 | **draft PR #6 opublikowany 25.07.2026** | koszty faktyczne/modelowane, prowizje, alokacja i nieobcinany wynik zarządczy |
+| PR-6c / Etap 2.4 | **draft PR #7 opublikowany 25.07.2026** | wspólna prezentacja Dashboard/Finanse/rezerwacja/CSV, filtry okresu, kompletność, deep-linki i dowody |
+| Etap 2 jako całość | **implementacja gotowa do ręcznej akceptacji** | PR-5–PR-6c są zaimplementowane; 137 testów, lint, TypeScript, build i smoke test desktop/mobile przechodzą. Pozostaje akceptacja słownika przez właściciela/księgowość i scalenie stosu PR #5 → #6 → #7 |
 
 ## Bramka wydania: MVP operatora dla taty
 
@@ -62,9 +65,9 @@ Pełny zakres, kolejność zależności, inwentaryzacja danych, kryteria akcepta
 | 3 | Etap 1 — bezpieczeństwo i zaufanie | PR-3 — zaakceptowany | usunięcie przykładowych insightów i uczciwe empty states | przy braku danych nie ma rekomendacji biznesowej |
 | 4 | Etap 1 — bezpieczeństwo i zaufanie | **PR-4 — zaakceptowany z wyjątkiem HIBP** | invitation-only, blokada signup→owner i bramka konfiguracji Auth; HIBP po Pro | ukończone na obecnym planie; HIBP pozostaje przyjętym ryzykiem |
 | 5 | Etap 2 — prawidłowe metryki | **PR-5 — zaakceptowany** | wspólny silnik okresów, aktywne rezerwacje, obłożenie, waluty | testy granic miesiąca/roku/DST i preview przeszły; właściciel zatwierdził publikację online |
-| 6 | Etap 2 — finanse | PR-6a | saldo gościa i cztery perspektywy: sprzedaż, należności, cashflow, wynik | ręczne fixture'y potwierdzają wpłaty, zwroty, saldo i nadpłatę |
-| 7 | Etap 2 — finanse | PR-6b | koszty faktyczne/modelowane, prowizje i wynik zarządczy | koszt nie zmienia salda gościa; strata i nadpłata nie są ukrywane |
-| 8 | Etap 2 — finanse | PR-6c | prezentacja, dowody, kompletność i eksport finansowy | szczegół rezerwacji, Dashboard, Finanse i CSV są zgodne |
+| 6 | Etap 2 — finanse | **PR-6a — draft #5** | saldo gościa i cztery perspektywy: sprzedaż, należności, cashflow, wynik | fixture'y potwierdzają wpłaty, zwroty, saldo i nadpłatę |
+| 7 | Etap 2 — finanse | **PR-6b — draft #6** | koszty faktyczne/modelowane, prowizje i wynik zarządczy | koszt nie zmienia salda gościa; strata i nadpłata nie są ukrywane |
+| 8 | Etap 2 — finanse | **PR-6c — draft #7** | prezentacja, dowody, kompletność i eksport finansowy | szczegół rezerwacji, Dashboard, Finanse i CSV są zgodne; testy automatyczne i przeglądarkowe przechodzą |
 | 9 | Etap 3 — wielosesyjność | PR-7 | telemetryka, koordynacja kart, czytelny konflikt | brak cichego nadpisania zmian |
 | 10 | Etap 3 — zapis domenowy | PR-8a… | komendy per domena i odejście od pełnego snapshotu | migracja etapami; każdy pod-PR osobno |
 | 11 | Etap 4 — organizacje i role | PR-9a | active organization, role, RLS i izolacja PII/finansów | dwie organizacje i role przechodzą testy negatywne |
@@ -113,9 +116,9 @@ Każda paczka z sufiksem jest osobnym PR-em i ma własną bramkę. Nie łączymy
 6. Każda karta KPI podaje okres, kompletność i źródło obliczenia.
 7. Testy automatyczne, build i test przeglądarkowy desktop/mobile przechodzą bez błędów konsoli.
 
-**Status PR-5 (2026-07-19): zaakceptowany przez właściciela do publikacji online.** Zweryfikowano 100 testów automatycznych, lint, TypeScript, build oraz Dashboard i Finanse na desktopie i telefonie. PR-6a jest następną nierozpoczętą paczką.
+**Status PR-5 (2026-07-19): zaakceptowany przez właściciela do publikacji online.** Zweryfikowano 100 testów automatycznych, lint, TypeScript, build oraz Dashboard i Finanse na desktopie i telefonie. Kolejne paczki PR-6a–PR-6c zostały wykonane i opublikowane jako drafty #5–#7 w dniu 25.07.2026.
 
-## Aktualna paczka: PR-6a — saldo gościa i cztery perspektywy finansowe
+## Zrealizowany stos finansowy: PR-6a–PR-6c
 
 ### Cel
 
@@ -151,6 +154,15 @@ Zbudować jedno źródło prawdy dla wartości pobytu, wpłat gościa, zwrotów,
 5. Direct bez prowizji nie jest oznaczony jako niekompletny tylko dlatego, że nie ma prowizji OTA.
 6. Brak ceny i konflikt walut zwracają jawny stan niekompletności.
 7. Wszystkie miejsca pokazujące saldo korzystają z jednego silnika i przechodzą te same testy.
+
+**Status PR-6a (2026-07-25): opublikowany jako draft PR #5.** Silnik salda i czterech perspektyw jest pokryty fixture'ami częściowej i pełnej wpłaty, zwrotu, nadpłaty, prowizji, kosztu, direct, OTA oraz PLN/EUR.
+
+### Domknięcie PR-6b i PR-6c
+
+- **PR-6b — draft PR #6:** wynik zarządczy rozdziela fakty od modeli, zachowuje źródła, nie dubluje powiązanych kosztów, pokazuje stratę i gotowość danych.
+- **PR-6c — draft PR #7:** Dashboard i Finanse korzystają z jednego raportu; szczegół rezerwacji pokazuje wartość, zaksięgowane wpłaty i saldo; każda karta otwiera dowody, a CSV pozwala odtworzyć wynik.
+- Końcowa walidacja stosu: **137/137 testów**, lint, TypeScript i build 28 tras; smoke test desktop 1440 px i mobile 390 px bez poziomego overflow.
+- Następna decyzja nie jest implementacyjna: właściciel/księgowość potwierdza nazwy i ręcznie porównuje jeden zamknięty miesiąc. Dopiero potem Etap 2 można oznaczyć jako zaakceptowany.
 
 ## Pełne przypisanie ustaleń z walkthrough
 
