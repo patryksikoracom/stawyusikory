@@ -173,29 +173,29 @@ begin
       'Nowa', 'Potwierdzona', 'Przed przyjazdem', 'W trakcie', 'Po pobycie',
       'Zamknięta', 'Anulowana'
     ]::text[])
-    or case
+    or (case
       when jsonb_typeof(p_booking -> 'adults') = 'number'
       then (p_booking ->> 'adults')::numeric <> trunc((p_booking ->> 'adults')::numeric)
         or (p_booking ->> 'adults')::numeric not between 1 and 100
       else true
-    end
-    or case
+    end)
+    or (case
       when jsonb_typeof(p_booking -> 'children') = 'number'
       then (p_booking ->> 'children')::numeric <> trunc((p_booking ->> 'children')::numeric)
         or (p_booking ->> 'children')::numeric not between 0 and 100
       else true
-    end
+    end)
     or coalesce(p_booking ->> 'bookingDate', '') !~ '^\d{4}-\d{2}-\d{2}$'
     or coalesce(p_booking ->> 'checkIn', '') !~ '^\d{4}-\d{2}-\d{2}$'
     or coalesce(p_booking ->> 'checkOut', '') !~ '^\d{4}-\d{2}-\d{2}$'
     or (p_booking ? 'arrivalTime' and coalesce(p_booking ->> 'arrivalTime', '') !~ '^([01]\d|2[0-3]):[0-5]\d$')
     or (p_booking ? 'departureTime' and coalesce(p_booking ->> 'departureTime', '') !~ '^([01]\d|2[0-3]):[0-5]\d$')
-    or case
+    or (case
       when coalesce(p_booking ->> 'checkIn', '') ~ '^\d{4}-\d{2}-\d{2}$'
         and coalesce(p_booking ->> 'checkOut', '') ~ '^\d{4}-\d{2}-\d{2}$'
       then (p_booking ->> 'checkOut')::date <= (p_booking ->> 'checkIn')::date
       else false
-    end
+    end)
   then
     raise exception 'Rezerwacja narusza reguły domenowe' using errcode = '22023';
   end if;
@@ -275,12 +275,12 @@ begin
       or message ->> 'bookingId' is distinct from p_booking_id
       or length(trim(coalesce(message ->> 'ruleId', ''))) < 1
       or length(trim(coalesce(message ->> 'templateId', ''))) < 1
-      or case
+      or (case
         when jsonb_typeof(message -> 'templateVersion') = 'number'
         then (message ->> 'templateVersion')::numeric <> trunc((message ->> 'templateVersion')::numeric)
           or (message ->> 'templateVersion')::numeric < 1
         else true
-      end
+      end)
       or length(trim(coalesce(message ->> 'dueAt', ''))) < 1
       or coalesce(message ->> 'channel', '') <> all(array['SMS', 'E-mail', 'OTA']::text[])
       or coalesce(message ->> 'status', '') <> all(array[
