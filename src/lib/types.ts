@@ -230,6 +230,8 @@ export type OpsTask = {
   comment?: string;
   issueId?: string;
   planningHorizon?: RepairHorizon;
+  version?: number;
+  updatedAt?: string;
 };
 
 export type PaymentTransaction = {

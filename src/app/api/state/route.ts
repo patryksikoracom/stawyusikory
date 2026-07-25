@@ -70,7 +70,7 @@ export async function GET() {
   const [{ data: records, error: recordsError }, { data: revision, error: revisionError }] = await Promise.all([
     result.supabase!
       .from("operational_records")
-      .select("entity_type,entity_id,payload")
+      .select("entity_type,entity_id,payload,record_version,updated_at")
       .eq("organization_id", result.organizationId),
     result.supabase!
       .from("operational_state_versions")
@@ -90,7 +90,13 @@ export async function GET() {
       const type = record.entity_type as EntityType;
       if (!entityTypes.includes(type)) continue;
       if (type === "settings") state.settings = record.payload;
-      else (state[type] as unknown[]).push(record.payload);
+      else if (type === "tasks") {
+        (state[type] as unknown[]).push({
+          ...(record.payload as Record<string, unknown>),
+          version: record.record_version,
+          updatedAt: record.updated_at,
+        });
+      } else (state[type] as unknown[]).push(record.payload);
     }
     return NextResponse.json({
       data: state,

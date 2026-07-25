@@ -170,6 +170,19 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 - [ ] Snapshot pozostawić tylko jako backup/eksport, nie główną ścieżkę CRUD.
 - [ ] Plan migracji i rollbacku z porównaniem liczby/haszy rekordów.
 
+**PR-8a — pierwszy wycinek wykonany lokalnie 25.07.2026:**
+
+- [x] `PATCH /api/tasks/:id` aktualizuje istniejące zadanie bez pełnego `PUT /api/state`.
+- [x] Zod oraz niezależne inwarianty Postgresa walidują komendę.
+- [x] `record_version` i optimistic locking dotyczą jednego zadania.
+- [x] Audit event powstaje w tej samej transakcji co zmiana.
+- [x] Globalna wersja jest zwiększana bez warunku, aby stary pełny snapshot nie nadpisał komendy domenowej.
+- [x] Test klienta potwierdza brak pełnego `PUT` po zmianie zadania.
+- [x] Test integracyjny zawiera 100 równoległych aktualizacji różnych zadań i konflikt tego samego zadania.
+- [ ] Uruchomić próbę 100 aktualizacji na dedykowanym Supabase; jedyny dostępny projekt jest operacyjny i nie został użyty do testu destrukcyjnego.
+
+**Status PR-8a:** implementacja lokalna, 152/152 testy, lint, TypeScript, build i smoke desktop/mobile przechodzą. Publikacja jest zablokowana do czasu zastosowania migracji i przejścia testu integracyjnego na odizolowanej bazie.
+
 **Akceptacja etapu 3:** 100 równoległych, kontrolowanych aktualizacji różnych rekordów bez konfliktu globalnego; konflikt tego samego rekordu nie traci danych i daje czytelny wynik 409; brak pełnego delete/reinsert przy pojedynczej zmianie.
 
 ### Etap 4 — multi-tenant, role i operacje zespołu (4–7 dni)

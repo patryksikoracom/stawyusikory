@@ -162,7 +162,10 @@ function normalizeData(parsed?: Partial<AppData> | null, fallback: AppData = ini
     })),
     guests: parsed?.guests ?? fallback.guests,
     consents: parsed?.consents ?? fallback.consents,
-    tasks,
+    tasks: tasks.map((task) => ({
+      ...task,
+      version: task.version ?? 1,
+    })),
     media: parsed?.media ?? fallback.media,
     blocks: parsed?.blocks ?? fallback.blocks,
     rates,
@@ -285,6 +288,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const dataReady = useRef(false);
   const cloudReady = useRef(false);
   const stateVersion = useRef(0);
+  const taskRecordVersions = useRef<Map<string, number>>(new Map());
   const baseData = useRef<AppData>(cloudConfigured ? emptyCloudData() : normalizeData());
   const localRevision = useRef(0);
   const savedRevision = useRef(0);
@@ -330,7 +334,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         clearPersistedAppData();
         setData(emptyCloudData());
       } else {
-        setData(readLocalData());
+        const localData = readLocalData();
+        taskRecordVersions.current = new Map(localData.tasks.map((task) => [task.id, task.version ?? 1]));
+        setData(localData);
         dataReady.current = true;
         setDataStatus("ready");
         setSyncMode("local");
@@ -390,6 +396,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           const payload = await response.json() as CloudStatePayload;
           const loadedData = payload.data ? normalizeData(payload.data, emptyCloudData()) : emptyCloudData();
           stateVersion.current = payload.version ?? 0;
+          taskRecordVersions.current = new Map(loadedData.tasks.map((task) => [task.id, task.version ?? 1]));
           conflictGeneration.current += 1;
           baseData.current = loadedData;
           localRevision.current = 0;
@@ -480,7 +487,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           }
           if (!response.ok) throw new Error("save failed");
           const payload = await response.json() as { version?: number; savedAt?: string };
-          if (typeof payload.version === "number") stateVersion.current = payload.version;
+          if (typeof payload.version === "number") {
+            stateVersion.current = payload.version;
+            // Legacy PUT replaces every record and assigns the committed global
+            // version. Keep the task lock map aligned until this domain is the
+            // only remaining write path.
+            taskRecordVersions.current = new Map(data.tasks.map((task) => [task.id, payload.version!]));
+          }
           savedRevision.current = Math.max(savedRevision.current, revisionToSave);
           baseData.current = data;
           setSyncMode("cloud");
@@ -511,6 +524,109 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       return next;
     });
   }, []);
+
+  const updateTask = useCallback((task: OpsTask) => {
+    if (!dataReady.current) return;
+    if (!cloudConfigured) {
+      mutate((current) => ({
+        ...current,
+        tasks: current.tasks.map((item) => item.id === task.id ? task : item),
+        auditLog: [audit("task", task.id, "updated", `${task.title}: ${task.status}`), ...current.auditLog],
+      }));
+      return;
+    }
+    if (!cloudReady.current) return;
+
+    const currentTask = latestData.current.tasks.find((item) => item.id === task.id);
+    if (!currentTask) return;
+    const expectedRecordVersion = taskRecordVersions.current.get(task.id) ?? currentTask.version ?? 1;
+    const requestId = typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : uid("REQ");
+    const clientSentAt = new Date().toISOString();
+    const optimisticTask = {
+      ...task,
+      version: expectedRecordVersion + 1,
+      updatedAt: clientSentAt,
+    };
+
+    taskRecordVersions.current.set(task.id, expectedRecordVersion + 1);
+    setData((current) => ({
+      ...current,
+      tasks: current.tasks.map((item) => item.id === task.id ? optimisticTask : item),
+    }));
+
+    cloudSaveQueue.current = cloudSaveQueue.current.then(async () => {
+      if (!cloudReady.current) return;
+      try {
+        const response = await fetch(`/api/tasks/${encodeURIComponent(task.id)}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            task: optimisticTask,
+            expectedRecordVersion,
+            requestId,
+            clientSentAt,
+            tabId: tabId.current,
+          }),
+        });
+        if (response.status === 409) {
+          const payload = await response.json().catch(() => ({})) as {
+            currentRecordVersion?: number;
+            detectedAt?: string;
+            requestId?: string;
+          };
+          cloudReady.current = false;
+          setSyncMode("conflict");
+          setSyncConflict({
+            source: "server-rejection",
+            detectedAt: payload.detectedAt ?? new Date().toISOString(),
+            expectedVersion: expectedRecordVersion,
+            currentVersion: payload.currentRecordVersion,
+            requestId: payload.requestId ?? requestId,
+            changes: summarizeSyncChanges(baseData.current, latestData.current),
+          });
+          return;
+        }
+        if (!response.ok) throw new Error("task command failed");
+        const payload = await response.json() as {
+          task: OpsTask;
+          recordVersion: number;
+          stateVersion: number;
+          savedAt?: string;
+        };
+        taskRecordVersions.current.set(task.id, payload.recordVersion);
+        stateVersion.current = payload.stateVersion;
+        const committedTask = {
+          ...payload.task,
+          version: payload.recordVersion,
+        };
+        setData((current) => ({
+          ...current,
+          tasks: current.tasks.map((item) => item.id === task.id ? committedTask : item),
+        }));
+        baseData.current = {
+          ...baseData.current,
+          tasks: baseData.current.tasks.map((item) => item.id === task.id ? committedTask : item),
+        };
+        setSyncMode("cloud");
+        const savedAt = payload.savedAt ?? new Date().toISOString();
+        setLastSavedAt(savedAt);
+        syncChannel.current?.postMessage({
+          type: "state-committed",
+          tabId: tabId.current,
+          requestId,
+          version: payload.stateVersion,
+          savedAt,
+        } satisfies StateCommittedMessage);
+      } catch {
+        // Zachowujemy optymistyczną zmianę na ekranie, ale nie udajemy, że
+        // została zsynchronizowana. Ponowne pobranie przywróci stan z chmury.
+        cloudReady.current = false;
+        setSyncMode("error");
+      }
+    });
+  }, [mutate]);
 
   const retryDataLoad = useCallback(() => {
     if (!cloudConfigured) return;
@@ -629,11 +745,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       next.scheduledMessages = reconcileScheduledMessages(next);
       return next;
     }),
-    updateTask: (task) => mutate((current) => ({
-      ...current,
-      tasks: current.tasks.map((item) => item.id === task.id ? task : item),
-      auditLog: [audit("task", task.id, "updated", `${task.title}: ${task.status}`), ...current.auditLog],
-    })),
+    updateTask,
     toggleChecklistItem: (item) => mutate((current) => ({
       ...current,
       checklistItems: current.checklistItems.map((candidate) => candidate.id === item.id ? item : candidate),
@@ -843,6 +955,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     retryDataLoad,
     syncConflict,
     syncMode,
+    updateTask,
   ]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
