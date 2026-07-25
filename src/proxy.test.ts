@@ -13,6 +13,7 @@ describe("auth proxy", () => {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "test-key";
     vi.mocked(createMiddlewareClient).mockReturnValue({
       client: {
+        initialize: vi.fn().mockResolvedValue({ error: null }),
         getUser: vi.fn().mockResolvedValue({
           data: { user: null },
           error: {
@@ -46,6 +47,7 @@ describe("auth proxy", () => {
   it("expires a stale session cookie when auth returns no user without a refresh error", async () => {
     vi.mocked(createMiddlewareClient).mockReturnValue({
       client: {
+        initialize: vi.fn().mockResolvedValue({ error: null }),
         getUser: vi.fn().mockResolvedValue({
           data: { user: null },
           error: null,
@@ -64,5 +66,31 @@ describe("auth proxy", () => {
     expect(response.status).toBe(307);
     expect(response.headers.get("set-cookie")).toContain("sb-test-auth-token=");
     expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
+  });
+
+  it("keeps a valid initialized session and allows the protected request", async () => {
+    const initialize = vi.fn().mockResolvedValue({ error: null });
+    vi.mocked(createMiddlewareClient).mockReturnValue({
+      client: {
+        initialize,
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: "marcin" } },
+          error: null,
+        }),
+      },
+      flushCookies: vi.fn().mockResolvedValue(undefined),
+    } as unknown as ReturnType<typeof createMiddlewareClient>);
+    const request = new NextRequest("https://stawyusikory.vercel.app/dashboard", {
+      headers: {
+        cookie: "sb-test-auth-token=valid",
+      },
+    });
+
+    const response = await proxy(request);
+
+    expect(initialize).toHaveBeenCalledOnce();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+    expect(response.headers.get("set-cookie")).toBeNull();
   });
 });
