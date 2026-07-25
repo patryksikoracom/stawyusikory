@@ -59,6 +59,7 @@ describe("finance presentation across surfaces", () => {
     });
 
     render(<DashboardView />);
+    vi.runAllTimers();
 
     const financeSection = screen
       .getByRole("heading", { name: "Te same liczby, które otworzysz w Finansach" })
@@ -73,6 +74,8 @@ describe("finance presentation across surfaces", () => {
       );
       expect(link).toHaveAttribute("href", `/finances#${metric.id}`);
     }
+    expect(store.prepareDepartureDebriefs).not.toHaveBeenCalled();
+    expect(store.markDeparturePrompted).not.toHaveBeenCalled();
   });
 
   it("gives booking value, guest postings and balance equal weight", () => {

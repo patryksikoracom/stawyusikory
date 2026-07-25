@@ -38,6 +38,11 @@ import { defaultAutomationRules, defaultMessageTemplates, reconcileScheduledMess
 import { guestInsightAfterDeparture, repairTaskForIssue } from "@/lib/workflow/departures";
 import { downloadEncryptedJson, downloadPricingAnalysisDataset } from "@/lib/security/data-exports";
 import { isTrashExpired, trashExpiryDate } from "@/lib/booking-trash";
+import {
+  conflictBackup,
+  summarizeSyncChanges,
+  type SyncConflict,
+} from "@/lib/sync/state-conflict";
 
 export type SyncMode = "checking" | "cloud" | "local" | "error" | "conflict";
 export type DataStatus = "loading" | "ready" | "error";
@@ -46,8 +51,11 @@ type AppStore = {
   data: AppData;
   dataStatus: DataStatus;
   syncMode: SyncMode;
+  syncConflict?: SyncConflict;
   lastSavedAt?: string;
   retryDataLoad: () => void;
+  copyConflictChanges: () => Promise<boolean>;
+  reloadAfterConflict: () => void;
   addBooking: (booking: Booking, contact?: ContactConsent) => void;
   updateBooking: (booking: Booking) => void;
   cancelBooking: (bookingId: string) => void;
@@ -88,7 +96,23 @@ type AppStore = {
 const StoreContext = createContext<AppStore | null>(null);
 const storageKey = "stawy-u-sikory-app-data-v3";
 const oldStorageKey = "stawy-u-sikory-app-data-v2";
+const syncChannelName = "stawy-os-state-sync-v1";
 const cloudConfigured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+
+type StateCommittedMessage = {
+  type: "state-committed";
+  tabId: string;
+  requestId: string;
+  version: number;
+  savedAt: string;
+};
+
+type CloudStatePayload = {
+  data?: Partial<AppData> | null;
+  updatedAt?: string;
+  version?: number;
+  quarantinedDemo?: boolean;
+};
 
 export function clearPersistedAppData() {
   if (typeof window === "undefined") return;
@@ -254,13 +278,51 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [dataStatus, setDataStatus] = useState<DataStatus>("loading");
   const [hydrated, setHydrated] = useState(false);
   const [syncMode, setSyncMode] = useState<SyncMode>("checking");
+  const [syncConflict, setSyncConflict] = useState<SyncConflict>();
   const [lastSavedAt, setLastSavedAt] = useState<string>();
   const [loadRequest, setLoadRequest] = useState(0);
+  const latestData = useRef(data);
   const dataReady = useRef(false);
   const cloudReady = useRef(false);
   const stateVersion = useRef(0);
+  const baseData = useRef<AppData>(cloudConfigured ? emptyCloudData() : normalizeData());
+  const localRevision = useRef(0);
+  const savedRevision = useRef(0);
+  const tabId = useRef(uid("TAB"));
+  const syncChannel = useRef<BroadcastChannel | null>(null);
+  const conflictGeneration = useRef(0);
   const skipNextCloudSave = useRef(false);
   const cloudSaveQueue = useRef<Promise<void>>(Promise.resolve());
+
+  const compareConflictWithCloud = useCallback(async (
+    conflict: Omit<SyncConflict, "changes">,
+    localData: AppData,
+    generation: number,
+  ) => {
+    try {
+      const response = await fetch("/api/state", { cache: "no-store" });
+      if (!response.ok) throw new Error("comparison failed");
+      const payload = await response.json() as CloudStatePayload;
+      const remoteData = payload.data ? normalizeData(payload.data, emptyCloudData()) : emptyCloudData();
+      if (conflictGeneration.current !== generation) return;
+      setSyncConflict({
+        ...conflict,
+        currentVersion: payload.version ?? conflict.currentVersion,
+        remoteSavedAt: payload.updatedAt ?? conflict.remoteSavedAt,
+        changes: summarizeSyncChanges(baseData.current, localData, remoteData),
+      });
+    } catch {
+      if (conflictGeneration.current !== generation) return;
+      setSyncConflict({
+        ...conflict,
+        changes: summarizeSyncChanges(baseData.current, localData),
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    latestData.current = data;
+  }, [data]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -279,6 +341,45 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (!hydrated || !cloudConfigured || typeof BroadcastChannel === "undefined") return;
+    const channel = new BroadcastChannel(syncChannelName);
+    syncChannel.current = channel;
+    channel.onmessage = (event: MessageEvent<StateCommittedMessage>) => {
+      const message = event.data;
+      if (!message || message.type !== "state-committed" || message.tabId === tabId.current) return;
+      const hasLocalChanges = localRevision.current !== savedRevision.current;
+      if (!hasLocalChanges && cloudReady.current) {
+        dataReady.current = false;
+        cloudReady.current = false;
+        setDataStatus("loading");
+        setSyncMode("checking");
+        setLoadRequest((request) => request + 1);
+        return;
+      }
+      cloudReady.current = false;
+      const conflict = {
+        source: "another-tab" as const,
+        detectedAt: new Date().toISOString(),
+        expectedVersion: stateVersion.current,
+        currentVersion: message.version,
+        requestId: message.requestId,
+        remoteSavedAt: message.savedAt,
+      };
+      const generation = ++conflictGeneration.current;
+      setSyncMode("conflict");
+      setSyncConflict({
+        ...conflict,
+        changes: summarizeSyncChanges(baseData.current, latestData.current),
+      });
+      void compareConflictWithCloud(conflict, latestData.current, generation);
+    };
+    return () => {
+      channel.close();
+      if (syncChannel.current === channel) syncChannel.current = null;
+    };
+  }, [compareConflictWithCloud, hydrated]);
+
+  useEffect(() => {
     if (!hydrated || !cloudConfigured) return;
     let active = true;
     async function loadCloud() {
@@ -286,19 +387,20 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         const response = await fetch("/api/state", { cache: "no-store" });
         if (!active) return;
         if (response.ok) {
-          const payload = await response.json() as {
-            data?: Partial<AppData> | null;
-            updatedAt?: string;
-            version?: number;
-            quarantinedDemo?: boolean;
-          };
+          const payload = await response.json() as CloudStatePayload;
+          const loadedData = payload.data ? normalizeData(payload.data, emptyCloudData()) : emptyCloudData();
           stateVersion.current = payload.version ?? 0;
+          conflictGeneration.current += 1;
+          baseData.current = loadedData;
+          localRevision.current = 0;
+          savedRevision.current = 0;
           skipNextCloudSave.current = true;
-          setData(payload.data ? normalizeData(payload.data, emptyCloudData()) : emptyCloudData());
+          setData(loadedData);
           cloudReady.current = true;
           dataReady.current = true;
           setDataStatus("ready");
           setSyncMode("cloud");
+          setSyncConflict(undefined);
           setLastSavedAt(payload.updatedAt);
           return;
         }
@@ -327,44 +429,92 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       skipNextCloudSave.current = false;
       return;
     }
+    if (localRevision.current === savedRevision.current) return;
+    const revisionToSave = localRevision.current;
     const timeout = window.setTimeout(() => {
       // Zmiany mogą pojawić się, gdy poprzedni PUT nadal trwa. Kolejka gwarantuje,
       // że każda operacja odczyta wersję dopiero po zakończeniu poprzedniej.
       cloudSaveQueue.current = cloudSaveQueue.current.then(async () => {
         if (!cloudReady.current) return;
+        const requestId = typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : uid("REQ");
+        const clientSentAt = new Date().toISOString();
+        const expectedVersion = stateVersion.current;
         try {
           const response = await fetch("/api/state", {
             method: "PUT",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ data, expectedVersion: stateVersion.current }),
+            body: JSON.stringify({
+              data,
+              expectedVersion,
+              requestId,
+              clientSentAt,
+              tabId: tabId.current,
+            }),
           });
           if (response.status === 409) {
             // Konflikt wymaga świadomego przeładowania danych. Bez tej blokady
             // każda kolejna lokalna mutacja ponawiała ten sam błędny zapis.
+            const payload = await response.json().catch(() => ({})) as {
+              currentVersion?: number;
+              requestId?: string;
+              detectedAt?: string;
+            };
             cloudReady.current = false;
             setSyncMode("conflict");
+            const conflict = {
+              source: "server-rejection",
+              detectedAt: payload.detectedAt ?? new Date().toISOString(),
+              expectedVersion,
+              currentVersion: payload.currentVersion,
+              requestId: payload.requestId ?? requestId,
+            } as const;
+            const generation = ++conflictGeneration.current;
+            setSyncConflict({
+              ...conflict,
+              changes: summarizeSyncChanges(baseData.current, latestData.current),
+            });
+            void compareConflictWithCloud(conflict, latestData.current, generation);
             return;
           }
           if (!response.ok) throw new Error("save failed");
-          const payload = await response.json() as { version?: number };
+          const payload = await response.json() as { version?: number; savedAt?: string };
           if (typeof payload.version === "number") stateVersion.current = payload.version;
+          savedRevision.current = Math.max(savedRevision.current, revisionToSave);
+          baseData.current = data;
           setSyncMode("cloud");
-          setLastSavedAt(new Date().toISOString());
+          const savedAt = payload.savedAt ?? new Date().toISOString();
+          setLastSavedAt(savedAt);
+          if (typeof payload.version === "number") {
+            syncChannel.current?.postMessage({
+              type: "state-committed",
+              tabId: tabId.current,
+              requestId,
+              version: payload.version,
+              savedAt,
+            } satisfies StateCommittedMessage);
+          }
         } catch {
           setSyncMode("error");
         }
       });
     }, 700);
     return () => window.clearTimeout(timeout);
-  }, [data, dataStatus, hydrated]);
+  }, [compareConflictWithCloud, data, dataStatus, hydrated]);
 
   const mutate = useCallback((fn: (current: AppData) => AppData) => {
     if (!dataReady.current) return;
-    setData(fn);
+    setData((current) => {
+      const next = fn(current);
+      if (next !== current) localRevision.current += 1;
+      return next;
+    });
   }, []);
 
   const retryDataLoad = useCallback(() => {
     if (!cloudConfigured) return;
+    conflictGeneration.current += 1;
     dataReady.current = false;
     cloudReady.current = false;
     setDataStatus("loading");
@@ -372,12 +522,35 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setLoadRequest((request) => request + 1);
   }, []);
 
+  const reloadAfterConflict = useCallback(() => {
+    if (!cloudConfigured) return;
+    conflictGeneration.current += 1;
+    dataReady.current = false;
+    cloudReady.current = false;
+    setDataStatus("loading");
+    setSyncMode("checking");
+    setLoadRequest((request) => request + 1);
+  }, []);
+
+  const copyConflictChanges = useCallback(async () => {
+    if (!syncConflict || !navigator.clipboard?.writeText) return false;
+    try {
+      await navigator.clipboard.writeText(conflictBackup(latestData.current, syncConflict));
+      return true;
+    } catch {
+      return false;
+    }
+  }, [syncConflict]);
+
   const value = useMemo<AppStore>(() => ({
     data,
     dataStatus,
     syncMode,
+    syncConflict,
     lastSavedAt,
     retryDataLoad,
+    copyConflictChanges,
+    reloadAfterConflict,
     addBooking: (booking, contact) => mutate((current) => {
       const tasks = createTasksForBooking(booking);
       const next: AppData = {
@@ -660,7 +833,17 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       setData(normalizeData());
       clearPersistedAppData();
     },
-  }), [data, dataStatus, lastSavedAt, mutate, retryDataLoad, syncMode]);
+  }), [
+    copyConflictChanges,
+    data,
+    dataStatus,
+    lastSavedAt,
+    mutate,
+    reloadAfterConflict,
+    retryDataLoad,
+    syncConflict,
+    syncMode,
+  ]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }
