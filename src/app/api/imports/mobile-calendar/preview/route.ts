@@ -4,7 +4,7 @@ import { parseMobileCalendar } from "@/lib/import/mobile-calendar";
 import { isOrganizationEditor, requireOrganization } from "@/lib/supabase/auth-context";
 
 export async function POST(request: Request) {
-  const context = await requireOrganization();
+  const context = await requireOrganization(request);
   if (context.error) return context.error;
   if (!isOrganizationEditor(context.role)) return NextResponse.json({ error: "Brak uprawnień do importu." }, { status: 403 });
   const parsed = z.object({ raw: z.string().max(1_000_000) }).safeParse(await request.json().catch(() => null));

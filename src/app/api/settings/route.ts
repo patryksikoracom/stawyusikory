@@ -9,7 +9,7 @@ import { isOrganizationEditor, requireOrganization } from "@/lib/supabase/auth-c
 const maxPayloadBytes = 16_000;
 
 export async function PATCH(request: Request) {
-  const context = await requireOrganization();
+  const context = await requireOrganization(request);
   if (context.error) return context.error;
   if (!isOrganizationEditor(context.role)) {
     return NextResponse.json(

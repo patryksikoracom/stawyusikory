@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { isOrganizationEditor, requireOrganization } from "@/lib/supabase/auth-context";
+import { createServiceClient } from "@/lib/supabase/server";
 import type { CalendarBlock, SourceConnection } from "@/lib/types";
 import { validateExternalCalendarUrlForFetch } from "@/lib/integrations/ical-security";
 
@@ -48,19 +49,16 @@ function safeId(value: string) {
 export async function POST(request: Request) {
   const expected = process.env.CRON_SECRET;
   const cronAuthorized = Boolean(expected && request.headers.get("authorization") === `Bearer ${expected}`);
-  const userClient = cronAuthorized ? null : await createClient();
-  const user = userClient ? (await userClient.auth.getUser()).data.user : null;
-  if (!cronAuthorized && !user) return NextResponse.json({ error: "Brak autoryzacji harmonogramu." }, { status: 401 });
+  const userContext = cronAuthorized ? null : await requireOrganization(request);
+  if (userContext?.error) return userContext.error;
 
   const service = createServiceClient();
   if (!service) return NextResponse.json({ error: "Supabase service role nie jest skonfigurowane." }, { status: 503 });
 
   let organizationIds: string[] = [];
-  if (userClient && user) {
-    const { data: membership } = await userClient.from("organization_memberships").select("organization_id,role").eq("user_id", user.id).limit(1).maybeSingle();
-    if (!membership) return NextResponse.json({ error: "Brak organizacji użytkownika." }, { status: 403 });
-    if (membership.role !== "owner" && membership.role !== "admin") return NextResponse.json({ error: "Brak uprawnień do synchronizacji." }, { status: 403 });
-    organizationIds = [membership.organization_id];
+  if (userContext && !userContext.error) {
+    if (!isOrganizationEditor(userContext.role)) return NextResponse.json({ error: "Brak uprawnień do synchronizacji." }, { status: 403 });
+    organizationIds = [userContext.organizationId];
   } else {
     const { data: organizations, error } = await service.from("operational_state_versions").select("organization_id");
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });

@@ -46,10 +46,11 @@ Commit, push i deployment są osobnymi decyzjami. Samo ukończenie lokalnej pacz
 | PR-8d / Etap 3.5 | **wdrożony online 26.07.2026** | `PATCH /api/bookings/:id` aktualizuje lub anuluje rezerwację razem z kontaktem, zadaniami i szkicami wiadomości; wersje rekordów, blokady domków, audyt oraz zero pełnego `PUT` są pokryte testami |
 | PR-8e1 / Etap 3.6 | **wdrożony online 26.07.2026 — draft PR #20** | kosz i przywracanie rezerwacji używają jawnej operacji w atomowej komendzie agregatu; zachowują statusy zadań i wiadomości, blokują wygasłe/kolizyjne przywrócenie i nie wykonują pełnego `PUT` |
 | PR-8e2 / Etap 3.7 | **wdrożony online 26.07.2026 — draft PR #20** | `POST /api/payments` księguje pojedynczą, walidowaną i idempotentną transakcję; konflikt identyfikatora, waluta, źródła kosztów/prowizji, wersja stanu i audyt są obsłużone bez pełnego `PUT` |
-| PR-8e3 / Etap 3.8 | **implementacja lokalna gotowa do ręcznej akceptacji 26.07.2026** | `PATCH /api/settings` zapisuje singleton `settings/organization` z wersją rekordu, walidacją Zod/Postgres, konfliktem 409 i audytem; formularz nie ogłasza sukcesu przed potwierdzeniem i nie wykonuje pełnego `PUT` |
-| PR-8e4a / Etap 3.9 | **implementacja lokalna gotowa do ręcznej akceptacji 26.07.2026** | `POST /api/calendar-blocks` i `PATCH /api/calendar-blocks/:id` tworzą oraz anulują blokady wersjonowanymi komendami; wspólna blokada domku serializuje wyścig z rezerwacją, a UI odróżnia lokalny zapis od potwierdzenia Mobile Calendar/OTA |
-| PR-8 zbiorczo / Etap 3 | **implementacja lokalna kompletna 26.07.2026** | wszystkie pozostałe rodziny mutacji używają atomowej, wersjonowanej komendy batchowej; klient i API nie udostępniają już pełnego `PUT /api/state`; 289 testów, lint, TypeScript i build 33 tras przechodzą |
-| Etap 3 jako całość | **implementacja kompletna lokalnie — czeka na publikację końcówki PR-8** | PR-7 oraz opublikowane części PR-8 działają online; lokalna końcówka obejmuje ustawienia, blokady i wszystkie pozostałe mutacje rekordowe. Nie planujemy kolejnych podziałów PR-8; pozostaje jednorazowa publikacja migracji i niedestrukcyjny smoke |
+| PR-8e3 / Etap 3.8 | **wdrożony online 26.07.2026 — PR #20** | `PATCH /api/settings` zapisuje singleton `settings/organization` z wersją rekordu, walidacją Zod/Postgres, konfliktem 409 i audytem; formularz nie ogłasza sukcesu przed potwierdzeniem i nie wykonuje pełnego `PUT` |
+| PR-8e4a / Etap 3.9 | **wdrożony online 26.07.2026 — PR #20** | `POST /api/calendar-blocks` i `PATCH /api/calendar-blocks/:id` tworzą oraz anulują blokady wersjonowanymi komendami; wspólna blokada domku serializuje wyścig z rezerwacją, a UI odróżnia lokalny zapis od potwierdzenia Mobile Calendar/OTA |
+| PR-8 zbiorczo / Etap 3 | **wdrożony online 26.07.2026 — PR #20** | wszystkie pozostałe rodziny mutacji używają atomowej, wersjonowanej komendy batchowej; klient i API nie udostępniają już pełnego `PUT /api/state`; 289 testów, lint, TypeScript i build 33 tras przechodzą |
+| Etap 3 jako całość | **zamknięty online 26.07.2026** | PR-7 i cały PR-8 działają online; migracje, uprawnienia RPC, login, chronione trasy, konsola i runtime zostały potwierdzone po wdrożeniu |
+| PR-9a / Etap 4.1 | **implementacja lokalna gotowa do draft PR 26.07.2026** | jawna aktywna organizacja bez `limit(1)`, siedem ról, macierz uprawnień, projekcja PII/finansów, RLS i poprawki Advisora; 309 testów, lint, TypeScript, build i smoke desktop/390 px przechodzą. Migracja czeka na test w odizolowanym Supabase |
 
 ## Bramka wydania: MVP operatora dla taty
 
@@ -91,7 +92,7 @@ Test taty z 25.07.2026 zmienia priorytet interfejsu operatora: kalendarz, wolne 
 | 10g | Etap 3 — zapis domenowy | **PR-8e3 — gotowy lokalnie** | ustawienia organizacji bez pełnego snapshotu | osobna wersjonowana komenda, konflikt rekordu, 245 testów i smoke desktop/mobile przechodzą; migracja czeka na publikację |
 | 10h | Etap 3 — zapis domenowy | **PR-8e4a — gotowy lokalnie** | tworzenie i anulowanie blokad kalendarza bez pełnego snapshotu | wersjonowane komendy, konflikt dostępności, wyścig rezerwacja↔blokada i dostępny dialog; migracja czeka na publikację |
 | 10i | Etap 3 — zapis domenowy | **PR-8 zbiorczo — komplet lokalnie** | wszystkie pozostałe mutacje: usterki, debrief, komunikacja, faktury, media, profile, zgody, połączenia, domki, stawki, koszty i import | jedna atomowa komenda batchowa, wersje rekordów, konflikt 409, audyt i brak pełnego `PUT /api/state` |
-| 11 | Etap 4 — organizacje i role | PR-9a | active organization, role, RLS i izolacja PII/finansów | dwie organizacje i role przechodzą testy negatywne |
+| 11 | Etap 4 — organizacje i role | **PR-9a — gotowy lokalnie** | active organization, role, RLS i izolacja PII/finansów | testy kontraktu dwóch organizacji i wszystkich ról przechodzą; właściwy test RLS czeka na odizolowany Supabase |
 | 12 | Etap 4 — operacje zespołu | PR-9b | zlecenia sprzątania, przyjęcie, checklisty per domek i eskalacja | sprzątająca wykonuje pełny turnover bez dostępu do PII/finansów |
 | 13 | Etap 4 — zgodność operacyjna | PR-9c | procedura małoletnich wynikająca z zatwierdzonego SOP i minimalizacja danych | zapisuje się wykonanie procedury, nie zbędne dane dziecka |
 | 14 | Etap 5 — fundament UX | PR-10a | wspólne dialogi, klawiatura, mobile, paginacja i wydajność | WCAG smoke test i 1000 rekordów |
@@ -409,6 +410,26 @@ Migracje PR-7–PR-8c działają online. Pełny test tworzenia, idempotencji i w
 Walidacja zbiorcza: **289/289 testów**, lint, TypeScript, kontrola składni skryptu integracyjnego i produkcyjny build 33 tras przechodzą. Testy obejmują kontrakt batcha, role, limit payloadu, bezpieczne błędy, commit, replay, konflikt wersji, audyt, brak snapshotu i mapę wersji. Rozszerzony test integracyjny jest przygotowany, lecz nie został uruchomiony: lokalny Docker/Supabase nie działa, a baza operacyjna nie jest miejscem do destrukcyjnej próby.
 
 Cały zbiorczy PR-8 działa online. Migracje ustawień, blokad kalendarza i komendy batchowej zostały zastosowane na produkcyjnym Supabase, a uprawnienia potwierdzono bez zapisu danych: nowe RPC są dostępne dla `authenticated`, niedostępne dla `anon`, a stare `replace_operational_state*` nie są wykonywalne przez aplikację. PR #20 został zmergowany do `main` jako commit `1ddfcd6`; produkcyjne wdrożenie Vercel `dpl_GSLrg9Nu4z49xgF5LNzwi8YDARmM` jest `READY` pod `stawyusikory.vercel.app`. Login, przekierowania chronionych tras, konsola przeglądarki i monitoring runtime przechodzą bez błędów. Zakres PR-8 jest zamknięty; nie tworzymy kolejnych podpaczek ani rund ulepszeń.
+
+## PR-9a — aktywna organizacja, role i RLS
+
+Implementacja lokalna usuwa wybór pierwszego członkostwa przez `limit(1)`. Aktywna organizacja pochodzi z jawnego nagłówka albo `HttpOnly` cookie, a każde API ponownie sprawdza członkostwo użytkownika. Przy jednym członkostwie wybór jest automatyczny; przy wielu aplikacja wymaga wyboru i udostępnia przełącznik organizacji, który przed przeładowaniem usuwa lokalny cache danych.
+
+Macierz ról obejmuje `owner`, `admin`, `manager`, `cleaning`, `marketing`, `accounting` i `viewer` oraz uprawnienia `read/write/PII/finance/send/export`. Surowe rekordy JSON są dostępne tylko dla `owner/admin`. Pozostałe role otrzymują serwerową projekcję właściwą dla roli; `cleaning` nadal korzysta wyłącznie z dedykowanego panelu i service-only RPC.
+
+Migracja PR-9a:
+
+- rozszerza constraint ról i dodaje funkcje `private.organization_role` oraz `private.has_org_permission`;
+- używa `(select auth.uid())`, nie `user_metadata`;
+- rozdziela polityki per operacja, aby usunąć nakładające się polityki `SELECT/FOR ALL`;
+- dodaje indeksy wszystkich brakujących kluczy obcych wskazanych przez Advisor;
+- przenosi `btree_gist` poza `public`;
+- dodaje bezpieczną politykę odczytu własnego `users_profiles`;
+- blokuje surowy snapshot i rekordy przed rolami ograniczonymi.
+
+Walidacja lokalna: **309/309 testów**, ESLint, TypeScript, kontrola konfiguracji Auth, składnia integracji, produkcyjny build 34 tras oraz smoke desktop/390 px przechodzą. Brak błędów konsoli, overlay i poziomego overflow. Testy obejmują obcą organizację, nieznaną rolę, każdą komórkę macierzy, redakcję PII/finansów, brak dostępu cleaning do ogólnego stanu oraz `HttpOnly` wybór aktywnej organizacji.
+
+Pozostała bramka przed merge/deploymentem: uruchomić migrację i pozytywne/negatywne testy RLS na odizolowanej gałęzi Supabase z dwiema organizacjami i siedmioma rolami. Projekt operacyjny nie jest używany do destrukcyjnego testu. Po migracji należy ponowić Security/Performance Advisor; jedynym zaakceptowanym ostrzeżeniem bezpieczeństwa może pozostać HIBP wymagające planu Pro.
 
 ## Pełne przypisanie ustaleń z walkthrough
 

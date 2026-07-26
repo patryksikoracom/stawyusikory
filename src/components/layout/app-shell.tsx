@@ -97,6 +97,7 @@ function ShellInner({ children, identity }: { children: React.ReactNode; identit
   const [showSearch, setShowSearch] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
+  const [organizationSwitching, setOrganizationSwitching] = useState(false);
   const [showConflictComparison, setShowConflictComparison] = useState(false);
   const [query, setQuery] = useState("");
   const dataReady = dataStatus === "ready";
@@ -123,6 +124,23 @@ function ShellInner({ children, identity }: { children: React.ReactNode; identit
       await Promise.all(keys.map((key) => window.caches.delete(key)));
     }
     window.location.href = "/login";
+  }
+
+  async function switchOrganization(organizationId: string) {
+    if (!organizationId || organizationId === identity.organizationId) return;
+    setOrganizationSwitching(true);
+    const response = await fetch("/api/session/organization", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ organizationId }),
+    });
+    if (!response.ok) {
+      setOrganizationSwitching(false);
+      setToast("Nie udało się przełączyć organizacji.");
+      return;
+    }
+    clearPersistedAppData();
+    window.location.reload();
   }
 
   function added() {
@@ -179,7 +197,7 @@ function ShellInner({ children, identity }: { children: React.ReactNode; identit
                 {showAlerts ? <div aria-label="Alerty operacyjne" className="absolute right-[-3rem] top-12 w-[min(360px,calc(100vw-2rem))] rounded-2xl border border-[#d7cfc0] bg-[#fffdf8] p-3 shadow-2xl sm:right-0" role="dialog"><div className="flex items-center justify-between gap-3 px-2 py-1"><p className="text-xs font-black uppercase tracking-[.15em] text-[#74814d]">Wymaga uwagi</p>{alerts.length ? <span className="rounded-full bg-[#f6e8c9] px-2 py-0.5 text-[10px] font-black text-[#7a5b19]">{alerts.length}</span> : null}</div>{alerts.map((alert) => <AlertMini key={alert.id} {...alert} />)}{!alerts.length ? <div className="mx-1 mt-2 rounded-xl bg-[#e9f1e3] px-4 py-5 text-center"><span className="mx-auto grid size-9 place-items-center rounded-full bg-[#4d986b] text-white"><Icon className="size-4" name="check" /></span><p className="mt-2 text-sm font-black">Brak spraw wymagających uwagi</p><p className="mt-1 text-xs leading-5 text-[#607069]">Aktualne dane nie tworzą żadnego alertu.</p></div> : null}</div> : null}
               </div>
               <span className="hidden sm:block"><Button disabled={!dataReady} onClick={() => setShowNew(true)}><Icon className="size-4" name="plus" />Nowa rezerwacja</Button></span>
-              <div className="relative"><button aria-expanded={showAccount} aria-label={`Konto: ${identity.displayName}`} className="grid size-10 place-items-center rounded-xl bg-[#18332c] text-xs font-black text-white" onClick={() => setShowAccount((value) => !value)}>{identity.initials}</button>{showAccount ? <div className="absolute right-0 top-12 w-[min(290px,calc(100vw-2rem))] rounded-2xl border border-[#d7cfc0] bg-[#fffdf8] p-2 shadow-2xl"><div className="border-b border-[#e8e1d5] px-3 pb-3 pt-2"><p className="truncate text-sm font-black">{identity.displayName}</p><p className="mt-0.5 truncate text-xs text-[#68766f]">{identity.email ?? "Brak adresu e-mail"}</p><div className="mt-2 flex flex-wrap gap-1.5"><span className="rounded-full bg-[#e5ead7] px-2 py-1 text-[10px] font-black text-[#315744]">{identity.roleLabel}</span>{identity.organizationName ? <span className="max-w-full truncate rounded-full bg-[#e5ecec] px-2 py-1 text-[10px] font-black text-[#315d61]">{identity.organizationName}</span> : null}</div></div><Link className="mt-1 block rounded-xl px-3 py-2 text-sm font-bold hover:bg-[#f1eee6]" href="/settings" onClick={() => setShowAccount(false)}>Ustawienia</Link><button className="w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-[#9b4029] hover:bg-[#f9dfd7]" onClick={signOut}>Wyloguj się</button></div> : null}</div>
+              <div className="relative"><button aria-expanded={showAccount} aria-label={`Konto: ${identity.displayName}`} className="grid size-10 place-items-center rounded-xl bg-[#18332c] text-xs font-black text-white" onClick={() => setShowAccount((value) => !value)}>{identity.initials}</button>{showAccount ? <div className="absolute right-0 top-12 w-[min(290px,calc(100vw-2rem))] rounded-2xl border border-[#d7cfc0] bg-[#fffdf8] p-2 shadow-2xl"><div className="border-b border-[#e8e1d5] px-3 pb-3 pt-2"><p className="truncate text-sm font-black">{identity.displayName}</p><p className="mt-0.5 truncate text-xs text-[#68766f]">{identity.email ?? "Brak adresu e-mail"}</p>{identity.availableOrganizations.length > 1 ? <label className="mt-3 grid gap-1 text-[10px] font-black uppercase tracking-[.12em] text-[#68766f]">Aktywna organizacja<select aria-label="Aktywna organizacja" className="min-h-10 rounded-xl border border-[#d5cebf] bg-white px-2 text-xs font-bold normal-case tracking-normal text-[#18332c]" disabled={organizationSwitching} onChange={(event) => void switchOrganization(event.target.value)} value={identity.organizationId ?? ""}><option disabled value="">Wybierz organizację</option>{identity.availableOrganizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}</select></label> : null}<div className="mt-2 flex flex-wrap gap-1.5"><span className="rounded-full bg-[#e5ead7] px-2 py-1 text-[10px] font-black text-[#315744]">{identity.roleLabel}</span>{identity.organizationName ? <span className="max-w-full truncate rounded-full bg-[#e5ecec] px-2 py-1 text-[10px] font-black text-[#315d61]">{identity.organizationName}</span> : null}</div></div><Link className="mt-1 block rounded-xl px-3 py-2 text-sm font-bold hover:bg-[#f1eee6]" href="/settings" onClick={() => setShowAccount(false)}>Ustawienia</Link><button className="w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-[#9b4029] hover:bg-[#f9dfd7]" onClick={signOut}>Wyloguj się</button></div> : null}</div>
             </div>
           </div>
         </header>

@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { isGeneralStateReader } from "@/lib/auth/permissions";
+import { visibleOperationalRecord } from "@/lib/auth/state-visibility";
+import { requireOrganization } from "@/lib/supabase/auth-context";
+import { createServiceClient } from "@/lib/supabase/server";
 
 const entityTypes = [
   "units", "bookings", "guests", "consents", "tasks", "media", "blocks",
@@ -10,21 +13,6 @@ const entityTypes = [
 
 type EntityType = (typeof entityTypes)[number];
 
-async function context() {
-  const supabase = await createClient();
-  if (!supabase) return { error: NextResponse.json({ error: "Supabase nie jest skonfigurowany" }, { status: 503 }) };
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: NextResponse.json({ error: "Wymagane logowanie" }, { status: 401 }) };
-  const { data: membership } = await supabase
-    .from("organization_memberships")
-    .select("organization_id,role")
-    .eq("user_id", user.id)
-    .limit(1)
-    .maybeSingle();
-  if (!membership) return { error: NextResponse.json({ error: "Brak organizacji użytkownika" }, { status: 403 }) };
-  return { supabase, organizationId: membership.organization_id, role: membership.role as "owner" | "admin" | "viewer" | "cleaning" };
-}
-
 function isBundledDemoState(value: unknown) {
   if (!value || typeof value !== "object") return false;
   const bookings = (value as { bookings?: unknown }).bookings;
@@ -34,19 +22,21 @@ function isBundledDemoState(value: unknown) {
 }
 
 
-export async function GET() {
-  const result = await context();
+export async function GET(request: Request) {
+  const result = await requireOrganization(request);
   if (result.error) return result.error;
-  if (result.role === "cleaning") {
+  if (!isGeneralStateReader(result.role)) {
     return NextResponse.json({ error: "To konto korzysta wyłącznie z panelu sprzątania." }, { status: 403 });
   }
+  const service = createServiceClient();
+  if (!service) return NextResponse.json({ error: "Bezpieczny odczyt danych nie jest skonfigurowany." }, { status: 503 });
 
   const [{ data: records, error: recordsError }, { data: revision, error: revisionError }] = await Promise.all([
-    result.supabase!
+    service
       .from("operational_records")
       .select("entity_type,entity_id,payload,record_version,updated_at")
       .eq("organization_id", result.organizationId),
-    result.supabase!
+    service
       .from("operational_state_versions")
       .select("version,updated_at")
       .eq("organization_id", result.organizationId)
@@ -58,9 +48,13 @@ export async function GET() {
     if (!missingTable) return NextResponse.json({ error: recordsError?.message ?? revisionError?.message }, { status: 500 });
   }
 
-  if (records?.length) {
+  const visibleRecords = (records ?? [])
+    .map((record) => visibleOperationalRecord(record, result.role))
+    .filter((record): record is NonNullable<typeof record> => Boolean(record));
+
+  if (visibleRecords.length) {
     const state = Object.fromEntries(entityTypes.map((type) => [type, type === "settings" ? null : []])) as Record<EntityType, unknown>;
-    for (const record of records) {
+    for (const record of visibleRecords) {
       const type = record.entity_type as EntityType;
       if (!entityTypes.includes(type)) continue;
       if (type === "settings") {
@@ -92,7 +86,7 @@ export async function GET() {
       updatedAt: revision?.updated_at,
       source: "records",
       recordVersions: Object.fromEntries(
-        records.map((record) => [
+        visibleRecords.map((record) => [
           `${record.entity_type}:${record.entity_id}`,
           Number(record.record_version),
         ]),
@@ -100,7 +94,16 @@ export async function GET() {
     }, { headers: { "cache-control": "private, no-store" } });
   }
 
-  const { data: legacy, error: legacyError } = await result.supabase!
+  if (result.role !== "owner" && result.role !== "admin") {
+    return NextResponse.json({
+      data: null,
+      version: revision?.version ?? 0,
+      updatedAt: revision?.updated_at,
+      source: "empty",
+    }, { headers: { "cache-control": "private, no-store" } });
+  }
+
+  const { data: legacy, error: legacyError } = await service
     .from("operational_snapshots")
     .select("state,updated_at")
     .eq("organization_id", result.organizationId)

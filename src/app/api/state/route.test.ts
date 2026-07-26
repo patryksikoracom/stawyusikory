@@ -3,26 +3,24 @@ import { GET } from "./route";
 
 const mocks = vi.hoisted(() => ({
   createClient: vi.fn(),
+  createServiceClient: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: mocks.createClient,
+  createServiceClient: mocks.createServiceClient,
 }));
 
 describe("GET /api/state wersje rekordów", () => {
   it("dołącza wersje do danych i pełną mapę wersji dla komend batchowych", async () => {
     const membershipQuery = {
       select: vi.fn(),
-      eq: vi.fn(),
-      limit: vi.fn(),
-      maybeSingle: vi.fn().mockResolvedValue({
-        data: { organization_id: "org-test", role: "owner" },
+      eq: vi.fn().mockResolvedValue({
+        data: [{ organization_id: "org-test", role: "owner" }],
         error: null,
       }),
     };
     membershipQuery.select.mockReturnValue(membershipQuery);
-    membershipQuery.eq.mockReturnValue(membershipQuery);
-    membershipQuery.limit.mockReturnValue(membershipQuery);
 
     const records = [
       {
@@ -106,13 +104,18 @@ describe("GET /api/state wersje rekordów", () => {
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-test" } } }) },
       from: vi.fn((table: string) => {
         if (table === "organization_memberships") return membershipQuery;
+        throw new Error(`Unexpected user table: ${table}`);
+      }),
+    });
+    mocks.createServiceClient.mockReturnValue({
+      from: vi.fn((table: string) => {
         if (table === "operational_records") return recordsQuery;
         if (table === "operational_state_versions") return revisionQuery;
-        throw new Error(`Unexpected table: ${table}`);
+        throw new Error(`Unexpected service table: ${table}`);
       }),
     });
 
-    const response = await GET();
+    const response = await GET(new Request("https://app.example.com/api/state"));
     const payload = await response.json();
 
     expect(response.status).toBe(200);

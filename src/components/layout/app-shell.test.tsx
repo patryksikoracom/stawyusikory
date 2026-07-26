@@ -23,10 +23,12 @@ vi.mock("./app-store", () => ({
 }));
 
 const identity: AppIdentity = {
+  availableOrganizations: [],
   authenticated: true,
   displayName: "Codex Test",
   email: "codex-test@stawyusikory.pl",
   initials: "CT",
+  organizationId: "org-test",
   organizationName: "Stawy u Sikory",
   role: "admin",
   roleLabel: "Administrator",
@@ -85,5 +87,32 @@ describe("AppShell przed zakończeniem ładowania", () => {
     expect(within(dialog).getByText("Rezerwacje")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Wczytaj z chmury" }));
     expect(reloadAfterConflict).toHaveBeenCalledOnce();
+  });
+
+  it("pokazuje jawny wybór aktywnej organizacji dla wielu członkostw", () => {
+    mocks.store.current = {
+      data: initialData,
+      dataStatus: "ready" as const,
+      syncMode: "cloud" as const,
+      retryDataLoad: vi.fn(),
+    };
+    render(
+      <AppShell
+        identity={{
+          ...identity,
+          availableOrganizations: [
+            { id: "org-test", name: "Stawy u Sikory", role: "admin" },
+            { id: "org-other", name: "Drugi obiekt", role: "viewer" },
+          ],
+        }}
+      >
+        <div>Treść aplikacji</div>
+      </AppShell>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Konto: Codex Test" }));
+    const select = screen.getByRole("combobox", { name: "Aktywna organizacja" });
+    expect(select).toHaveValue("org-test");
+    expect(within(select).getByRole("option", { name: "Drugi obiekt" })).toBeInTheDocument();
   });
 });
