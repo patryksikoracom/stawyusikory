@@ -349,6 +349,9 @@ Podczas rozmowy telefonicznej tata chce zaznaczyć domek i zakres dat, natychmia
 ### Kontekst z testu taty — 2026-07-25
 
 - Termin ma być wybrany bezpośrednio na wizualnym kalendarzu, a nie przez dwa oderwane pola dat.
+- Podczas rozmowy z klientem tata ma móc znaleźć wolną lukę bez opuszczania kalendarza, zaznaczyć początek i koniec pobytu, a następnie od razu zobaczyć cenę. Sama wycena nie tworzy rezerwacji ani blokady.
+- Na komputerze wybór zakresu ma działać jak w systemach rezerwacji lotów: kliknięcie dnia początku i kliknięcie dnia końca, z opcjonalnym przeciągnięciem po wolnych dniach. Na telefonie ma działać pewnie przez dwa dotknięcia: początek, potem koniec.
+- Po pierwszym kliknięciu lub dotknięciu kalendarz wyraźnie pokazuje wybrany początek; po drugim pokazuje cały zakres, liczbę nocy, dostępność i przejście do wyceny z zachowanym domkiem oraz datami.
 - Standardowe godziny są ustawieniem obiektu: check-in od 16:00, check-out do 11:00. Nie zajmują miejsca w szybkim formularzu.
 - Formularz ma obsługiwać dorosłych, dzieci, zwierzęta i dodatkowe usługi.
 - Czapla nie przyjmuje zwierząt.
@@ -384,6 +387,9 @@ Docelowo wycena ma być możliwa w kilkadziesiąt sekund, a pełny zapis rezerwa
 #### Etap A — szybka wycena bez utraty danych
 
 - wizualny wybór domku oraz dat przyjazdu i wyjazdu z kalendarza;
+- na komputerze: kliknięcie początku i końca zakresu oraz opcjonalne przeciągnięcie po wolnych dniach;
+- na telefonie: dwa duże, jednoznaczne dotknięcia początku i końca, bez wymogu precyzyjnego przeciągania;
+- po pierwszym wyborze widoczny stan „wybierz datę wyjazdu”, po drugim wyróżniony cały zakres oraz liczba nocy;
 - natychmiastowa informacja o dostępności lub konflikcie;
 - cena z cennika: suma, średnia cena za noc i rozbicie według zastosowanych sezonów;
 - ostrzeżenie o minimalnej długości pobytu;
@@ -421,6 +427,8 @@ Docelowo wycena ma być możliwa w kilkadziesiąt sekund, a pełny zapis rezerwa
 - Czapla blokuje zwykły zapis rezerwacji ze zwierzęciem; Rybak nalicza właściwą opłatę per zwierzę za pobyt.
 - Domyślna zaliczka 33% i ręczna zmiana, np. do 50%, są liczone od ceny końcowej.
 - Konflikt jest widoczny przed przedstawieniem terminu jako dostępnego.
+- Tata może podczas rozmowy znaleźć lukę, zaznaczyć zakres i zobaczyć cenę bez przechodzenia przez pola formularza ani tworzenia rezerwacji.
+- Ten sam zakres jest wybieralny kliknięciem lub przeciągnięciem na komputerze oraz dwoma dotknięciami na telefonie; po wyborze cena dostaje właściwy domek i daty.
 - Tata potrafi samodzielnie podać cenę w mniej niż 30 sekund i zapisać kompletną rezerwację w mniej niż dwie minuty.
 - W pilocie lokalny zapis nie udaje potwierdzenia w OTA.
 
@@ -639,7 +647,8 @@ Ekran startowy roli operatora ma od razu pokazać wizualną dostępność Czapli
 - Czapla i Rybak są widoczne w jednym kontekście;
 - bieżące pobyty, przyszłe rezerwacje i wolne luki są czytelne tekstowo, nie tylko kolorami;
 - dzisiaj i najbliższe dni mają jasny punkt odniesienia;
-- dwa tapnięcia wybierają początek i koniec pobytu;
+- na komputerze kliknięcie początku i końca oraz opcjonalne przeciągnięcie wybierają zakres pobytu; na telefonie robią to dwa dotknięcia;
+- po pierwszym wyborze dzień początku i instrukcja następnego kroku są widoczne, a po drugim cały zakres pozostaje wyróżniony;
 - wybrany zakres pozostaje widoczny i otwiera POM-005 z zachowanymi datami;
 - duże pola dotykowe i brak krytycznych elementów mniejszych niż tekst możliwy do przeczytania przez tatę;
 - brief „Dzisiaj”, zadania i statystyki są poniżej kalendarza albo w osobnej zakładce;
@@ -650,15 +659,17 @@ Ekran startowy roli operatora ma od razu pokazać wizualną dostępność Czapli
 1. Użyć rzeczywistego telefonu taty i jego ustawienia wielkości tekstu.
 2. Otworzyć aplikację podczas symulowanej rozmowy.
 3. Znaleźć trzy wolne zakresy dla obu domków.
-4. Wybrać zakres dwoma tapnięciami i przejść do wyceny.
-5. Powtórzyć przy powiększeniu do 200%, w pionie i bez obracania telefonu.
-6. Sprawdzić przypadki: pobyt trwający, wyjazd dzisiaj, zmiana gości, długa rezerwacja, blokada i błąd synchronizacji.
+4. Na komputerze wybrać każdy zakres kliknięciem początku i końca, a co najmniej jeden także przeciągnięciem.
+5. Na telefonie wybrać każdy zakres dwoma dotknięciami i przejść do wyceny.
+6. Powtórzyć przy powiększeniu do 200%, w pionie i bez obracania telefonu.
+7. Sprawdzić przypadki: pobyt trwający, wyjazd dzisiaj, zmiana gości, długa rezerwacja, blokada i błąd synchronizacji.
 
 ### Kryteria akceptacji
 
 - Po otwarciu aplikacji tata widzi dostępność bez przewijania przez powitanie i KPI.
 - Potrafi wskazać, czy każdy domek jest wolny w danym terminie bez otwierania osobnych kart.
-- Wybór zakresu wymaga najwyżej dwóch tapnięć na kalendarzu i jednego przejścia do karty.
+- Wybór zakresu wymaga najwyżej dwóch dotknięć na telefonie albo dwóch kliknięć na komputerze; przeciągnięcie jest równoważną, opcjonalną drogą na komputerze.
+- Po wybraniu zakresu bez dodatkowego wpisywania dat można zobaczyć wycenę; sprawdzenie ceny nie tworzy rezerwacji ani blokady.
 - Powiększony tekst nie ukrywa dat, nazwy domku, stanu dostępności, ceny ani głównej akcji.
 - Informacja nie zależy wyłącznie od koloru.
 - Interfejs pozostaje użyteczny przy powiększeniu/zoomie do 200% na telefonie taty.
