@@ -252,6 +252,21 @@ try {
     });
   }
 
+  function updateBookingRpc(aggregate, expectedRecordVersion, tabId) {
+    return userClient.rpc("update_operational_booking", {
+      p_organization_id: ownOrg,
+      p_booking_id: aggregate.booking.id,
+      p_expected_record_version: expectedRecordVersion,
+      p_booking: aggregate.booking,
+      p_contact: aggregate.contact,
+      p_tasks: aggregate.tasks,
+      p_scheduled_messages: aggregate.scheduledMessages,
+      p_request_id: crypto.randomUUID(),
+      p_client_sent_at: new Date().toISOString(),
+      p_tab_id: tabId,
+    });
+  }
+
   console.log("Integration: checking atomic booking aggregate, replay, calendar conflicts and race protection…");
   const aggregate = bookingAggregate("BOOKING-AGGREGATE", "2099-08-10", "2099-08-13");
   const aggregateRequestId = crypto.randomUUID();
@@ -269,6 +284,62 @@ try {
   const duplicateBooking = await createBookingRpc(aggregate, crypto.randomUUID(), "integration-booking-duplicate");
   if (duplicateBooking.error) throw duplicateBooking.error;
   assert(duplicateBooking.data?.status === "exists", "Duplicate booking id was not rejected.");
+
+  const updatedAggregate = {
+    booking: {
+      ...aggregate.booking,
+      checkIn: "2099-08-11",
+      checkOut: "2099-08-14",
+      guestLabel: "Gość po zmianie",
+      version: 2,
+    },
+    contact: {
+      ...aggregate.contact,
+      version: 2,
+    },
+    tasks: aggregate.tasks.map((task) => ({
+      ...task,
+      dueDate: "2099-08-14",
+      version: 2,
+    })),
+    scheduledMessages: aggregate.scheduledMessages.map((message) => ({
+      ...message,
+      bookingFingerprint: "2099-08-11|2099-08-14|BOOKING-AGGREGATE",
+      version: 2,
+    })),
+  };
+  const updateCommit = await updateBookingRpc(updatedAggregate, 1, "integration-booking-update");
+  if (updateCommit.error) throw updateCommit.error;
+  assert(updateCommit.data?.status === "committed", "Booking update was not committed.");
+  assert(Number(updateCommit.data?.recordVersion) === 2, "Booking update returned the wrong record version.");
+  assert(updateCommit.data?.aggregate?.booking?.checkOut === "2099-08-14", "Booking dates were not updated.");
+  assert(Number(updateCommit.data?.aggregate?.contact?.version) === 2, "Booking contact was not versioned.");
+  assert(Number(updateCommit.data?.aggregate?.tasks?.[0]?.version) === 2, "Booking task was not versioned.");
+  assert(Number(updateCommit.data?.aggregate?.scheduledMessages?.[0]?.version) === 2, "Booking message was not versioned.");
+
+  const staleUpdate = await updateBookingRpc(updatedAggregate, 1, "integration-booking-update-stale");
+  if (staleUpdate.error) throw staleUpdate.error;
+  assert(staleUpdate.data?.status === "conflict", "A stale booking update was not rejected.");
+  assert(Number(staleUpdate.data?.recordVersion) === 2, "Booking conflict returned the wrong current version.");
+
+  const blockedUpdateAggregate = {
+    ...updatedAggregate,
+    booking: {
+      ...updatedAggregate.booking,
+      checkIn: "2099-10-10",
+      checkOut: "2099-10-11",
+      version: 3,
+    },
+    contact: { ...updatedAggregate.contact, version: 3 },
+    tasks: updatedAggregate.tasks.map((task) => ({ ...task, dueDate: "2099-10-11", version: 3 })),
+    scheduledMessages: updatedAggregate.scheduledMessages.map((message) => ({ ...message, version: 3 })),
+  };
+  const blockedUpdate = await updateBookingRpc(blockedUpdateAggregate, 2, "integration-booking-update-blocked");
+  if (blockedUpdate.error) throw blockedUpdate.error;
+  assert(
+    blockedUpdate.data?.status === "availability_conflict" && blockedUpdate.data?.conflictType === "block",
+    "A booking update into a calendar block was not rejected.",
+  );
 
   const boundaryConflict = bookingAggregate("BOOKING-BOUNDARY", "2099-08-13", "2099-08-15", "09:00");
   const boundaryCommit = await createBookingRpc(boundaryConflict, crypto.randomUUID(), "integration-booking-boundary");
@@ -292,6 +363,24 @@ try {
     JSON.stringify(raceStatuses) === JSON.stringify(["availability_conflict", "committed"]),
     `Concurrent booking race was not serialized: ${raceStatuses.join(", ")}`,
   );
+
+  const cancelledAggregate = {
+    ...updatedAggregate,
+    booking: {
+      ...updatedAggregate.booking,
+      workflowStatus: "Anulowana",
+      version: 3,
+    },
+    contact: { ...updatedAggregate.contact, version: 3 },
+    tasks: updatedAggregate.tasks.map((task) => ({ ...task, status: "Nie dotyczy", version: 3 })),
+    scheduledMessages: updatedAggregate.scheduledMessages.map((message) => ({ ...message, status: "Anulowana", version: 3 })),
+  };
+  const cancelCommit = await updateBookingRpc(cancelledAggregate, 2, "integration-booking-cancel");
+  if (cancelCommit.error) throw cancelCommit.error;
+  assert(cancelCommit.data?.status === "committed", "Booking cancellation was not committed.");
+  assert(cancelCommit.data?.aggregate?.booking?.workflowStatus === "Anulowana", "Booking was not cancelled.");
+  assert(cancelCommit.data?.aggregate?.tasks?.[0]?.status === "Nie dotyczy", "Stay task was not cancelled.");
+  assert(cancelCommit.data?.aggregate?.scheduledMessages?.[0]?.status === "Anulowana", "Scheduled message was not cancelled.");
 
   const [records, writeTelemetry, taskTelemetry, checklistTelemetry, bookingTelemetry, scheduledRows] = await Promise.all([
     userClient.from("operational_records").select("entity_type,entity_id,record_version,payload"),
@@ -335,10 +424,13 @@ try {
   assert(checklistRecords.length === 100, "Not all checklist records survived parallel updates.");
   assert(checklistRecords.every((record) => Number(record.record_version) === 2 && record.payload.done === true), "Parallel checklist records have inconsistent versions or payloads.");
   assert(checklistTelemetry.data.length === 100, "Checklist command audit is incomplete.");
-  assert(bookingTelemetry.data.filter((event) => event.action === "command_committed").length === 2, "Booking commit audit is incomplete.");
-  assert(bookingTelemetry.data.filter((event) => event.action === "command_conflict").length >= 4, "Booking conflict audit is incomplete.");
-  assert(scheduledRows.data.some((row) => row.booking_id === aggregate.booking.id), "Scheduled-message execution row was not committed with the aggregate.");
-  console.log("Supabase integration test passed: Auth, RLS, record persistence, two-session protection, 100 parallel record updates, atomic booking creation, replay, availability conflicts, race serialization, and command audit.");
+  assert(bookingTelemetry.data.filter((event) => event.action === "command_committed").length === 4, "Booking commit audit is incomplete.");
+  assert(bookingTelemetry.data.filter((event) => event.action === "command_conflict").length >= 6, "Booking conflict audit is incomplete.");
+  assert(
+    scheduledRows.data.some((row) => row.booking_id === aggregate.booking.id && row.status === "Anulowana"),
+    "Scheduled-message execution row was not reconciled with the cancelled booking.",
+  );
+  console.log("Supabase integration test passed: Auth, RLS, record persistence, two-session protection, 100 parallel record updates, atomic booking create/update/cancel, replay, availability conflicts, race serialization, and command audit.");
 } finally {
   console.log("Integration: cleaning temporary data…");
   await userClient.auth.signOut().catch(() => undefined);

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { PUT } from "./route";
+import { GET, PUT } from "./route";
 
 const mocks = vi.hoisted(() => ({
   rpc: vi.fn(),
@@ -94,5 +94,92 @@ describe("PUT /api/state telemetryka zapisu", () => {
 
     expect(response.status).toBe(400);
     expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /api/state wersje rekordów agregatu rezerwacji", () => {
+  it("dołącza wersje rezerwacji, kontaktu, zadań i wiadomości", async () => {
+    const membershipQuery = {
+      select: vi.fn(),
+      eq: vi.fn(),
+      limit: vi.fn(),
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: { organization_id: "org-test", role: "owner" },
+        error: null,
+      }),
+    };
+    membershipQuery.select.mockReturnValue(membershipQuery);
+    membershipQuery.eq.mockReturnValue(membershipQuery);
+    membershipQuery.limit.mockReturnValue(membershipQuery);
+
+    const records = [
+      {
+        entity_type: "bookings",
+        entity_id: "BOOKING-1",
+        payload: { id: "BOOKING-1" },
+        record_version: 4,
+        updated_at: "2026-07-25T20:00:00.000Z",
+      },
+      {
+        entity_type: "consents",
+        entity_id: "BOOKING-1",
+        payload: { bookingId: "BOOKING-1" },
+        record_version: 3,
+        updated_at: "2026-07-25T20:00:00.000Z",
+      },
+      {
+        entity_type: "tasks",
+        entity_id: "TASK-1",
+        payload: { id: "TASK-1", bookingId: "BOOKING-1" },
+        record_version: 6,
+        updated_at: "2026-07-25T20:00:00.000Z",
+      },
+      {
+        entity_type: "scheduledMessages",
+        entity_id: "SCH-1",
+        payload: { id: "SCH-1", bookingId: "BOOKING-1" },
+        record_version: 2,
+        updated_at: "2026-07-25T20:00:00.000Z",
+      },
+    ];
+    const recordsQuery = {
+      select: vi.fn(),
+      eq: vi.fn().mockResolvedValue({ data: records, error: null }),
+    };
+    recordsQuery.select.mockReturnValue(recordsQuery);
+    const revisionQuery = {
+      select: vi.fn(),
+      eq: vi.fn(),
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: { version: 12, updated_at: "2026-07-25T20:00:00.000Z" },
+        error: null,
+      }),
+    };
+    revisionQuery.select.mockReturnValue(revisionQuery);
+    revisionQuery.eq.mockReturnValue(revisionQuery);
+
+    mocks.createClient.mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-test" } } }) },
+      from: vi.fn((table: string) => {
+        if (table === "organization_memberships") return membershipQuery;
+        if (table === "operational_records") return recordsQuery;
+        if (table === "operational_state_versions") return revisionQuery;
+        throw new Error(`Unexpected table: ${table}`);
+      }),
+    });
+
+    const response = await GET();
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload).toMatchObject({
+      version: 12,
+      data: {
+        bookings: [{ id: "BOOKING-1", version: 4 }],
+        consents: [{ bookingId: "BOOKING-1", version: 3 }],
+        tasks: [{ id: "TASK-1", version: 6 }],
+        scheduledMessages: [{ id: "SCH-1", version: 2 }],
+      },
+    });
   });
 });

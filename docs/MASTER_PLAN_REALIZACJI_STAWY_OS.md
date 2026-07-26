@@ -1,7 +1,7 @@
 # Stawy OS — nadrzędny plan realizacji
 
 **Status:** plan obowiązujący
-**Data aktualizacji:** 25 lipca 2026
+**Data aktualizacji:** 26 lipca 2026
 **Źródła:** audyt aplikacji, plan wdrożenia poprawek, plan restrukturyzacji, ADR-001, słownik KPI, raport z przejścia przez aplikację z 19 lipca oraz ustalenia z realizacji PR-1–PR-5
 
 ## Jak czytać plan
@@ -43,7 +43,8 @@ Commit, push i deployment są osobnymi decyzjami. Samo ukończenie lokalnej pacz
 | PR-8a / Etap 3.2 | **wdrożony lokalnie 25.07.2026; gotowy do testu na dedykowanym Supabase** | pierwsza komenda rekordowa `PATCH /api/tasks/:id`, Zod i inwarianty bazy, `record_version`, audyt transakcyjny i brak pełnego `PUT` po zmianie zadania; 152 testy i smoke desktop/mobile przechodzą |
 | PR-8b / Etap 3.3 | **wdrożony lokalnie 25.07.2026; gotowy do testu na dedykowanym Supabase** | wersjonowana komenda `PATCH /api/checklist-items/:id`, transakcyjny audyt, szybkie kolejne kliknięcia bez regresji i bezpieczne odświeżenie po sygnale z drugiej karty; 162 testy przechodzą |
 | PR-8c / Etap 3.4 | **wdrożony lokalnie 25.07.2026; gotowy do testu na dedykowanym Supabase** | `POST /api/bookings` tworzy atomowo rezerwację, kontakt, zadania, checklistę i szkice komunikacji; blokada per domek chroni przed równoległym double-bookingiem, a request ID zapewnia idempotencję |
-| Etap 3 jako całość | **otwarty** | PR-7 zabezpiecza przejściowy zapis pełnego stanu; PR-8a–PR-8c przenoszą aktualizacje zadań/checklisty i tworzenie rezerwacji na komendy domenowe. Próby integracyjne są przygotowane, ale wymagają odizolowanego Supabase; aktualizacja/anulowanie rezerwacji, płatności i ustawienia nadal używają ścieżki przejściowej |
+| PR-8d / Etap 3.5 | **wdrożony lokalnie 26.07.2026; gotowy do testu na dedykowanym Supabase** | `PATCH /api/bookings/:id` aktualizuje lub anuluje rezerwację razem z kontaktem, zadaniami i szkicami wiadomości; wersje rekordów, blokady domków, audyt oraz zero pełnego `PUT` są pokryte testami |
+| Etap 3 jako całość | **otwarty** | PR-7 zabezpiecza przejściowy zapis pełnego stanu; PR-8a–PR-8d przenoszą zadania, checklistę oraz tworzenie, aktualizację i anulowanie rezerwacji na komendy domenowe. Próby integracyjne są przygotowane, ale wymagają odizolowanego Supabase; kosz/przywracanie rezerwacji, płatności i ustawienia nadal używają ścieżki przejściowej |
 
 ## Bramka wydania: MVP operatora dla taty
 
@@ -79,7 +80,8 @@ Test taty z 25.07.2026 zmienia priorytet interfejsu operatora: kalendarz, wolne 
 | 10a | Etap 3 — zapis domenowy | **PR-8a — wdrożony lokalnie** | wersjonowana aktualizacja zadania bez pełnego snapshotu | przed publikacją migracja i test 100 rekordów na dedykowanym Supabase |
 | 10b | Etap 3 — zapis domenowy | **PR-8b — wdrożony lokalnie** | wersjonowana aktualizacja punktu checklisty bez pełnego snapshotu | przed publikacją migracja i test 100 rekordów na dedykowanym Supabase |
 | 10c | Etap 3 — zapis domenowy | **PR-8c — wdrożony lokalnie** | atomowe utworzenie agregatu rezerwacji bez pełnego snapshotu | przed publikacją migracja oraz test idempotencji, konfliktów i równoległego bookingu na dedykowanym Supabase |
-| 10d | Etap 3 — zapis domenowy | PR-8d… | aktualizacja/anulowanie rezerwacji, płatności, ustawienia i odejście od pełnego snapshotu | migracja etapami; każdy pod-PR osobno |
+| 10d | Etap 3 — zapis domenowy | **PR-8d — wdrożony lokalnie** | wersjonowana aktualizacja/anulowanie rezerwacji wraz z kontaktem, zadaniami i szkicami wiadomości | przed publikacją migracja i test integracyjny na dedykowanym Supabase |
+| 10e | Etap 3 — zapis domenowy | PR-8e… | kosz/przywracanie rezerwacji, płatności, ustawienia i odejście od pełnego snapshotu | migracja etapami; każdy pod-PR osobno |
 | 11 | Etap 4 — organizacje i role | PR-9a | active organization, role, RLS i izolacja PII/finansów | dwie organizacje i role przechodzą testy negatywne |
 | 12 | Etap 4 — operacje zespołu | PR-9b | zlecenia sprzątania, przyjęcie, checklisty per domek i eskalacja | sprzątająca wykonuje pełny turnover bez dostępu do PII/finansów |
 | 13 | Etap 4 — zgodność operacyjna | PR-9c | procedura małoletnich wynikająca z zatwierdzonego SOP i minimalizacja danych | zapisuje się wykonanie procedury, nie zbędne dane dziecka |
@@ -193,7 +195,7 @@ Zbudować jedno źródło prawdy dla wartości pobytu, wpłat gościa, zwrotów,
 - symulacja dwóch kart potwierdza brak PUT po zewnętrznym zapisie, zachowanie lokalnej zmiany i odporność na spóźnioną odpowiedź porównania;
 - migracja nie została zastosowana do produkcji. Przed publikacją należy uruchomić `npm run test:integration` wyłącznie na dedykowanym projekcie Supabase zgodnie z README.
 
-PR-7 nie zamyka Etapu 3: nadal zabezpiecza przejściowy zapis pełnego stanu. PR-8a–PR-8c zastępują go dla aktualizacji zadań/checklisty i tworzenia rezerwacji, a PR-8d… ma przenieść kolejne mutacje na komendy domenowe.
+PR-7 nie zamyka Etapu 3: nadal zabezpiecza przejściowy zapis pełnego stanu. PR-8a–PR-8d zastępują go dla zadań, checklisty oraz tworzenia, aktualizacji i anulowania rezerwacji; następne mutacje domenowe są zaplanowane jako PR-8e.
 
 ## Wdrożony lokalnie PR-8a — pierwsza komenda domenowa
 
@@ -261,7 +263,32 @@ Przed publikacją trzeba utworzyć dedykowany projekt lub gałąź Supabase, zas
 - read-only smoke test `/bookings` oraz formularza „Dodaj rezerwację” przechodzi na desktopie i 390 px bez error overlay, błędów konsoli i poziomego overflow;
 - pełny test integracyjny nie został uruchomiony, ponieważ nie skonfigurowano dedykowanego projektu testowego, a projektu operacyjnego nie użyto do prób destrukcyjnych.
 
-Przed publikacją należy zastosować migracje PR-7–PR-8c do odizolowanego Supabase i uruchomić `npm run test:integration`. Następny mały wycinek Etapu 3 powinien objąć wersjonowaną aktualizację/anulowanie rezerwacji albo księgowanie płatności; pełny snapshot pozostaje przejściową ścieżką dla pozostałych domen.
+Przed publikacją należy zastosować migracje PR-7–PR-8c do odizolowanego Supabase i uruchomić `npm run test:integration`. Następny mały wycinek Etapu 3 — wersjonowana aktualizacja/anulowanie rezerwacji — został wykonany jako PR-8d.
+
+## Wdrożony lokalnie PR-8d — aktualizacja i anulowanie rezerwacji
+
+### Zakres
+
+- edycja oraz anulowanie istniejącej rezerwacji przechodzą przez `PATCH /api/bookings/:id`, bez pełnego `PUT /api/state`;
+- blokada optymistyczna dotyczy rekordu rezerwacji, a kontakt, zadania i szkice wiadomości mają własne wersje sprawdzane przed pierwszym zapisem;
+- zmiana domku lub terminu blokuje stary i nowy domek w stałej kolejności, ponownie sprawdza rezerwacje, godziny graniczne i blokady kalendarza;
+- rezerwacja, kontakt, otwarte zadania pobytowe, rekordy wiadomości i tabela wykonawcza `scheduled_messages` są uzgadniane w jednej transakcji;
+- anulowanie oznacza otwarte zadania pobytowe jako `Nie dotyczy`, ale nie zamyka wykonanej pracy ani zadania naprawczego;
+- konflikt dowolnego powiązanego rekordu zatrzymuje całą komendę i zostawia audyt `command_conflict`;
+- `/api/state` przekazuje rzeczywiste wersje rezerwacji, kontaktów, zadań, checklist i wiadomości, dzięki czemu klient nie zgaduje blokady;
+- formularz edycji zapisuje rezerwację i kontakt jedną komendą, a szybkie kolejne mutacje są kolejkowane bez nadpisania nowszego stanu starszą odpowiedzią.
+
+### Walidacja
+
+- **200/200 testów automatycznych**, lint, TypeScript, kontrola konfiguracji Auth i produkcyjny build 32 tras przechodzą;
+- test store wykonuje edycję i anulowanie, sprawdza kolejne wersje rezerwacji/kontaktu/zadania, anulowanie szkiców i zero `PUT /api/state`;
+- testy API obejmują role, limity, relacje, zakres dat, konflikt rekordu, konflikt skutku ubocznego, konflikt dostępności, brak domku oraz bezpieczne błędy;
+- test statyczny migracji pilnuje `security invoker`, pustego `search_path`, odebrania wykonania `public/anon`, blokady doradczej, audytu i tabel uzgadnianych transakcyjnie;
+- test przeglądarkowy `/bookings` i formularza edycji przechodzi na desktopie oraz 390×844 bez błędów konsoli, error overlay i poziomego overflow;
+- skrypt integracyjny obejmuje create → update → konflikt starej wersji → konflikt blokady → cancel oraz sprawdzenie audytu i `scheduled_messages`;
+- skrypt integracyjny nie został uruchomiony przeciwko bazie: brak lokalnego Postgresa/Dockera i brak odizolowanego projektu testowego. Projektu operacyjnego celowo nie użyto.
+
+Przed publikacją trzeba zastosować migracje PR-7–PR-8d do dedykowanego Supabase i uruchomić `npm run test:integration`. Następny mały wycinek Etapu 3 powinien objąć kosz/przywracanie rezerwacji albo księgowanie płatności; ustawienia pozostają kolejną osobną komendą.
 
 ## Pełne przypisanie ustaleń z walkthrough
 

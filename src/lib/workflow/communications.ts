@@ -133,6 +133,8 @@ export function reconcileScheduledMessages(data: AppData): ScheduledMessage[] {
         idempotencyKey: existing?.idempotencyKey ?? `scheduled-${rule.id}-${booking.id}-${template.version}`,
         bookingFingerprint: fingerprint,
         createdAt: existing?.createdAt ?? new Date().toISOString(),
+        version: existing?.version,
+        updatedAt: existing?.updatedAt,
       });
     }
   }

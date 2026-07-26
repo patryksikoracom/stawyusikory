@@ -213,6 +213,8 @@ export type ContactConsent = {
   consentSource?: string;
   consentDate?: string;
   consentWithdrawnAt?: string;
+  version?: number;
+  updatedAt?: string;
 };
 
 export type OpsTask = {
@@ -373,6 +375,8 @@ export type ScheduledMessage = {
   idempotencyKey: string;
   bookingFingerprint: string;
   createdAt: string;
+  version?: number;
+  updatedAt?: string;
 };
 
 export type MarketingTouchpoint = {

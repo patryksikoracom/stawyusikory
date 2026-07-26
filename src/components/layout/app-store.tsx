@@ -38,7 +38,10 @@ import { defaultAutomationRules, defaultMessageTemplates, reconcileScheduledMess
 import { guestInsightAfterDeparture, repairTaskForIssue } from "@/lib/workflow/departures";
 import { downloadEncryptedJson, downloadPricingAnalysisDataset } from "@/lib/security/data-exports";
 import { isTrashExpired, trashExpiryDate } from "@/lib/booking-trash";
-import type { BookingAggregate } from "@/lib/domain/booking-command";
+import type {
+  BookingAggregate,
+  BookingMutationAggregate,
+} from "@/lib/domain/booking-command";
 import {
   conflictBackup,
   summarizeSyncChanges,
@@ -58,7 +61,7 @@ type AppStore = {
   copyConflictChanges: () => Promise<boolean>;
   reloadAfterConflict: () => void;
   addBooking: (booking: Booking, contact?: ContactConsent) => void;
-  updateBooking: (booking: Booking) => void;
+  updateBooking: (booking: Booking, contact?: ContactConsent) => void;
   cancelBooking: (bookingId: string) => void;
   deleteBooking: (bookingId: string) => void;
   restoreBooking: (bookingId: string) => void;
@@ -162,7 +165,10 @@ function normalizeData(parsed?: Partial<AppData> | null, fallback: AppData = ini
       version: booking.version ?? 1,
     })),
     guests: parsed?.guests ?? fallback.guests,
-    consents: parsed?.consents ?? fallback.consents,
+    consents: (parsed?.consents ?? fallback.consents).map((consent) => ({
+      ...consent,
+      version: consent.version ?? 1,
+    })),
     tasks: tasks.map((task) => ({
       ...task,
       version: task.version ?? 1,
@@ -192,7 +198,10 @@ function normalizeData(parsed?: Partial<AppData> | null, fallback: AppData = ini
     departureDebriefs: parsed?.departureDebriefs ?? fallback.departureDebriefs,
     messageTemplates: parsed?.messageTemplates?.length ? parsed.messageTemplates : fallback.messageTemplates.length ? fallback.messageTemplates : defaultMessageTemplates,
     automationRules: parsed?.automationRules?.length ? parsed.automationRules : fallback.automationRules.length ? fallback.automationRules : defaultAutomationRules,
-    scheduledMessages: parsed?.scheduledMessages ?? fallback.scheduledMessages,
+    scheduledMessages: (parsed?.scheduledMessages ?? fallback.scheduledMessages).map((message) => ({
+      ...message,
+      version: message.version ?? 1,
+    })),
     marketingTouchpoints: parsed?.marketingTouchpoints ?? fallback.marketingTouchpoints,
     auditLog: parsed?.auditLog ?? fallback.auditLog,
     settings: parsed?.settings ?? fallback.settings,
@@ -285,6 +294,9 @@ function bookingAggregate(
   createdAt: string,
 ): BookingAggregate {
   const committedBooking = { ...booking, version: 1, updatedAt: createdAt };
+  const committedContact = contact
+    ? { ...contact, version: 1, updatedAt: createdAt }
+    : undefined;
   const tasks = createTasksForBooking(committedBooking).map((task) => ({
     ...task,
     version: 1,
@@ -298,13 +310,20 @@ function bookingAggregate(
   const candidate: AppData = {
     ...current,
     bookings: [committedBooking, ...current.bookings],
-    consents: contact ? [contact, ...current.consents] : current.consents,
+    consents: committedContact ? [committedContact, ...current.consents] : current.consents,
     tasks: [...tasks, ...current.tasks],
     checklistItems: [...checklistItems, ...current.checklistItems],
   };
   const scheduledMessages = reconcileScheduledMessages(candidate)
-    .filter((message) => message.bookingId === booking.id);
-  return { booking: committedBooking, contact, tasks, checklistItems, scheduledMessages };
+    .filter((message) => message.bookingId === booking.id)
+    .map((message) => ({ ...message, version: 1, updatedAt: createdAt }));
+  return {
+    booking: committedBooking,
+    contact: committedContact,
+    tasks,
+    checklistItems,
+    scheduledMessages,
+  };
 }
 
 function mergeBookingAggregate(current: AppData, aggregate: BookingAggregate): AppData {
@@ -343,6 +362,110 @@ function removeBookingAggregate(current: AppData, aggregate: BookingAggregate): 
   };
 }
 
+type BookingMutationVersions = {
+  booking: number;
+  contact?: number;
+  tasks: Map<string, number>;
+  scheduledMessages: Map<string, number>;
+};
+
+function bookingMutationAggregate(
+  current: AppData,
+  booking: Booking,
+  contact: ContactConsent | undefined,
+  versions: BookingMutationVersions,
+  updatedAt: string,
+): BookingMutationAggregate {
+  const committedBooking = {
+    ...booking,
+    version: versions.booking + 1,
+    updatedAt,
+  };
+  const committedContact = contact
+    ? {
+      ...contact,
+      version: (versions.contact ?? 0) + 1,
+      updatedAt,
+    }
+    : undefined;
+  const tasks = (
+    committedBooking.workflowStatus === "Anulowana"
+      ? cancelOpenStayTasks(current.tasks, committedBooking.id)
+      : rescheduleOpenTasksForBooking(current.tasks, committedBooking)
+  )
+    .filter((task) => task.bookingId === committedBooking.id)
+    .map((task) => ({
+      ...task,
+      version: (versions.tasks.get(task.id) ?? task.version ?? 1) + 1,
+      updatedAt,
+    }));
+  const candidate: AppData = {
+    ...current,
+    bookings: current.bookings.map((item) => item.id === committedBooking.id ? committedBooking : item),
+    consents: committedContact
+      ? current.consents.some((item) => item.bookingId === committedBooking.id)
+        ? current.consents.map((item) => item.bookingId === committedBooking.id ? committedContact : item)
+        : [committedContact, ...current.consents]
+      : current.consents,
+    tasks: current.tasks.map((task) => tasks.find((candidateTask) => candidateTask.id === task.id) ?? task),
+  };
+  const scheduledMessages = reconcileScheduledMessages(candidate)
+    .filter((message) => message.bookingId === committedBooking.id)
+    .map((message) => ({
+      ...message,
+      version: (versions.scheduledMessages.get(message.id) ?? message.version ?? 0) + 1,
+      updatedAt,
+    }));
+  return {
+    booking: committedBooking,
+    contact: committedContact,
+    tasks,
+    scheduledMessages,
+  };
+}
+
+function mergeBookingMutation(
+  current: AppData,
+  aggregate: BookingMutationAggregate,
+  preserveNewer = false,
+): AppData {
+  const bookingId = aggregate.booking.id;
+  const incomingContact = aggregate.contact;
+  const incomingTasks = new Map(aggregate.tasks.map((task) => [task.id, task]));
+  const incomingMessages = new Map(aggregate.scheduledMessages.map((message) => [message.id, message]));
+  const shouldReplace = (currentVersion: number | undefined, incomingVersion: number | undefined) =>
+    !preserveNewer || (currentVersion ?? 1) <= (incomingVersion ?? 1);
+
+  return {
+    ...current,
+    bookings: current.bookings.map((booking) => booking.id === bookingId
+      && shouldReplace(booking.version, aggregate.booking.version)
+      ? aggregate.booking
+      : booking),
+    consents: incomingContact
+      ? current.consents.some((contact) => contact.bookingId === bookingId)
+        ? current.consents.map((contact) => contact.bookingId === bookingId
+          && shouldReplace(contact.version, incomingContact.version)
+          ? incomingContact
+          : contact)
+        : [incomingContact, ...current.consents]
+      : current.consents,
+    tasks: current.tasks.map((task) => {
+      const incoming = incomingTasks.get(task.id);
+      return incoming && shouldReplace(task.version, incoming.version) ? incoming : task;
+    }),
+    scheduledMessages: [
+      ...current.scheduledMessages.map((message) => {
+        const incoming = incomingMessages.get(message.id);
+        return incoming && shouldReplace(message.version, incoming.version) ? incoming : message;
+      }),
+      ...aggregate.scheduledMessages.filter(
+        (incoming) => !current.scheduledMessages.some((message) => message.id === incoming.id),
+      ),
+    ].sort((a, b) => a.dueAt.localeCompare(b.dueAt)),
+  };
+}
+
 export function AppStoreProvider({ children }: { children: ReactNode }) {
   // Pierwszy render musi być identyczny na serwerze i w przeglądarce. Właściwy
   // stan lokalny lub chmurowy jest pobierany zaraz po zamontowaniu komponentu.
@@ -357,8 +480,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const dataReady = useRef(false);
   const cloudReady = useRef(false);
   const stateVersion = useRef(0);
+  const bookingRecordVersions = useRef<Map<string, number>>(new Map());
+  const consentRecordVersions = useRef<Map<string, number>>(new Map());
   const taskRecordVersions = useRef<Map<string, number>>(new Map());
   const checklistRecordVersions = useRef<Map<string, number>>(new Map());
+  const scheduledMessageRecordVersions = useRef<Map<string, number>>(new Map());
   const pendingRecordCommands = useRef(0);
   const reloadAfterRecordCommands = useRef(false);
   const baseData = useRef<AppData>(cloudConfigured ? emptyCloudData() : normalizeData());
@@ -407,8 +533,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         setData(emptyCloudData());
       } else {
         const localData = readLocalData();
+        bookingRecordVersions.current = new Map(localData.bookings.map((booking) => [booking.id, booking.version ?? 1]));
+        consentRecordVersions.current = new Map(localData.consents.map((consent) => [consent.bookingId, consent.version ?? 1]));
         taskRecordVersions.current = new Map(localData.tasks.map((task) => [task.id, task.version ?? 1]));
         checklistRecordVersions.current = new Map(localData.checklistItems.map((item) => [item.id, item.version ?? 1]));
+        scheduledMessageRecordVersions.current = new Map(
+          localData.scheduledMessages.map((message) => [message.id, message.version ?? 1]),
+        );
         setData(localData);
         dataReady.current = true;
         setDataStatus("ready");
@@ -473,8 +604,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           const payload = await response.json() as CloudStatePayload;
           const loadedData = payload.data ? normalizeData(payload.data, emptyCloudData()) : emptyCloudData();
           stateVersion.current = payload.version ?? 0;
+          bookingRecordVersions.current = new Map(loadedData.bookings.map((booking) => [booking.id, booking.version ?? 1]));
+          consentRecordVersions.current = new Map(loadedData.consents.map((consent) => [consent.bookingId, consent.version ?? 1]));
           taskRecordVersions.current = new Map(loadedData.tasks.map((task) => [task.id, task.version ?? 1]));
           checklistRecordVersions.current = new Map(loadedData.checklistItems.map((item) => [item.id, item.version ?? 1]));
+          scheduledMessageRecordVersions.current = new Map(
+            loadedData.scheduledMessages.map((message) => [message.id, message.version ?? 1]),
+          );
           conflictGeneration.current += 1;
           baseData.current = loadedData;
           localRevision.current = 0;
@@ -569,8 +705,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
             stateVersion.current = payload.version;
             // Legacy PUT replaces every record and assigns the committed global
             // version. Keep migrated record locks aligned until this path is gone.
+            bookingRecordVersions.current = new Map(data.bookings.map((booking) => [booking.id, payload.version!]));
+            consentRecordVersions.current = new Map(data.consents.map((consent) => [consent.bookingId, payload.version!]));
             taskRecordVersions.current = new Map(data.tasks.map((task) => [task.id, payload.version!]));
             checklistRecordVersions.current = new Map(data.checklistItems.map((item) => [item.id, payload.version!]));
+            scheduledMessageRecordVersions.current = new Map(
+              data.scheduledMessages.map((message) => [message.id, payload.version!]),
+            );
           }
           savedRevision.current = Math.max(savedRevision.current, revisionToSave);
           baseData.current = data;
@@ -635,8 +776,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     const requestId = typeof crypto !== "undefined" && crypto.randomUUID
       ? crypto.randomUUID()
       : uid("REQ");
+    bookingRecordVersions.current.set(booking.id, 1);
+    if (aggregate.contact) consentRecordVersions.current.set(booking.id, 1);
     for (const task of aggregate.tasks) taskRecordVersions.current.set(task.id, 1);
     for (const item of aggregate.checklistItems) checklistRecordVersions.current.set(item.id, 1);
+    for (const message of aggregate.scheduledMessages) scheduledMessageRecordVersions.current.set(message.id, 1);
     pendingRecordCommands.current += 1;
     setData((current) => mergeBookingAggregate(current, aggregate));
 
@@ -658,8 +802,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         });
         if (!response.ok) {
           setData((current) => removeBookingAggregate(current, aggregate));
+          bookingRecordVersions.current.delete(booking.id);
+          consentRecordVersions.current.delete(booking.id);
           for (const task of aggregate.tasks) taskRecordVersions.current.delete(task.id);
           for (const item of aggregate.checklistItems) checklistRecordVersions.current.delete(item.id);
+          for (const message of aggregate.scheduledMessages) scheduledMessageRecordVersions.current.delete(message.id);
           cloudReady.current = false;
           setSyncMode(response.status === 409 ? "conflict" : "error");
           if (response.status === 409) {
@@ -684,11 +831,24 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           savedAt?: string;
         };
         stateVersion.current = payload.stateVersion;
+        bookingRecordVersions.current.set(
+          booking.id,
+          payload.aggregate.booking.version ?? 1,
+        );
+        if (payload.aggregate.contact) {
+          consentRecordVersions.current.set(
+            booking.id,
+            payload.aggregate.contact.version ?? 1,
+          );
+        }
         for (const task of payload.aggregate.tasks) {
           taskRecordVersions.current.set(task.id, task.version ?? 1);
         }
         for (const item of payload.aggregate.checklistItems) {
           checklistRecordVersions.current.set(item.id, item.version ?? 1);
+        }
+        for (const message of payload.aggregate.scheduledMessages) {
+          scheduledMessageRecordVersions.current.set(message.id, message.version ?? 1);
         }
         setData((current) => mergeBookingAggregate(current, payload.aggregate));
         baseData.current = mergeBookingAggregate(baseData.current, payload.aggregate);
@@ -705,6 +865,206 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       } catch {
         // Nie wycofujemy zapisu przy niejednoznacznym błędzie sieci: transakcja
         // mogła dojść do bazy. Ponowne pobranie rozstrzygnie stan bez duplikacji.
+        cloudReady.current = false;
+        setSyncMode("error");
+      } finally {
+        finishRecordCommand();
+      }
+    });
+  }, [finishRecordCommand, mutate]);
+
+  const commitBookingMutation = useCallback((
+    booking: Booking,
+    contact: ContactConsent | undefined,
+    action: "updated" | "cancelled",
+  ) => {
+    if (!dataReady.current) return;
+    const currentBooking = latestData.current.bookings.find((item) => item.id === booking.id);
+    if (!currentBooking) return;
+
+    if (!cloudConfigured) {
+      mutate((current) => {
+        const nextTasks = booking.workflowStatus === "Anulowana"
+          ? cancelOpenStayTasks(current.tasks, booking.id)
+          : rescheduleOpenTasksForBooking(current.tasks, booking);
+        const next: AppData = {
+          ...current,
+          bookings: current.bookings.map((item) => item.id === booking.id
+            ? {
+              ...booking,
+              version: (item.version ?? 1) + 1,
+              updatedAt: new Date().toISOString(),
+            }
+            : item),
+          consents: contact
+            ? current.consents.some((item) => item.bookingId === booking.id)
+              ? current.consents.map((item) => item.bookingId === booking.id ? contact : item)
+              : [contact, ...current.consents]
+            : current.consents,
+          tasks: nextTasks,
+          auditLog: [
+            audit(
+              "booking",
+              booking.id,
+              action,
+              action === "cancelled"
+                ? "Anulowano rezerwację"
+                : `Zmieniono rezerwację ${booking.guestLabel}`,
+            ),
+            ...current.auditLog,
+          ],
+        };
+        next.scheduledMessages = reconcileScheduledMessages(next);
+        return next;
+      });
+      return;
+    }
+    if (!cloudReady.current) return;
+
+    const expectedRecordVersion = bookingRecordVersions.current.get(booking.id)
+      ?? currentBooking.version
+      ?? 1;
+    const existingContact = latestData.current.consents.find((item) => item.bookingId === booking.id);
+    const versions: BookingMutationVersions = {
+      booking: expectedRecordVersion,
+      contact: contact
+        ? consentRecordVersions.current.get(booking.id) ?? existingContact?.version ?? 0
+        : undefined,
+      tasks: new Map(
+        latestData.current.tasks
+          .filter((task) => task.bookingId === booking.id)
+          .map((task) => [
+            task.id,
+            taskRecordVersions.current.get(task.id) ?? task.version ?? 1,
+          ]),
+      ),
+      scheduledMessages: new Map(
+        latestData.current.scheduledMessages
+          .filter((message) => message.bookingId === booking.id)
+          .map((message) => [
+            message.id,
+            scheduledMessageRecordVersions.current.get(message.id) ?? message.version ?? 1,
+          ]),
+      ),
+    };
+    const requestId = typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : uid("REQ");
+    const clientSentAt = new Date().toISOString();
+    const aggregate = bookingMutationAggregate(
+      latestData.current,
+      booking,
+      contact,
+      versions,
+      clientSentAt,
+    );
+
+    bookingRecordVersions.current.set(booking.id, expectedRecordVersion + 1);
+    if (aggregate.contact) {
+      consentRecordVersions.current.set(booking.id, aggregate.contact.version ?? 1);
+    }
+    for (const task of aggregate.tasks) {
+      taskRecordVersions.current.set(task.id, task.version ?? 1);
+    }
+    for (const message of aggregate.scheduledMessages) {
+      scheduledMessageRecordVersions.current.set(message.id, message.version ?? 1);
+    }
+    pendingRecordCommands.current += 1;
+    setData((current) => mergeBookingMutation(current, aggregate));
+
+    cloudSaveQueue.current = cloudSaveQueue.current.then(async () => {
+      if (!cloudReady.current) {
+        finishRecordCommand();
+        return;
+      }
+      try {
+        const response = await fetch(`/api/bookings/${encodeURIComponent(booking.id)}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            aggregate,
+            expectedRecordVersion,
+            requestId,
+            clientSentAt,
+            tabId: tabId.current,
+          }),
+        });
+        if (response.status === 409) {
+          const payload = await response.json().catch(() => ({})) as {
+            currentRecordVersion?: number;
+            detectedAt?: string;
+            requestId?: string;
+          };
+          cloudReady.current = false;
+          setSyncMode("conflict");
+          setSyncConflict({
+            source: "server-rejection",
+            detectedAt: payload.detectedAt ?? new Date().toISOString(),
+            expectedVersion: expectedRecordVersion,
+            currentVersion: payload.currentRecordVersion,
+            requestId: payload.requestId ?? requestId,
+            changes: summarizeSyncChanges(baseData.current, latestData.current),
+          });
+          return;
+        }
+        if (!response.ok) throw new Error("booking command failed");
+        const payload = await response.json() as {
+          aggregate: BookingMutationAggregate;
+          recordVersion: number;
+          stateVersion: number;
+          savedAt?: string;
+        };
+
+        bookingRecordVersions.current.set(
+          booking.id,
+          Math.max(
+            bookingRecordVersions.current.get(booking.id) ?? 1,
+            payload.recordVersion,
+          ),
+        );
+        if (payload.aggregate.contact) {
+          consentRecordVersions.current.set(
+            booking.id,
+            Math.max(
+              consentRecordVersions.current.get(booking.id) ?? 0,
+              payload.aggregate.contact.version ?? 1,
+            ),
+          );
+        }
+        for (const task of payload.aggregate.tasks) {
+          taskRecordVersions.current.set(
+            task.id,
+            Math.max(
+              taskRecordVersions.current.get(task.id) ?? 1,
+              task.version ?? 1,
+            ),
+          );
+        }
+        for (const message of payload.aggregate.scheduledMessages) {
+          scheduledMessageRecordVersions.current.set(
+            message.id,
+            Math.max(
+              scheduledMessageRecordVersions.current.get(message.id) ?? 1,
+              message.version ?? 1,
+            ),
+          );
+        }
+        stateVersion.current = payload.stateVersion;
+        setData((current) => mergeBookingMutation(current, payload.aggregate, true));
+        baseData.current = mergeBookingMutation(baseData.current, payload.aggregate);
+        setSyncMode("cloud");
+        const savedAt = payload.savedAt ?? new Date().toISOString();
+        setLastSavedAt(savedAt);
+        syncChannel.current?.postMessage({
+          type: "state-committed",
+          tabId: tabId.current,
+          requestId,
+          version: payload.stateVersion,
+          savedAt,
+        } satisfies StateCommittedMessage);
+      } catch {
+        // Stan optymistyczny zostaje widoczny. Odświeżenie rozstrzyga, czy
+        // transakcja dotarła do bazy, bez ponownego pełnego zapisu.
         cloudReady.current = false;
         setSyncMode("error");
       } finally {
@@ -980,30 +1340,17 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     copyConflictChanges,
     reloadAfterConflict,
     addBooking: createBooking,
-    updateBooking: (booking) => mutate((current) => {
-      const next: AppData = {
-        ...current,
-        bookings: current.bookings.map((item) => item.id === booking.id
-          ? { ...booking, version: (item.version ?? 1) + 1, updatedAt: new Date().toISOString() }
-          : item),
-        tasks: rescheduleOpenTasksForBooking(current.tasks, booking),
-        auditLog: [audit("booking", booking.id, "updated", `Zmieniono rezerwację ${booking.guestLabel}`), ...current.auditLog],
-      };
-      next.scheduledMessages = reconcileScheduledMessages(next);
-      return next;
-    }),
-    cancelBooking: (bookingId) => mutate((current) => {
-      const next: AppData = {
-        ...current,
-        bookings: current.bookings.map((item) => item.id === bookingId
-          ? { ...item, workflowStatus: "Anulowana", updatedAt: new Date().toISOString() }
-          : item),
-        tasks: cancelOpenStayTasks(current.tasks, bookingId),
-        auditLog: [audit("booking", bookingId, "cancelled", "Anulowano rezerwację"), ...current.auditLog],
-      };
-      next.scheduledMessages = reconcileScheduledMessages(next);
-      return next;
-    }),
+    updateBooking: (booking, contact) => commitBookingMutation(booking, contact, "updated"),
+    cancelBooking: (bookingId) => {
+      const booking = latestData.current.bookings.find((item) => item.id === bookingId);
+      if (!booking) return;
+      const contact = latestData.current.consents.find((item) => item.bookingId === bookingId);
+      commitBookingMutation(
+        { ...booking, workflowStatus: "Anulowana" },
+        contact,
+        "cancelled",
+      );
+    },
     deleteBooking: (bookingId) => mutate((current) => {
       const deletedAt = new Date().toISOString();
       const next: AppData = {
@@ -1243,6 +1590,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     },
   }), [
     copyConflictChanges,
+    commitBookingMutation,
     createBooking,
     data,
     dataStatus,
