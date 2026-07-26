@@ -41,6 +41,7 @@ import { isTrashExpired, trashExpiryDate } from "@/lib/booking-trash";
 import type {
   BookingAggregate,
   BookingMutationAggregate,
+  BookingMutationOperation,
 } from "@/lib/domain/booking-command";
 import {
   conflictBackup,
@@ -369,12 +370,60 @@ type BookingMutationVersions = {
   scheduledMessages: Map<string, number>;
 };
 
+function tasksForBookingMutation(
+  tasks: OpsTask[],
+  booking: Booking,
+  operation: BookingMutationOperation,
+) {
+  if (operation === "trash") {
+    return tasks.map((task) => task.bookingId === booking.id
+      && task.type !== "Naprawa"
+      && !["Zrobione", "Nie dotyczy"].includes(task.status)
+      ? {
+        ...task,
+        statusBeforeBookingDeletion: task.status,
+        status: "Nie dotyczy" as const,
+      }
+      : task);
+  }
+  if (operation === "restore") {
+    return tasks.map((task) => task.bookingId === booking.id && task.statusBeforeBookingDeletion
+      ? {
+        ...task,
+        status: task.statusBeforeBookingDeletion,
+        statusBeforeBookingDeletion: undefined,
+      }
+      : task);
+  }
+  return booking.workflowStatus === "Anulowana"
+    ? cancelOpenStayTasks(tasks, booking.id)
+    : rescheduleOpenTasksForBooking(tasks, booking);
+}
+
+function messagesForBookingRestore(
+  messages: ScheduledMessage[],
+  bookingId: string,
+) {
+  return messages.map((message) => message.bookingId === bookingId
+    && message.statusBeforeBookingDeletion
+    ? {
+      ...message,
+      status: message.statusBeforeBookingDeletion,
+      bookingFingerprint: message.bookingFingerprintBeforeDeletion
+        ?? message.bookingFingerprint,
+      statusBeforeBookingDeletion: undefined,
+      bookingFingerprintBeforeDeletion: undefined,
+    }
+    : message);
+}
+
 function bookingMutationAggregate(
   current: AppData,
   booking: Booking,
   contact: ContactConsent | undefined,
   versions: BookingMutationVersions,
   updatedAt: string,
+  operation: BookingMutationOperation,
 ): BookingMutationAggregate {
   const committedBooking = {
     ...booking,
@@ -388,11 +437,7 @@ function bookingMutationAggregate(
       updatedAt,
     }
     : undefined;
-  const tasks = (
-    committedBooking.workflowStatus === "Anulowana"
-      ? cancelOpenStayTasks(current.tasks, committedBooking.id)
-      : rescheduleOpenTasksForBooking(current.tasks, committedBooking)
-  )
+  const tasks = tasksForBookingMutation(current.tasks, committedBooking, operation)
     .filter((task) => task.bookingId === committedBooking.id)
     .map((task) => ({
       ...task,
@@ -408,14 +453,49 @@ function bookingMutationAggregate(
         : [committedContact, ...current.consents]
       : current.consents,
     tasks: current.tasks.map((task) => tasks.find((candidateTask) => candidateTask.id === task.id) ?? task),
+    scheduledMessages: operation === "restore"
+      ? messagesForBookingRestore(current.scheduledMessages, committedBooking.id)
+      : current.scheduledMessages,
   };
   const scheduledMessages = reconcileScheduledMessages(candidate)
     .filter((message) => message.bookingId === committedBooking.id)
-    .map((message) => ({
-      ...message,
-      version: (versions.scheduledMessages.get(message.id) ?? message.version ?? 0) + 1,
-      updatedAt,
-    }));
+    .map((message) => {
+      const existing = current.scheduledMessages.find((item) => item.id === message.id);
+      if (
+        operation === "trash"
+        && existing
+        && ["Wysłana", "Dostarczona"].includes(existing.status)
+      ) {
+        return {
+          ...message,
+          status: existing.status,
+          bookingFingerprint: existing.bookingFingerprint,
+          version: (versions.scheduledMessages.get(message.id) ?? message.version ?? 0) + 1,
+          updatedAt,
+        };
+      }
+      if (operation === "trash" && existing?.status !== "Anulowana") {
+        return {
+          ...message,
+          statusBeforeBookingDeletion: existing?.status ?? message.status,
+          bookingFingerprintBeforeDeletion: existing?.bookingFingerprint
+            ?? message.bookingFingerprint,
+          version: (versions.scheduledMessages.get(message.id) ?? message.version ?? 0) + 1,
+          updatedAt,
+        };
+      }
+      return {
+        ...message,
+        statusBeforeBookingDeletion: operation === "restore"
+          ? undefined
+          : message.statusBeforeBookingDeletion,
+        bookingFingerprintBeforeDeletion: operation === "restore"
+          ? undefined
+          : message.bookingFingerprintBeforeDeletion,
+        version: (versions.scheduledMessages.get(message.id) ?? message.version ?? 0) + 1,
+        updatedAt,
+      };
+    });
   return {
     booking: committedBooking,
     contact: committedContact,
@@ -484,6 +564,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const consentRecordVersions = useRef<Map<string, number>>(new Map());
   const taskRecordVersions = useRef<Map<string, number>>(new Map());
   const checklistRecordVersions = useRef<Map<string, number>>(new Map());
+  const paymentRecordVersions = useRef<Map<string, number>>(new Map());
   const scheduledMessageRecordVersions = useRef<Map<string, number>>(new Map());
   const pendingRecordCommands = useRef(0);
   const reloadAfterRecordCommands = useRef(false);
@@ -537,6 +618,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         consentRecordVersions.current = new Map(localData.consents.map((consent) => [consent.bookingId, consent.version ?? 1]));
         taskRecordVersions.current = new Map(localData.tasks.map((task) => [task.id, task.version ?? 1]));
         checklistRecordVersions.current = new Map(localData.checklistItems.map((item) => [item.id, item.version ?? 1]));
+        paymentRecordVersions.current = new Map(localData.payments.map((payment) => [payment.id, payment.version ?? 1]));
         scheduledMessageRecordVersions.current = new Map(
           localData.scheduledMessages.map((message) => [message.id, message.version ?? 1]),
         );
@@ -608,6 +690,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           consentRecordVersions.current = new Map(loadedData.consents.map((consent) => [consent.bookingId, consent.version ?? 1]));
           taskRecordVersions.current = new Map(loadedData.tasks.map((task) => [task.id, task.version ?? 1]));
           checklistRecordVersions.current = new Map(loadedData.checklistItems.map((item) => [item.id, item.version ?? 1]));
+          paymentRecordVersions.current = new Map(loadedData.payments.map((payment) => [payment.id, payment.version ?? 1]));
           scheduledMessageRecordVersions.current = new Map(
             loadedData.scheduledMessages.map((message) => [message.id, message.version ?? 1]),
           );
@@ -709,6 +792,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
             consentRecordVersions.current = new Map(data.consents.map((consent) => [consent.bookingId, payload.version!]));
             taskRecordVersions.current = new Map(data.tasks.map((task) => [task.id, payload.version!]));
             checklistRecordVersions.current = new Map(data.checklistItems.map((item) => [item.id, payload.version!]));
+            paymentRecordVersions.current = new Map(data.payments.map((payment) => [payment.id, payload.version!]));
             scheduledMessageRecordVersions.current = new Map(
               data.scheduledMessages.map((message) => [message.id, payload.version!]),
             );
@@ -876,7 +960,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const commitBookingMutation = useCallback((
     booking: Booking,
     contact: ContactConsent | undefined,
-    action: "updated" | "cancelled",
+    operation: BookingMutationOperation,
   ) => {
     if (!dataReady.current) return;
     const currentBooking = latestData.current.bookings.find((item) => item.id === booking.id);
@@ -884,38 +968,48 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
     if (!cloudConfigured) {
       mutate((current) => {
-        const nextTasks = booking.workflowStatus === "Anulowana"
-          ? cancelOpenStayTasks(current.tasks, booking.id)
-          : rescheduleOpenTasksForBooking(current.tasks, booking);
-        const next: AppData = {
-          ...current,
-          bookings: current.bookings.map((item) => item.id === booking.id
-            ? {
-              ...booking,
-              version: (item.version ?? 1) + 1,
-              updatedAt: new Date().toISOString(),
-            }
-            : item),
-          consents: contact
-            ? current.consents.some((item) => item.bookingId === booking.id)
-              ? current.consents.map((item) => item.bookingId === booking.id ? contact : item)
-              : [contact, ...current.consents]
-            : current.consents,
-          tasks: nextTasks,
+        const currentContact = current.consents.find((item) => item.bookingId === booking.id);
+        const localAggregate = bookingMutationAggregate(
+          current,
+          booking,
+          contact,
+          {
+            booking: currentBooking.version ?? 1,
+            contact: contact ? currentContact?.version ?? 0 : undefined,
+            tasks: new Map(current.tasks
+              .filter((task) => task.bookingId === booking.id)
+              .map((task) => [task.id, task.version ?? 1])),
+            scheduledMessages: new Map(current.scheduledMessages
+              .filter((message) => message.bookingId === booking.id)
+              .map((message) => [message.id, message.version ?? 1])),
+          },
+          new Date().toISOString(),
+          operation,
+        );
+        return {
+          ...mergeBookingMutation(current, localAggregate),
           auditLog: [
             audit(
               "booking",
               booking.id,
-              action,
-              action === "cancelled"
-                ? "Anulowano rezerwację"
-                : `Zmieniono rezerwację ${booking.guestLabel}`,
+              operation === "trash"
+                ? "deleted"
+                : operation === "restore"
+                  ? "restored"
+                  : operation === "cancel"
+                    ? "cancelled"
+                    : "updated",
+              operation === "trash"
+                ? "Przeniesiono rezerwację do kosza na 30 dni"
+                : operation === "restore"
+                  ? "Przywrócono rezerwację z kosza"
+                  : operation === "cancel"
+                    ? "Anulowano rezerwację"
+                    : `Zmieniono rezerwację ${booking.guestLabel}`,
             ),
             ...current.auditLog,
           ],
         };
-        next.scheduledMessages = reconcileScheduledMessages(next);
-        return next;
       });
       return;
     }
@@ -957,6 +1051,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       contact,
       versions,
       clientSentAt,
+      operation,
     );
 
     bookingRecordVersions.current.set(booking.id, expectedRecordVersion + 1);
@@ -983,6 +1078,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             aggregate,
+            operation,
             expectedRecordVersion,
             requestId,
             clientSentAt,
@@ -1300,6 +1396,143 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     });
   }, [finishRecordCommand, mutate]);
 
+  const createPayment = useCallback((payment: PaymentTransaction) => {
+    if (!dataReady.current) return;
+    const booking = latestData.current.bookings.find((item) => item.id === payment.bookingId);
+    if (
+      !booking
+      || paymentRecordVersions.current.has(payment.id)
+      || latestData.current.payments.some((item) => item.id === payment.id)
+    ) return;
+    const normalizedPayment = {
+      ...payment,
+      currency: payment.currency ?? booking.currency,
+    };
+
+    if (!cloudConfigured) {
+      mutate((current) => ({
+        ...current,
+        payments: [normalizedPayment, ...current.payments],
+        auditLog: [
+          audit(
+            "payment",
+            payment.id,
+            "created",
+            `${payment.type}: ${payment.amount} ${normalizedPayment.currency ?? "bez waluty"}`,
+          ),
+          ...current.auditLog,
+        ],
+      }));
+      return;
+    }
+    if (!cloudReady.current || !normalizedPayment.currency) return;
+
+    const requestId = typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : uid("REQ");
+    const clientSentAt = new Date().toISOString();
+    const optimisticPayment: PaymentTransaction = {
+      ...normalizedPayment,
+      currency: normalizedPayment.currency,
+      version: 1,
+      updatedAt: clientSentAt,
+    };
+
+    paymentRecordVersions.current.set(payment.id, 1);
+    pendingRecordCommands.current += 1;
+    setData((current) => ({
+      ...current,
+      payments: [optimisticPayment, ...current.payments],
+    }));
+
+    cloudSaveQueue.current = cloudSaveQueue.current.then(async () => {
+      if (!cloudReady.current) {
+        finishRecordCommand();
+        return;
+      }
+      try {
+        const response = await fetch("/api/payments", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            payment: optimisticPayment,
+            requestId,
+            clientSentAt,
+            tabId: tabId.current,
+          }),
+        });
+        if (!response.ok) {
+          setData((current) => ({
+            ...current,
+            payments: current.payments.filter((item) => item.id !== payment.id),
+          }));
+          paymentRecordVersions.current.delete(payment.id);
+          cloudReady.current = false;
+          setSyncMode(response.status === 409 ? "conflict" : "error");
+          if (response.status === 409) {
+            const payload = await response.json().catch(() => ({})) as {
+              currentRecordVersion?: number;
+              detectedAt?: string;
+              requestId?: string;
+            };
+            setSyncConflict({
+              source: "server-rejection",
+              detectedAt: payload.detectedAt ?? new Date().toISOString(),
+              expectedVersion: 0,
+              currentVersion: payload.currentRecordVersion,
+              requestId: payload.requestId ?? requestId,
+              changes: summarizeSyncChanges(baseData.current, latestData.current),
+            });
+          }
+          return;
+        }
+
+        const payload = await response.json() as {
+          payment: PaymentTransaction;
+          recordVersion: number;
+          stateVersion: number;
+          savedAt?: string;
+        };
+        const committedPayment = {
+          ...payload.payment,
+          version: payload.recordVersion,
+        };
+        paymentRecordVersions.current.set(payment.id, payload.recordVersion);
+        stateVersion.current = payload.stateVersion;
+        setData((current) => ({
+          ...current,
+          payments: current.payments.map((item) => item.id === payment.id
+            ? committedPayment
+            : item),
+        }));
+        baseData.current = {
+          ...baseData.current,
+          payments: [
+            committedPayment,
+            ...baseData.current.payments.filter((item) => item.id !== payment.id),
+          ],
+        };
+        setSyncMode("cloud");
+        const savedAt = payload.savedAt ?? new Date().toISOString();
+        setLastSavedAt(savedAt);
+        syncChannel.current?.postMessage({
+          type: "state-committed",
+          tabId: tabId.current,
+          requestId,
+          version: payload.stateVersion,
+          savedAt,
+        } satisfies StateCommittedMessage);
+      } catch {
+        // Po niejednoznacznym błędzie sieci zostawiamy wpis optymistyczny.
+        // Odświeżenie rozstrzygnie, czy idempotentna komenda dotarła do bazy.
+        cloudReady.current = false;
+        setSyncMode("error");
+      } finally {
+        finishRecordCommand();
+      }
+    });
+  }, [finishRecordCommand, mutate]);
+
   const retryDataLoad = useCallback(() => {
     if (!cloudConfigured) return;
     conflictGeneration.current += 1;
@@ -1340,7 +1573,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     copyConflictChanges,
     reloadAfterConflict,
     addBooking: createBooking,
-    updateBooking: (booking, contact) => commitBookingMutation(booking, contact, "updated"),
+    updateBooking: (booking, contact) => commitBookingMutation(booking, contact, "update"),
     cancelBooking: (bookingId) => {
       const booking = latestData.current.bookings.find((item) => item.id === bookingId);
       if (!booking) return;
@@ -1348,50 +1581,36 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       commitBookingMutation(
         { ...booking, workflowStatus: "Anulowana" },
         contact,
-        "cancelled",
+        "cancel",
       );
     },
-    deleteBooking: (bookingId) => mutate((current) => {
+    deleteBooking: (bookingId) => {
+      const booking = latestData.current.bookings.find((item) => item.id === bookingId);
+      if (!booking || booking.deletedAt) return;
       const deletedAt = new Date().toISOString();
-      const next: AppData = {
-        ...current,
-        bookings: current.bookings.map((item) => item.id === bookingId
-          ? {
-            ...item,
-            workflowStatusBeforeDeletion: item.workflowStatus,
-            workflowStatus: "Anulowana",
-            deletedAt,
-            purgeAfter: trashExpiryDate(deletedAt.slice(0, 10)),
-            updatedAt: deletedAt,
-          }
-          : item),
-        tasks: cancelOpenStayTasks(current.tasks, bookingId),
-        auditLog: [audit("booking", bookingId, "deleted", "Przeniesiono rezerwację do kosza na 30 dni"), ...current.auditLog],
-      };
-      next.scheduledMessages = reconcileScheduledMessages(next);
-      return next;
-    }),
-    restoreBooking: (bookingId) => mutate((current) => {
-      const next: AppData = {
-        ...current,
-        bookings: current.bookings.map((item) => item.id === bookingId
-          ? {
-            ...item,
-            workflowStatus: item.workflowStatusBeforeDeletion ?? "Nowa",
-            workflowStatusBeforeDeletion: undefined,
-            deletedAt: undefined,
-            purgeAfter: undefined,
-            updatedAt: new Date().toISOString(),
-          }
-          : item),
-        tasks: current.tasks.map((task) => task.bookingId === bookingId && task.status === "Nie dotyczy"
-          ? { ...task, status: "Do zrobienia", completedAt: undefined }
-          : task),
-        auditLog: [audit("booking", bookingId, "restored", "Przywrócono rezerwację z kosza"), ...current.auditLog],
-      };
-      next.scheduledMessages = reconcileScheduledMessages(next);
-      return next;
-    }),
+      const contact = latestData.current.consents.find((item) => item.bookingId === bookingId);
+      commitBookingMutation({
+        ...booking,
+        workflowStatusBeforeDeletion: booking.workflowStatus,
+        workflowStatus: "Anulowana",
+        deletedAt,
+        purgeAfter: trashExpiryDate(deletedAt.slice(0, 10)),
+        updatedAt: deletedAt,
+      }, contact, "trash");
+    },
+    restoreBooking: (bookingId) => {
+      const booking = latestData.current.bookings.find((item) => item.id === bookingId);
+      if (!booking?.deletedAt || isTrashExpired(booking)) return;
+      const contact = latestData.current.consents.find((item) => item.bookingId === bookingId);
+      commitBookingMutation({
+        ...booking,
+        workflowStatus: booking.workflowStatusBeforeDeletion ?? "Nowa",
+        workflowStatusBeforeDeletion: undefined,
+        deletedAt: undefined,
+        purgeAfter: undefined,
+        updatedAt: new Date().toISOString(),
+      }, contact, "restore");
+    },
     updateTask,
     toggleChecklistItem: updateChecklistItem,
     addIssue: (issue) => mutate((current) => ({
@@ -1467,26 +1686,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       blocks: current.blocks.map((item) => item.id === block.id ? block : item),
       auditLog: [audit("block", block.id, "updated", block.reason), ...current.auditLog],
     })),
-    addPayment: (payment) => mutate((current) => {
-      const booking = current.bookings.find((item) => item.id === payment.bookingId);
-      const normalizedPayment = {
-        ...payment,
-        currency: payment.currency ?? booking?.currency,
-      };
-      return {
-        ...current,
-        payments: [normalizedPayment, ...current.payments],
-        auditLog: [
-          audit(
-            "payment",
-            payment.id,
-            "created",
-            `${payment.type}: ${payment.amount} ${normalizedPayment.currency ?? "bez waluty"}`,
-          ),
-          ...current.auditLog,
-        ],
-      };
-    }),
+    addPayment: createPayment,
     addInvoice: (invoice) => mutate((current) => ({
       ...current,
       invoices: [invoice, ...current.invoices],
@@ -1592,6 +1792,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     copyConflictChanges,
     commitBookingMutation,
     createBooking,
+    createPayment,
     data,
     dataStatus,
     lastSavedAt,

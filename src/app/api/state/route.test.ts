@@ -141,6 +141,13 @@ describe("GET /api/state wersje rekordów agregatu rezerwacji", () => {
         record_version: 2,
         updated_at: "2026-07-25T20:00:00.000Z",
       },
+      {
+        entity_type: "payments",
+        entity_id: "PAYMENT-1",
+        payload: { id: "PAYMENT-1", bookingId: "BOOKING-1", amount: 450 },
+        record_version: 1,
+        updated_at: "2026-07-25T20:00:00.000Z",
+      },
     ];
     const recordsQuery = {
       select: vi.fn(),
@@ -178,6 +185,7 @@ describe("GET /api/state wersje rekordów agregatu rezerwacji", () => {
         bookings: [{ id: "BOOKING-1", version: 4 }],
         consents: [{ bookingId: "BOOKING-1", version: 3 }],
         tasks: [{ id: "TASK-1", version: 6 }],
+        payments: [{ id: "PAYMENT-1", version: 1 }],
         scheduledMessages: [{ id: "SCH-1", version: 2 }],
       },
     });

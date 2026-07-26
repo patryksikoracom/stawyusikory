@@ -95,6 +95,7 @@ export async function GET() {
         || type === "consents"
         || type === "tasks"
         || type === "checklistItems"
+        || type === "payments"
         || type === "scheduledMessages"
       ) {
         (state[type] as unknown[]).push({

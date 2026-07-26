@@ -190,6 +190,7 @@ try {
         adults: 2,
         children: 0,
         guestLabel: `Gość ${id}`,
+        currency: "PLN",
         paymentStatus: "Do uzupełnienia",
         workflowStatus: "Nowa",
         createdBy: "Integration",
@@ -252,8 +253,8 @@ try {
     });
   }
 
-  function updateBookingRpc(aggregate, expectedRecordVersion, tabId) {
-    return userClient.rpc("update_operational_booking", {
+  function updateBookingRpc(aggregate, expectedRecordVersion, tabId, operation = "update") {
+    return userClient.rpc("mutate_operational_booking", {
       p_organization_id: ownOrg,
       p_booking_id: aggregate.booking.id,
       p_expected_record_version: expectedRecordVersion,
@@ -261,7 +262,19 @@ try {
       p_contact: aggregate.contact,
       p_tasks: aggregate.tasks,
       p_scheduled_messages: aggregate.scheduledMessages,
+      p_operation: operation,
       p_request_id: crypto.randomUUID(),
+      p_client_sent_at: new Date().toISOString(),
+      p_tab_id: tabId,
+    });
+  }
+
+  function createPaymentRpc(payment, requestId, tabId) {
+    return userClient.rpc("create_operational_payment", {
+      p_organization_id: ownOrg,
+      p_payment_id: payment.id,
+      p_payment: payment,
+      p_request_id: requestId,
       p_client_sent_at: new Date().toISOString(),
       p_tab_id: tabId,
     });
@@ -280,6 +293,54 @@ try {
   const aggregateReplay = await createBookingRpc(aggregate, aggregateRequestId, "integration-booking-a");
   if (aggregateReplay.error) throw aggregateReplay.error;
   assert(aggregateReplay.data?.status === "already_committed", "Idempotent booking replay was not recognized.");
+
+  console.log("Integration: checking atomic payment posting, replay and conflicting duplicate…");
+  const payment = {
+    id: "PAYMENT-INTEGRATION",
+    bookingId: aggregate.booking.id,
+    occurredAt: "2099-07-26",
+    type: "Wpłata",
+    amount: 450.25,
+    currency: "PLN",
+    status: "Zaksięgowana",
+    method: "Przelew",
+    note: "Wpłata integracyjna",
+  };
+  const paymentRequestId = crypto.randomUUID();
+  const paymentCommit = await createPaymentRpc(
+    payment,
+    paymentRequestId,
+    "integration-payment-a",
+  );
+  if (paymentCommit.error) throw paymentCommit.error;
+  assert(paymentCommit.data?.status === "committed", "Payment was not committed.");
+  assert(Number(paymentCommit.data?.recordVersion) === 1, "Payment has the wrong record version.");
+
+  const paymentReplay = await createPaymentRpc(
+    payment,
+    paymentRequestId,
+    "integration-payment-a",
+  );
+  if (paymentReplay.error) throw paymentReplay.error;
+  assert(paymentReplay.data?.status === "already_committed", "Idempotent payment replay was not recognized.");
+
+  const paymentConflict = await createPaymentRpc(
+    { ...payment, amount: 451 },
+    crypto.randomUUID(),
+    "integration-payment-conflict",
+  );
+  if (paymentConflict.error) throw paymentConflict.error;
+  assert(paymentConflict.data?.status === "conflict", "Conflicting duplicate payment was not rejected.");
+
+  const currencyMismatch = await createPaymentRpc(
+    { ...payment, id: "PAYMENT-WRONG-CURRENCY", currency: "EUR" },
+    crypto.randomUUID(),
+    "integration-payment-currency",
+  );
+  assert(
+    currencyMismatch.error?.code === "22023",
+    "Payment currency mismatch was not rejected by the database.",
+  );
 
   const duplicateBooking = await createBookingRpc(aggregate, crypto.randomUUID(), "integration-booking-duplicate");
   if (duplicateBooking.error) throw duplicateBooking.error;
@@ -364,25 +425,112 @@ try {
     `Concurrent booking race was not serialized: ${raceStatuses.join(", ")}`,
   );
 
-  const cancelledAggregate = {
+  const deletedAt = new Date().toISOString();
+  const purgeAfterDate = new Date(`${deletedAt.slice(0, 10)}T12:00:00.000Z`);
+  purgeAfterDate.setUTCDate(purgeAfterDate.getUTCDate() + 30);
+  const trashedAggregate = {
     ...updatedAggregate,
     booking: {
       ...updatedAggregate.booking,
       workflowStatus: "Anulowana",
+      workflowStatusBeforeDeletion: updatedAggregate.booking.workflowStatus,
+      deletedAt,
+      purgeAfter: purgeAfterDate.toISOString().slice(0, 10),
       version: 3,
     },
     contact: { ...updatedAggregate.contact, version: 3 },
-    tasks: updatedAggregate.tasks.map((task) => ({ ...task, status: "Nie dotyczy", version: 3 })),
-    scheduledMessages: updatedAggregate.scheduledMessages.map((message) => ({ ...message, status: "Anulowana", version: 3 })),
+    tasks: updatedAggregate.tasks.map((task) => ({
+      ...task,
+      statusBeforeBookingDeletion: task.status,
+      status: "Nie dotyczy",
+      version: 3,
+    })),
+    scheduledMessages: updatedAggregate.scheduledMessages.map((message) => ({
+      ...message,
+      statusBeforeBookingDeletion: message.status,
+      bookingFingerprintBeforeDeletion: message.bookingFingerprint,
+      status: "Anulowana",
+      version: 3,
+    })),
   };
-  const cancelCommit = await updateBookingRpc(cancelledAggregate, 2, "integration-booking-cancel");
+  const trashCommit = await updateBookingRpc(
+    trashedAggregate,
+    2,
+    "integration-booking-trash",
+    "trash",
+  );
+  if (trashCommit.error) throw trashCommit.error;
+  assert(trashCommit.data?.status === "committed", "Booking trash command was not committed.");
+  assert(trashCommit.data?.aggregate?.booking?.deletedAt === deletedAt, "Booking did not enter trash.");
+  assert(
+    trashCommit.data?.aggregate?.tasks?.[0]?.statusBeforeBookingDeletion === "Do zrobienia",
+    "Booking task status was not preserved for restore.",
+  );
+
+  const restoredAggregate = {
+    ...trashCommit.data.aggregate,
+    booking: {
+      ...trashCommit.data.aggregate.booking,
+      workflowStatus: trashCommit.data.aggregate.booking.workflowStatusBeforeDeletion,
+      workflowStatusBeforeDeletion: undefined,
+      deletedAt: undefined,
+      purgeAfter: undefined,
+      version: 4,
+    },
+    contact: { ...trashCommit.data.aggregate.contact, version: 4 },
+    tasks: trashCommit.data.aggregate.tasks.map((task) => ({
+      ...task,
+      status: task.statusBeforeBookingDeletion,
+      statusBeforeBookingDeletion: undefined,
+      version: 4,
+    })),
+    scheduledMessages: trashCommit.data.aggregate.scheduledMessages.map((message) => ({
+      ...message,
+      status: message.statusBeforeBookingDeletion,
+      bookingFingerprint: message.bookingFingerprintBeforeDeletion,
+      statusBeforeBookingDeletion: undefined,
+      bookingFingerprintBeforeDeletion: undefined,
+      version: 4,
+    })),
+  };
+  const restoreCommit = await updateBookingRpc(
+    restoredAggregate,
+    3,
+    "integration-booking-restore",
+    "restore",
+  );
+  if (restoreCommit.error) throw restoreCommit.error;
+  assert(restoreCommit.data?.status === "committed", "Booking restore command was not committed.");
+  assert(!restoreCommit.data?.aggregate?.booking?.deletedAt, "Booking remained in trash after restore.");
+  assert(
+    restoreCommit.data?.aggregate?.tasks?.[0]?.status === "Do zrobienia",
+    "Booking task status was not restored.",
+  );
+
+  const cancelledAggregate = {
+    ...restoredAggregate,
+    booking: {
+      ...restoredAggregate.booking,
+      workflowStatus: "Anulowana",
+      version: 5,
+    },
+    contact: { ...restoredAggregate.contact, version: 5 },
+    tasks: restoredAggregate.tasks.map((task) => ({ ...task, status: "Nie dotyczy", version: 5 })),
+    scheduledMessages: restoredAggregate.scheduledMessages.map((message) => ({ ...message, status: "Anulowana", version: 5 })),
+  };
+  const cancelCommit = await updateBookingRpc(
+    cancelledAggregate,
+    4,
+    "integration-booking-cancel",
+    "cancel",
+  );
   if (cancelCommit.error) throw cancelCommit.error;
   assert(cancelCommit.data?.status === "committed", "Booking cancellation was not committed.");
   assert(cancelCommit.data?.aggregate?.booking?.workflowStatus === "Anulowana", "Booking was not cancelled.");
   assert(cancelCommit.data?.aggregate?.tasks?.[0]?.status === "Nie dotyczy", "Stay task was not cancelled.");
   assert(cancelCommit.data?.aggregate?.scheduledMessages?.[0]?.status === "Anulowana", "Scheduled message was not cancelled.");
 
-  const [records, writeTelemetry, taskTelemetry, checklistTelemetry, bookingTelemetry, scheduledRows] = await Promise.all([
+  const [records, writeTelemetry, taskTelemetry, checklistTelemetry, bookingTelemetry, paymentTelemetry, scheduledRows] = await Promise.all([
     userClient.from("operational_records").select("entity_type,entity_id,record_version,payload"),
     userClient
       .from("audit_events")
@@ -404,6 +552,10 @@ try {
       .select("entity_id,action,payload")
       .eq("entity_type", "booking"),
     userClient
+      .from("audit_events")
+      .select("entity_id,action,payload")
+      .eq("entity_type", "payment"),
+    userClient
       .from("scheduled_messages")
       .select("id,booking_id,status"),
   ]);
@@ -412,6 +564,7 @@ try {
   if (taskTelemetry.error) throw taskTelemetry.error;
   if (checklistTelemetry.error) throw checklistTelemetry.error;
   if (bookingTelemetry.error) throw bookingTelemetry.error;
+  if (paymentTelemetry.error) throw paymentTelemetry.error;
   if (scheduledRows.error) throw scheduledRows.error;
   assert(records.data.some((record) => record.entity_type === "units" && record.entity_id === "test-unit"), "Normalized records were not persisted.");
   const taskRecords = records.data.filter((record) => record.entity_type === "tasks" && record.entity_id.startsWith("test-task-"));
@@ -424,13 +577,41 @@ try {
   assert(checklistRecords.length === 100, "Not all checklist records survived parallel updates.");
   assert(checklistRecords.every((record) => Number(record.record_version) === 2 && record.payload.done === true), "Parallel checklist records have inconsistent versions or payloads.");
   assert(checklistTelemetry.data.length === 100, "Checklist command audit is incomplete.");
-  assert(bookingTelemetry.data.filter((event) => event.action === "command_committed").length === 4, "Booking commit audit is incomplete.");
+  const paymentRecord = records.data.find(
+    (record) => record.entity_type === "payments" && record.entity_id === payment.id,
+  );
+  assert(
+    Number(paymentRecord?.record_version) === 1
+      && paymentRecord?.payload?.amount === payment.amount,
+    "Payment ledger record is missing or inconsistent.",
+  );
+  assert(
+    paymentTelemetry.data.some(
+      (event) => event.entity_id === payment.id && event.action === "command_committed",
+    )
+      && paymentTelemetry.data.some(
+        (event) => event.entity_id === payment.id && event.action === "command_conflict",
+      ),
+    "Payment commit/conflict audit is incomplete.",
+  );
+  assert(bookingTelemetry.data.filter((event) => event.action === "command_committed").length === 6, "Booking commit audit is incomplete.");
+  assert(
+    bookingTelemetry.data.some(
+      (event) => event.action === "lifecycle_committed"
+        && event.payload?.command_kind === "trash",
+    )
+      && bookingTelemetry.data.some(
+        (event) => event.action === "lifecycle_committed"
+          && event.payload?.command_kind === "restore",
+      ),
+    "Booking trash/restore audit kinds are missing.",
+  );
   assert(bookingTelemetry.data.filter((event) => event.action === "command_conflict").length >= 6, "Booking conflict audit is incomplete.");
   assert(
     scheduledRows.data.some((row) => row.booking_id === aggregate.booking.id && row.status === "Anulowana"),
     "Scheduled-message execution row was not reconciled with the cancelled booking.",
   );
-  console.log("Supabase integration test passed: Auth, RLS, record persistence, two-session protection, 100 parallel record updates, atomic booking create/update/cancel, replay, availability conflicts, race serialization, and command audit.");
+  console.log("Supabase integration test passed: Auth, RLS, record persistence, two-session protection, 100 parallel record updates, atomic booking lifecycle, idempotent payment posting, availability conflicts, race serialization, and command audit.");
 } finally {
   console.log("Integration: cleaning temporary data…");
   await userClient.auth.signOut().catch(() => undefined);

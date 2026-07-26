@@ -37,7 +37,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   }
 
   const { aggregate } = parsed.data;
-  const { data, error } = await context.supabase.rpc("update_operational_booking", {
+  const { data, error } = await context.supabase.rpc("mutate_operational_booking", {
     p_organization_id: context.organizationId,
     p_booking_id: id,
     p_expected_record_version: parsed.data.expectedRecordVersion,
@@ -45,6 +45,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     p_contact: aggregate.contact ?? null,
     p_tasks: aggregate.tasks,
     p_scheduled_messages: aggregate.scheduledMessages,
+    p_operation: parsed.data.operation,
     p_request_id: parsed.data.requestId,
     p_client_sent_at: parsed.data.clientSentAt,
     p_tab_id: parsed.data.tabId,

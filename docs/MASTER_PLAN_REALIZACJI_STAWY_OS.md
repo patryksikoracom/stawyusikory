@@ -44,7 +44,9 @@ Commit, push i deployment są osobnymi decyzjami. Samo ukończenie lokalnej pacz
 | PR-8b / Etap 3.3 | **wdrożony online 25.07.2026** | wersjonowana komenda `PATCH /api/checklist-items/:id`, transakcyjny audyt, szybkie kolejne kliknięcia bez regresji i bezpieczne odświeżenie po sygnale z drugiej karty; 162 testy przechodzą |
 | PR-8c / Etap 3.4 | **wdrożony online 25.07.2026** | `POST /api/bookings` tworzy atomowo rezerwację, kontakt, zadania, checklistę i szkice komunikacji; blokada per domek chroni przed równoległym double-bookingiem, a request ID zapewnia idempotencję |
 | PR-8d / Etap 3.5 | **wdrożony online 26.07.2026** | `PATCH /api/bookings/:id` aktualizuje lub anuluje rezerwację razem z kontaktem, zadaniami i szkicami wiadomości; wersje rekordów, blokady domków, audyt oraz zero pełnego `PUT` są pokryte testami |
-| Etap 3 jako całość | **otwarty** | PR-7 zabezpiecza przejściowy zapis pełnego stanu; PR-8a–PR-8d przenoszą zadania, checklistę oraz tworzenie, aktualizację i anulowanie rezerwacji na komendy domenowe. Próby integracyjne są przygotowane, ale wymagają odizolowanego Supabase; kosz/przywracanie rezerwacji, płatności i ustawienia nadal używają ścieżki przejściowej |
+| PR-8e1 / Etap 3.6 | **implementacja lokalna gotowa do ręcznej akceptacji 26.07.2026** | kosz i przywracanie rezerwacji używają jawnej operacji w atomowej komendzie agregatu; zachowują statusy zadań i wiadomości, blokują wygasłe/kolizyjne przywrócenie i nie wykonują pełnego `PUT` |
+| PR-8e2 / Etap 3.7 | **implementacja lokalna gotowa do ręcznej akceptacji 26.07.2026** | `POST /api/payments` księguje pojedynczą, walidowaną i idempotentną transakcję; konflikt identyfikatora, waluta, źródła kosztów/prowizji, wersja stanu i audyt są obsłużone bez pełnego `PUT` |
+| Etap 3 jako całość | **otwarty** | PR-7 zabezpiecza przejściowy zapis pełnego stanu; PR-8a–PR-8e2 przenoszą zadania, checklistę, pełny cykl rezerwacji i księgowanie płatności na komendy domenowe. Próba integracyjna jest rozszerzona, ale wymaga odizolowanego Supabase; ustawienia nadal używają ścieżki przejściowej |
 
 ## Bramka wydania: MVP operatora dla taty
 
@@ -81,7 +83,9 @@ Test taty z 25.07.2026 zmienia priorytet interfejsu operatora: kalendarz, wolne 
 | 10b | Etap 3 — zapis domenowy | **PR-8b — wdrożony online** | wersjonowana aktualizacja punktu checklisty bez pełnego snapshotu | migracja online; testy regresji przechodzą |
 | 10c | Etap 3 — zapis domenowy | **PR-8c — wdrożony online** | atomowe utworzenie agregatu rezerwacji bez pełnego snapshotu | migracja online; pełny test równoległości pozostaje dla odizolowanego środowiska |
 | 10d | Etap 3 — zapis domenowy | **PR-8d — wdrożony online** | wersjonowana aktualizacja/anulowanie rezerwacji wraz z kontaktem, zadaniami i szkicami wiadomości | migracja i bezpieczny smoke RPC online; 204 testy oraz produkcyjny smoke przechodzą |
-| 10e | Etap 3 — zapis domenowy | PR-8e… | kosz/przywracanie rezerwacji, płatności, ustawienia i odejście od pełnego snapshotu | migracja etapami; każdy pod-PR osobno |
+| 10e | Etap 3 — zapis domenowy | **PR-8e1 — gotowy lokalnie** | kosz/przywracanie rezerwacji bez pełnego snapshotu | migracja i test integracyjny na odizolowanym Supabase przed publikacją |
+| 10f | Etap 3 — zapis domenowy | **PR-8e2 — gotowy lokalnie** | księgowanie płatności bez pełnego snapshotu | migracja i test integracyjny na odizolowanym Supabase przed publikacją |
+| 10g | Etap 3 — zapis domenowy | PR-8e3… | ustawienia i dalsze odejście od pełnego snapshotu | osobna wersjonowana komenda i test konfliktu |
 | 11 | Etap 4 — organizacje i role | PR-9a | active organization, role, RLS i izolacja PII/finansów | dwie organizacje i role przechodzą testy negatywne |
 | 12 | Etap 4 — operacje zespołu | PR-9b | zlecenia sprzątania, przyjęcie, checklisty per domek i eskalacja | sprzątająca wykonuje pełny turnover bez dostępu do PII/finansów |
 | 13 | Etap 4 — zgodność operacyjna | PR-9c | procedura małoletnich wynikająca z zatwierdzonego SOP i minimalizacja danych | zapisuje się wykonanie procedury, nie zbędne dane dziecka |
@@ -292,7 +296,52 @@ Migracje PR-7–PR-8c działają online. Pełny test tworzenia, idempotencji i w
 - pełny audyt nadal zgłasza 9 ostrzeżeń wysokiego poziomu wyłącznie w narzędziach deweloperskich ESLint/minimatch; brak bezpiecznej poprawki zgodnej z obecną konfiguracją, a lint, TypeScript, testy i build przechodzą;
 - pełny destrukcyjny scenariusz integracyjny nie został uruchomiony przeciwko bazie operacyjnej; pozostaje przygotowany wyłącznie dla odizolowanego projektu testowego.
 
-PR-7–PR-8d działają online. Następny mały wycinek Etapu 3 powinien objąć kosz/przywracanie rezerwacji albo księgowanie płatności; ustawienia pozostają kolejną osobną komendą. Pełne próby wyścigów i sprzątania danych nadal wykonujemy wyłącznie na dedykowanym Supabase.
+## Gotowy lokalnie PR-8e1 — kosz i przywracanie rezerwacji
+
+### Zakres
+
+- przeniesienie do kosza i przywrócenie przechodzą przez `PATCH /api/bookings/:id` z jawną operacją `trash` lub `restore`, bez pełnego `PUT /api/state`;
+- jedna wersjonowana komenda uzgadnia rezerwację, otwarte zadania pobytowe, szkice komunikacji i wykonawczą tabelę `scheduled_messages`;
+- kosz zachowuje poprzedni status wyłącznie tych zadań, które sam zmienia na `Nie dotyczy`; przywrócenie nie otwiera ponownie zadań już wykonanych, naprawczych ani wcześniej oznaczonych jako nieobowiązujące;
+- szkice komunikacji odzyskują dokładny status i fingerprint sprzed usunięcia, a historia wiadomości wysłanych lub dostarczonych pozostaje bez zmian;
+- przywrócenie jest blokowane po upływie 30 dni, przy niezgodnym stanie kosza, konflikcie wersji lub konflikcie dostępności;
+- funkcja opakowująca korzysta z istniejącej atomowej komendy PR-8d i dopisuje osobne zdarzenie `lifecycle_committed`, bez rozszerzania uprawnień do modyfikacji audytu;
+- polityka RLS audytu jawnie dopuszcza zdarzenia `related_record_conflict` i `lifecycle_committed`, więc ścieżki konfliktu i kosza nie wycofują całej transakcji przez niedozwolony wpis audytowy.
+
+### Walidacja
+
+- **210/210 testów automatycznych**, lint, TypeScript, kontrola konfiguracji Auth i produkcyjny build przechodzą;
+- test store wykonuje pełny cykl kosz → przywrócenie, sprawdza dokładne statusy zadań i wiadomości oraz zero `PUT /api/state`;
+- testy kontraktu API i domeny obejmują dozwolone operacje, wymagane pola kosza, zakaz modyfikacji pól cyklu życia przez zwykłą edycję oraz błędny stan przywrócenia;
+- test statyczny migracji pilnuje `security invoker`, pustego `search_path`, odebrania wykonania `public/anon`, delegowania do atomowej komendy PR-8d, audytu append-only i zakazu `UPDATE public.audit_events`;
+- rozszerzony skrypt integracyjny obejmuje create → update → trash → restore → cancel, zachowanie statusów oraz zdarzenia audytowe;
+- test przeglądarkowy potwierdza pełny cykl kosz → przywrócenie na desktopie oraz formularz usunięcia na szerokości telefonu bez błędów konsoli, error overlay i poziomego overflow;
+- migracja i destrukcyjny test integracyjny nie zostały uruchomione przeciwko bazie operacyjnej; przed publikacją wymagają odizolowanego projektu Supabase.
+
+## Gotowy lokalnie PR-8e2 — księgowanie płatności
+
+### Zakres
+
+- dodanie wpisu do ledgera przechodzi przez `POST /api/payments`, bez pełnego `PUT /api/state`;
+- Zod i Postgres niezależnie walidują identyfikatory, datę, dodatnią kwotę z dokładnością do grosza, walutę PLN/EUR, status zaksięgowania i limity pól;
+- koszt i prowizja wymagają źródła, domku oraz właściwej kategorii; opcjonalne powiązanie z modelem kosztowym musi istnieć w tej samej organizacji;
+- rezerwacja musi istnieć, a waluta i domek transakcji muszą być zgodne z rezerwacją;
+- identyfikator transakcji jest granicą idempotencji: powtórzenie identycznego payloadu zwraca istniejący rekord bez zwiększenia wersji, a inna treść pod tym samym ID daje kontrolowany konflikt;
+- pojedyncza transakcja, wersja stanu organizacji i audyt `command_committed` albo `command_conflict` powstają atomowo; funkcja jest `security invoker` z wykonaniem wyłącznie dla `authenticated`;
+- `/api/state` przekazuje rzeczywistą wersję rekordu płatności, a klient wykonuje optymistyczny zapis bez uruchamiania ścieżki przejściowej.
+
+### Walidacja
+
+- **230/230 testów automatycznych**, lint, TypeScript, kontrola konfiguracji Auth i produkcyjny build 33 tras przechodzą;
+- test store księguje transakcję przez `POST /api/payments`, blokuje ponowne wysłanie tego samego ID i potwierdza zero `PUT /api/state`;
+- testy API i domeny obejmują replay, konflikt ID, brak rezerwacji/modelu kosztowego, rolę viewer, limit payloadu, błędną kwotę, walutę, status oraz brak dowodu kosztu;
+- test statyczny migracji pilnuje `security invoker`, pustego `search_path`, zawężonego `EXECUTE`, relacji, idempotencji, audytu i zakazu zapisu pełnego snapshotu;
+- skrypt integracyjny obejmuje commit płatności, bezpieczny replay, konflikt zmienionej kwoty, konflikt waluty oraz weryfikację rekordu i audytu;
+- test przeglądarkowy na rezerwacji 1350 PLN potwierdził zmianę z 300 PLN wpłaconych i 1050 PLN salda na 700 PLN wpłaconych i 650 PLN salda po transakcji 400 PLN;
+- widok desktop i telefon 367 px przechodzi bez błędów konsoli, error overlay i poziomego overflow;
+- migracja i destrukcyjny test integracyjny nie zostały uruchomione przeciwko bazie operacyjnej; przed publikacją wymagają odizolowanego projektu Supabase.
+
+PR-7–PR-8d działają online, a PR-8e1–PR-8e2 są gotowe lokalnie. Następny mały wycinek Etapu 3 powinien objąć wersjonowany zapis ustawień organizacji. Przed publikacją obu lokalnych paczek trzeba zastosować migracje w kolejności i wykonać rozszerzoną próbę integracyjną wyłącznie na dedykowanym Supabase. Pełne próby wyścigów i sprzątania danych nadal wykonujemy wyłącznie na takim środowisku.
 
 ## Pełne przypisanie ustaleń z walkthrough
 
