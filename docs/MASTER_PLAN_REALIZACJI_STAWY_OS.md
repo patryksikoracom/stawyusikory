@@ -350,7 +350,7 @@ Migracje PR-7–PR-8c działają online. Pełny test tworzenia, idempotencji i w
 - produkcja Vercel dla commitu `55cf319` jest `READY`; niezalogowane wywołanie nowego endpointu jest poprawnie blokowane przekierowaniem do logowania, a monitoring nie zgłasza błędów runtime;
 - destrukcyjny test integracyjny nie został uruchomiony przeciwko bazie operacyjnej i pozostaje zarezerwowany dla odizolowanego projektu Supabase.
 
-## Gotowy lokalnie PR-8e3 — wersjonowany zapis ustawień organizacji
+## Wdrożony online PR-8e3 — wersjonowany zapis ustawień organizacji
 
 ### Zakres
 
@@ -369,9 +369,10 @@ Migracje PR-7–PR-8c działają online. Pełny test tworzenia, idempotencji i w
 - test statyczny migracji pilnuje `security invoker`, pustego `search_path`, zawężonego `EXECUTE`, pojedynczego rekordu, audytu i zakazu zapisu snapshotu;
 - skrypt integracyjny obejmuje commit, konflikt, rekord wersji 2 i oba zdarzenia audytowe, ale pozostaje do uruchomienia wyłącznie na odizolowanym Supabase;
 - smoke test `/settings` przechodzi na desktopie i przy rzeczywistej szerokości 390 px bez błędów konsoli, error overlay i poziomego overflow; walidacja pustej nazwy nie wywołuje zapisu;
-- migracja `20260726163800_update_operational_settings` nie została zastosowana online, a zapis operacyjny nie był używany do destrukcyjnej próby.
+- migracja `20260726163800_update_operational_settings` została zastosowana online; funkcja działa jako `security invoker`, ma pusty `search_path`, dostęp dla `authenticated` i brak `EXECUTE` dla `anon`;
+- niezalogowane wywołanie endpointu jest poprawnie blokowane przekierowaniem do logowania, a baza operacyjna nie była używana do destrukcyjnej próby.
 
-## Gotowy lokalnie PR-8e4a — wersjonowane blokady kalendarza
+## Wdrożony online PR-8e4a — wersjonowane blokady kalendarza
 
 ### Zakres
 
@@ -392,7 +393,8 @@ Migracje PR-7–PR-8c działają online. Pełny test tworzenia, idempotencji i w
 - test statyczny migracji pilnuje `security invoker`, pustego `search_path`, zawężonego `EXECUTE`, blokad doradczych, konfliktów dostępności, audytu i zakazu zapisu snapshotu;
 - skrypt integracyjny obejmuje commit, replay, anulowanie, konflikt starej wersji i wyścig rezerwacja↔blokada, ale pozostaje do uruchomienia wyłącznie na odizolowanym Supabase;
 - smoke test `/calendar` przechodzi na desktopie i przy rzeczywistej szerokości 390 px bez błędów konsoli, error overlay i poziomego overflow; walidacja pustego powodu nie wywołuje zapisu;
-- migracja `20260726165207_mutate_operational_calendar_blocks` nie została zastosowana online, a formularz nie zapisał danych podczas niedestrukcyjnej próby przeglądarkowej.
+- migracja `20260726165207_mutate_operational_calendar_blocks` została zastosowana online; funkcja działa jako `security invoker`, ma pusty `search_path`, dostęp dla `authenticated` i brak `EXECUTE` dla `anon`;
+- niezalogowane wywołanie endpointu jest poprawnie blokowane przekierowaniem do logowania, a formularz nie zapisał danych podczas niedestrukcyjnej próby przeglądarkowej.
 
 ## Domknięcie zbiorczego PR-8 — wszystkie pozostałe mutacje
 
@@ -406,7 +408,7 @@ Migracje PR-7–PR-8c działają online. Pełny test tworzenia, idempotencji i w
 
 Walidacja zbiorcza: **289/289 testów**, lint, TypeScript, kontrola składni skryptu integracyjnego i produkcyjny build 33 tras przechodzą. Testy obejmują kontrakt batcha, role, limit payloadu, bezpieczne błędy, commit, replay, konflikt wersji, audyt, brak snapshotu i mapę wersji. Rozszerzony test integracyjny jest przygotowany, lecz nie został uruchomiony: lokalny Docker/Supabase nie działa, a baza operacyjna nie jest miejscem do destrukcyjnej próby.
 
-PR-7–PR-8e2 działają online. PR-8e1 i PR-8e2 są zapisane w commicie `55cf319`, na backup branchu `agent/pr8e1-e2-release` i w draft PR #20. Lokalna końcówka zbiorczego PR-8 obejmuje PR-8e3, PR-8e4a oraz komendę batchową i czeka na jedną decyzję o commicie, publikacji trzech migracji oraz wdrożeniu. Zakres PR-8 jest zamknięty; nie tworzymy kolejnych podpaczek ani rund ulepszeń.
+Cały zbiorczy PR-8 działa online. Migracje ustawień, blokad kalendarza i komendy batchowej zostały zastosowane na produkcyjnym Supabase, a uprawnienia potwierdzono bez zapisu danych: nowe RPC są dostępne dla `authenticated`, niedostępne dla `anon`, a stare `replace_operational_state*` nie są wykonywalne przez aplikację. PR #20 został zmergowany do `main` jako commit `1ddfcd6`; produkcyjne wdrożenie Vercel `dpl_GSLrg9Nu4z49xgF5LNzwi8YDARmM` jest `READY` pod `stawyusikory.vercel.app`. Login, przekierowania chronionych tras, konsola przeglądarki i monitoring runtime przechodzą bez błędów. Zakres PR-8 jest zamknięty; nie tworzymy kolejnych podpaczek ani rund ulepszeń.
 
 ## Pełne przypisanie ustaleń z walkthrough
 
