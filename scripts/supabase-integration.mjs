@@ -174,6 +174,40 @@ try {
   assert(sameChecklistConflict.data?.status === "conflict", "A stale update of the same checklist item was not rejected.");
   assert(Number(sameChecklistConflict.data?.recordVersion) === 2, "The checklist conflict did not return the current record version.");
 
+  console.log("Integration: checking versioned organization settings and conflict protection…");
+  const updatedSettings = {
+    ...state.settings,
+    organizationName: "Test po zmianie",
+    cleaningContactName: "Anna",
+  };
+  const settingsCommit = await userClient.rpc("update_operational_settings", {
+    p_organization_id: ownOrg,
+    p_expected_record_version: 1,
+    p_settings: updatedSettings,
+    p_request_id: crypto.randomUUID(),
+    p_client_sent_at: new Date().toISOString(),
+    p_tab_id: "integration-settings-a",
+  });
+  if (settingsCommit.error) throw settingsCommit.error;
+  assert(settingsCommit.data?.status === "committed", "Settings were not committed.");
+  assert(Number(settingsCommit.data?.recordVersion) === 2, "Settings received the wrong record version.");
+  assert(
+    settingsCommit.data?.settings?.organizationName === "Test po zmianie",
+    "Committed settings payload is inconsistent.",
+  );
+
+  const settingsConflict = await userClient.rpc("update_operational_settings", {
+    p_organization_id: ownOrg,
+    p_expected_record_version: 1,
+    p_settings: { ...updatedSettings, organizationName: "Nieaktualna zmiana" },
+    p_request_id: crypto.randomUUID(),
+    p_client_sent_at: new Date().toISOString(),
+    p_tab_id: "integration-settings-conflict",
+  });
+  if (settingsConflict.error) throw settingsConflict.error;
+  assert(settingsConflict.data?.status === "conflict", "A stale settings update was not rejected.");
+  assert(Number(settingsConflict.data?.recordVersion) === 2, "Settings conflict returned the wrong record version.");
+
   function bookingAggregate(id, checkIn, checkOut, arrivalTime = "16:00", departureTime = "11:00") {
     const taskId = `${id}-clean`;
     return {
@@ -274,6 +308,25 @@ try {
       p_organization_id: ownOrg,
       p_payment_id: payment.id,
       p_payment: payment,
+      p_request_id: requestId,
+      p_client_sent_at: new Date().toISOString(),
+      p_tab_id: tabId,
+    });
+  }
+
+  function mutateBlockRpc(
+    block,
+    operation,
+    expectedRecordVersion,
+    requestId,
+    tabId,
+  ) {
+    return userClient.rpc("mutate_operational_calendar_block", {
+      p_organization_id: ownOrg,
+      p_operation: operation,
+      p_block_id: block.id,
+      p_expected_record_version: expectedRecordVersion,
+      p_block: block,
       p_request_id: requestId,
       p_client_sent_at: new Date().toISOString(),
       p_tab_id: tabId,
@@ -425,6 +478,127 @@ try {
     `Concurrent booking race was not serialized: ${raceStatuses.join(", ")}`,
   );
 
+  console.log("Integration: checking calendar-block create, replay, conflict, cancellation and booking race…");
+  const overlappingBlock = {
+    id: "BLOCK-BOOKING-CONFLICT",
+    unitId: "test-unit",
+    dateFrom: "2099-08-11",
+    dateTo: "2099-08-12",
+    blockType: "Serwis",
+    reason: "Konflikt z rezerwacją",
+    status: "Aktywna",
+    version: 1,
+  };
+  const overlappingBlockResult = await mutateBlockRpc(
+    overlappingBlock,
+    "create",
+    0,
+    crypto.randomUUID(),
+    "integration-block-booking-conflict",
+  );
+  if (overlappingBlockResult.error) throw overlappingBlockResult.error;
+  assert(
+    overlappingBlockResult.data?.status === "availability_conflict"
+      && overlappingBlockResult.data?.conflictType === "booking",
+    "A calendar block overlapping a booking was not rejected.",
+  );
+
+  const calendarBlock = {
+    id: "BLOCK-INTEGRATION",
+    unitId: "test-unit",
+    dateFrom: "2099-11-10",
+    dateTo: "2099-11-12",
+    blockType: "Remont",
+    reason: "Testowa blokada wersjonowana",
+    status: "Aktywna",
+    version: 1,
+  };
+  const blockRequestId = crypto.randomUUID();
+  const blockCommit = await mutateBlockRpc(
+    calendarBlock,
+    "create",
+    0,
+    blockRequestId,
+    "integration-block-create",
+  );
+  if (blockCommit.error) throw blockCommit.error;
+  assert(blockCommit.data?.status === "committed", "Calendar block was not committed.");
+  assert(Number(blockCommit.data?.recordVersion) === 1, "Calendar block has the wrong initial version.");
+
+  const blockReplay = await mutateBlockRpc(
+    calendarBlock,
+    "create",
+    0,
+    blockRequestId,
+    "integration-block-create",
+  );
+  if (blockReplay.error) throw blockReplay.error;
+  assert(blockReplay.data?.status === "already_committed", "Calendar block replay was not recognized.");
+
+  const cancelledBlock = {
+    ...calendarBlock,
+    status: "Anulowana",
+    version: 2,
+  };
+  const blockCancel = await mutateBlockRpc(
+    cancelledBlock,
+    "update",
+    1,
+    crypto.randomUUID(),
+    "integration-block-cancel",
+  );
+  if (blockCancel.error) throw blockCancel.error;
+  assert(blockCancel.data?.status === "committed", "Calendar block cancellation was not committed.");
+  assert(Number(blockCancel.data?.recordVersion) === 2, "Calendar block cancellation has the wrong version.");
+
+  const blockStaleUpdate = await mutateBlockRpc(
+    { ...calendarBlock, reason: "Nieaktualna zmiana", version: 2 },
+    "update",
+    1,
+    crypto.randomUUID(),
+    "integration-block-stale",
+  );
+  if (blockStaleUpdate.error) throw blockStaleUpdate.error;
+  assert(blockStaleUpdate.data?.status === "conflict", "A stale calendar-block update was not rejected.");
+  assert(Number(blockStaleUpdate.data?.recordVersion) === 2, "Block conflict returned the wrong version.");
+
+  const blockRaceBooking = bookingAggregate(
+    "BOOKING-BLOCK-RACE",
+    "2099-12-10",
+    "2099-12-12",
+  );
+  const blockRaceBlock = {
+    id: "BLOCK-RACE",
+    unitId: "test-unit",
+    dateFrom: "2099-12-10",
+    dateTo: "2099-12-12",
+    blockType: "Właściciel",
+    reason: "Wyścig blokady z rezerwacją",
+    status: "Aktywna",
+    version: 1,
+  };
+  const blockRaceResults = await Promise.all([
+    createBookingRpc(
+      blockRaceBooking,
+      crypto.randomUUID(),
+      "integration-booking-block-race",
+    ),
+    mutateBlockRpc(
+      blockRaceBlock,
+      "create",
+      0,
+      crypto.randomUUID(),
+      "integration-block-race",
+    ),
+  ]);
+  for (const result of blockRaceResults) if (result.error) throw result.error;
+  const blockRaceStatuses = blockRaceResults.map((result) => result.data?.status).sort();
+  assert(
+    JSON.stringify(blockRaceStatuses)
+      === JSON.stringify(["availability_conflict", "committed"]),
+    `Booking/block race was not serialized: ${blockRaceStatuses.join(", ")}`,
+  );
+
   const deletedAt = new Date().toISOString();
   const purgeAfterDate = new Date(`${deletedAt.slice(0, 10)}T12:00:00.000Z`);
   purgeAfterDate.setUTCDate(purgeAfterDate.getUTCDate() + 30);
@@ -530,7 +704,48 @@ try {
   assert(cancelCommit.data?.aggregate?.tasks?.[0]?.status === "Nie dotyczy", "Stay task was not cancelled.");
   assert(cancelCommit.data?.aggregate?.scheduledMessages?.[0]?.status === "Anulowana", "Scheduled message was not cancelled.");
 
-  const [records, writeTelemetry, taskTelemetry, checklistTelemetry, bookingTelemetry, paymentTelemetry, scheduledRows] = await Promise.all([
+  const batchIssue = {
+    id: "integration-batch-issue",
+    title: "Test komendy batchowej",
+    status: "Otwarte",
+    createdAt: new Date().toISOString(),
+  };
+  const batchRpc = (changes, requestId) => userClient.rpc("mutate_operational_record_batch", {
+    p_organization_id: ownOrg,
+    p_changes: changes,
+    p_request_id: requestId,
+    p_client_sent_at: new Date().toISOString(),
+    p_tab_id: "integration-tab-batch",
+  });
+  const batchCreateChanges = [{
+    entityType: "issues",
+    entityId: batchIssue.id,
+    operation: "upsert",
+    expectedRecordVersion: 0,
+    payload: batchIssue,
+  }];
+  const batchCreate = await batchRpc(batchCreateChanges, "integration-batch-create");
+  if (batchCreate.error) throw batchCreate.error;
+  assert(batchCreate.data?.status === "committed", "Record batch create was not committed.");
+  const batchReplay = await batchRpc(batchCreateChanges, "integration-batch-create");
+  if (batchReplay.error) throw batchReplay.error;
+  assert(batchReplay.data?.status === "already_committed", "Record batch replay was not idempotent.");
+  const batchUpdate = await batchRpc([{
+    ...batchCreateChanges[0],
+    expectedRecordVersion: 1,
+    payload: { ...batchIssue, status: "W toku" },
+  }], "integration-batch-update");
+  if (batchUpdate.error) throw batchUpdate.error;
+  assert(batchUpdate.data?.status === "committed", "Record batch update was not committed.");
+  const batchConflict = await batchRpc([{
+    ...batchCreateChanges[0],
+    expectedRecordVersion: 1,
+    payload: { ...batchIssue, status: "Rozwiązane" },
+  }], "integration-batch-stale");
+  if (batchConflict.error) throw batchConflict.error;
+  assert(batchConflict.data?.status === "conflict", "Stale record batch did not return a conflict.");
+
+  const [records, writeTelemetry, taskTelemetry, checklistTelemetry, settingsTelemetry, bookingTelemetry, paymentTelemetry, blockTelemetry, batchTelemetry, scheduledRows] = await Promise.all([
     userClient.from("operational_records").select("entity_type,entity_id,record_version,payload"),
     userClient
       .from("audit_events")
@@ -550,11 +765,24 @@ try {
     userClient
       .from("audit_events")
       .select("entity_id,action,payload")
+      .eq("entity_type", "settings")
+      .eq("entity_id", "organization"),
+    userClient
+      .from("audit_events")
+      .select("entity_id,action,payload")
       .eq("entity_type", "booking"),
     userClient
       .from("audit_events")
       .select("entity_id,action,payload")
       .eq("entity_type", "payment"),
+    userClient
+      .from("audit_events")
+      .select("entity_id,action,payload")
+      .eq("entity_type", "block"),
+    userClient
+      .from("audit_events")
+      .select("entity_id,action,payload")
+      .eq("entity_type", "record_batch"),
     userClient
       .from("scheduled_messages")
       .select("id,booking_id,status"),
@@ -563,8 +791,11 @@ try {
   if (writeTelemetry.error) throw writeTelemetry.error;
   if (taskTelemetry.error) throw taskTelemetry.error;
   if (checklistTelemetry.error) throw checklistTelemetry.error;
+  if (settingsTelemetry.error) throw settingsTelemetry.error;
   if (bookingTelemetry.error) throw bookingTelemetry.error;
   if (paymentTelemetry.error) throw paymentTelemetry.error;
+  if (blockTelemetry.error) throw blockTelemetry.error;
+  if (batchTelemetry.error) throw batchTelemetry.error;
   if (scheduledRows.error) throw scheduledRows.error;
   assert(records.data.some((record) => record.entity_type === "units" && record.entity_id === "test-unit"), "Normalized records were not persisted.");
   const taskRecords = records.data.filter((record) => record.entity_type === "tasks" && record.entity_id.startsWith("test-task-"));
@@ -577,6 +808,19 @@ try {
   assert(checklistRecords.length === 100, "Not all checklist records survived parallel updates.");
   assert(checklistRecords.every((record) => Number(record.record_version) === 2 && record.payload.done === true), "Parallel checklist records have inconsistent versions or payloads.");
   assert(checklistTelemetry.data.length === 100, "Checklist command audit is incomplete.");
+  const settingsRecord = records.data.find(
+    (record) => record.entity_type === "settings" && record.entity_id === "organization",
+  );
+  assert(
+    Number(settingsRecord?.record_version) === 2
+      && settingsRecord?.payload?.organizationName === "Test po zmianie",
+    "Versioned settings record is missing or inconsistent.",
+  );
+  assert(
+    settingsTelemetry.data.some((event) => event.action === "command_committed")
+      && settingsTelemetry.data.some((event) => event.action === "command_conflict"),
+    "Settings commit/conflict audit is incomplete.",
+  );
   const paymentRecord = records.data.find(
     (record) => record.entity_type === "payments" && record.entity_id === payment.id,
   );
@@ -594,7 +838,39 @@ try {
       ),
     "Payment commit/conflict audit is incomplete.",
   );
-  assert(bookingTelemetry.data.filter((event) => event.action === "command_committed").length === 6, "Booking commit audit is incomplete.");
+  const calendarBlockRecord = records.data.find(
+    (record) => record.entity_type === "blocks" && record.entity_id === calendarBlock.id,
+  );
+  assert(
+    Number(calendarBlockRecord?.record_version) === 2
+      && calendarBlockRecord?.payload?.status === "Anulowana",
+    "Versioned calendar-block record is missing or inconsistent.",
+  );
+  assert(
+    blockTelemetry.data.filter((event) => event.action === "command_committed").length >= 2
+      && blockTelemetry.data.filter((event) => event.action === "command_conflict").length >= 2,
+    "Calendar-block commit/conflict audit is incomplete.",
+  );
+  const batchIssueRecord = records.data.find(
+    (record) => record.entity_type === "issues" && record.entity_id === batchIssue.id,
+  );
+  assert(
+    Number(batchIssueRecord?.record_version) === 2
+      && batchIssueRecord?.payload?.status === "W toku",
+    "Record batch payload or version is inconsistent.",
+  );
+  assert(
+    batchTelemetry.data.some(
+      (event) => event.entity_id === "integration-batch-create"
+        && event.action === "command_committed",
+    )
+      && batchTelemetry.data.some(
+        (event) => event.entity_id === "integration-batch-stale"
+          && event.action === "command_conflict",
+      ),
+    "Record batch commit/conflict audit is incomplete.",
+  );
+  assert(bookingTelemetry.data.filter((event) => event.action === "command_committed").length >= 6, "Booking commit audit is incomplete.");
   assert(
     bookingTelemetry.data.some(
       (event) => event.action === "lifecycle_committed"
@@ -611,7 +887,7 @@ try {
     scheduledRows.data.some((row) => row.booking_id === aggregate.booking.id && row.status === "Anulowana"),
     "Scheduled-message execution row was not reconciled with the cancelled booking.",
   );
-  console.log("Supabase integration test passed: Auth, RLS, record persistence, two-session protection, 100 parallel record updates, atomic booking lifecycle, idempotent payment posting, availability conflicts, race serialization, and command audit.");
+  console.log("Supabase integration test passed: Auth, RLS, record persistence, two-session protection, 100 parallel record updates, versioned settings, atomic booking lifecycle, idempotent payment posting, versioned calendar blocks, record batches, booking/block race serialization, availability conflicts, and command audit.");
 } finally {
   console.log("Integration: cleaning temporary data…");
   await userClient.auth.signOut().catch(() => undefined);

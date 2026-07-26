@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initialData } from "@/lib/demo-data";
 import { AppDataGate } from "@/components/layout/app-data-gate";
 import { SettingsView } from "./settings-view";
@@ -37,11 +37,14 @@ function storeWithSettings(organizationName: string, dataStatus: "loading" | "re
 }
 
 describe("SettingsView po twardym odświeżeniu", () => {
+  afterEach(cleanup);
+
   beforeEach(() => {
     mocks.updateSettings.mockReset();
+    mocks.updateSettings.mockResolvedValue(true);
   });
 
-  it("nie montuje formularza na danych startowych i zapisuje dopiero dane z chmury", () => {
+  it("nie montuje formularza na danych startowych i zapisuje dopiero dane z chmury", async () => {
     mocks.store.current = storeWithSettings("Nazwa startowa", "loading");
     const { rerender } = render(
       <AppDataGate onRetry={vi.fn()} status="loading">
@@ -67,5 +70,30 @@ describe("SettingsView po twardym odświeżeniu", () => {
     expect(mocks.updateSettings).toHaveBeenCalledWith(expect.objectContaining({
       organizationName: "Stawy u Sikory — chmura",
     }));
+    expect(await screen.findByText("Ustawienia zostały zapisane.")).toBeInTheDocument();
+  });
+
+  it("nie pokazuje sukcesu bez potwierdzenia zapisu", async () => {
+    mocks.updateSettings.mockResolvedValue(false);
+    mocks.store.current = storeWithSettings("Stawy u Sikory", "ready");
+    render(<SettingsView currentRole="owner" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Zapisz ustawienia" }));
+
+    expect(await screen.findByText(/Nie potwierdzono zapisu/)).toBeInTheDocument();
+    expect(screen.queryByText("Ustawienia zostały zapisane.")).not.toBeInTheDocument();
+  });
+
+  it("odrzuca pustą nazwę przed wywołaniem store", async () => {
+    mocks.store.current = storeWithSettings("Stawy u Sikory", "ready");
+    render(<SettingsView currentRole="owner" />);
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Nazwa obiektu" }), {
+      target: { value: " " },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Zapisz ustawienia" }));
+
+    expect(await screen.findByText(/Nie potwierdzono zapisu/)).toBeInTheDocument();
+    expect(mocks.updateSettings).not.toHaveBeenCalled();
   });
 });

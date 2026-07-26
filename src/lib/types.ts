@@ -427,6 +427,8 @@ export type AppSettings = {
   defaultCheckIn: string;
   defaultCheckOut: string;
   aiApprovalRequired: boolean;
+  version?: number;
+  updatedAt?: string;
 };
 
 export type MediaAsset = {
@@ -470,6 +472,8 @@ export type CalendarBlock = {
     | "Inne";
   reason: string;
   status: "Planowana" | "Aktywna" | "Zakończona" | "Anulowana";
+  version?: number;
+  updatedAt?: string;
 };
 
 export type RateRule = {

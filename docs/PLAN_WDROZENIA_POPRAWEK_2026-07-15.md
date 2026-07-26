@@ -155,22 +155,22 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 - [x] Pokazać użytkownikowi konflikt z wyborem: odśwież, skopiuj zmiany, porównaj.
 - [x] Dodać test równoległych zapisów w dwóch sesjach.
 
-**Status PR-7 (2026-07-25): wdrożony i zweryfikowany lokalnie.** Przechodzi 144/144 testów, lint, TypeScript, build 28 tras oraz smoke test desktop/mobile. Test dwóch sesji obejmuje zatrzymanie PUT, zachowanie lokalnej zmiany i spóźnione porównanie. Migracja telemetryczna i rozszerzony `test:integration` są gotowe, ale przed publikacją muszą zostać uruchomione wyłącznie na dedykowanym projekcie Supabase.
+**Status PR-7 (2026-07-25): wdrożony online.** Przechodzi 144/144 testów, lint, TypeScript, build 28 tras oraz smoke test desktop/mobile. Test dwóch sesji obejmuje zatrzymanie PUT, zachowanie lokalnej zmiany i spóźnione porównanie. Migracja telemetryczna działa online; destrukcyjny `test:integration` pozostaje zarezerwowany dla dedykowanego projektu Supabase.
 
 #### 3.2 Docelowo
 
-- [ ] Zastąpić `PUT /api/state` komendami per domena, np.:
+- [ ] Dokończyć zastępowanie `PUT /api/state` komendami per domena:
   - `POST /bookings`, `PATCH /bookings/:id`, `POST /bookings/:id/cancel`;
   - `POST /payments`;
   - `PATCH /tasks/:id`;
   - `PATCH /settings`.
-- [ ] Walidacja Zod per komenda i invarianty serwerowe.
-- [ ] `record_version`/optimistic locking per rekord, a nie globalnie dla 707+ rekordów.
-- [ ] Audit event w tej samej transakcji co zmiana.
+- [x] Walidacja Zod per wdrożona komenda i invarianty serwerowe.
+- [x] `record_version`/optimistic locking per rekord dla wdrożonych komend.
+- [x] Audit event w tej samej transakcji co wdrożona zmiana domenowa.
 - [ ] Snapshot pozostawić tylko jako backup/eksport, nie główną ścieżkę CRUD.
 - [ ] Plan migracji i rollbacku z porównaniem liczby/haszy rekordów.
 
-**PR-8a — pierwszy wycinek wykonany lokalnie 25.07.2026:**
+**PR-8a — pierwszy wycinek wdrożony online 25.07.2026:**
 
 - [x] `PATCH /api/tasks/:id` aktualizuje istniejące zadanie bez pełnego `PUT /api/state`.
 - [x] Zod oraz niezależne inwarianty Postgresa walidują komendę.
@@ -181,9 +181,9 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 - [x] Test integracyjny zawiera 100 równoległych aktualizacji różnych zadań i konflikt tego samego zadania.
 - [ ] Uruchomić próbę 100 aktualizacji na dedykowanym Supabase; jedyny dostępny projekt jest operacyjny i nie został użyty do testu destrukcyjnego.
 
-**Status PR-8a:** implementacja lokalna, 152/152 testy, lint, TypeScript, build i smoke desktop/mobile przechodzą. Publikacja jest zablokowana do czasu zastosowania migracji i przejścia testu integracyjnego na odizolowanej bazie.
+**Status PR-8a:** wdrożony online; 152/152 testy, lint, TypeScript, build i smoke desktop/mobile przechodzą. Pełna próba równoległości pozostaje dla odizolowanej bazy.
 
-**PR-8b — checklista rekordowa wykonana lokalnie 25.07.2026:**
+**PR-8b — checklista rekordowa wdrożona online 25.07.2026:**
 
 - [x] `PATCH /api/checklist-items/:id` aktualizuje jeden punkt bez pełnego `PUT /api/state`.
 - [x] Zod i Postgres niezależnie walidują komendę oraz powiązane zadanie.
@@ -195,9 +195,9 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 - [x] Test integracyjny zawiera 100 równoległych aktualizacji różnych punktów i konflikt tego samego punktu.
 - [ ] Uruchomić próbę na dedykowanym Supabase; dostępny jest tylko projekt operacyjny bez gałęzi testowej.
 
-**Status PR-8b:** implementacja lokalna, 162/162 testy, lint, TypeScript, build 30 tras oraz read-only smoke test `/tasks` na desktopie i 390 px przechodzą. Migracja nie została zastosowana do projektu operacyjnego.
+**Status PR-8b:** wdrożony online; 162/162 testy, lint, TypeScript, build 30 tras oraz read-only smoke test `/tasks` na desktopie i 390 px przechodzą. Pełna próba równoległości pozostaje dla odizolowanej bazy.
 
-**PR-8c — transakcyjne utworzenie agregatu rezerwacji wykonane lokalnie 25.07.2026:**
+**PR-8c — transakcyjne utworzenie agregatu rezerwacji wdrożone online 25.07.2026:**
 
 - [x] `POST /api/bookings` tworzy rezerwację bez pełnego `PUT /api/state`.
 - [x] Rezerwacja, kontakt/zgody, 5 zadań workflow, checklista sprzątania i szkice komunikacji zapisują się w jednej transakcji.
@@ -210,7 +210,9 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 - [x] Test integracyjny zawiera commit, replay, konflikt ID, konflikt blokady/godzin i dwie równoległe próby tego samego terminu.
 - [ ] Uruchomić pełną próbę na dedykowanym Supabase; projekt operacyjny nie został użyty do destrukcyjnego testu.
 
-**Status PR-8c:** implementacja lokalna przechodzi 174/174 testy automatyczne, lint, TypeScript, build 31 tras oraz read-only smoke test `/bookings` i formularza na desktopie/390 px. Migracja nie została zastosowana do projektu operacyjnego.
+**Status PR-8c:** wdrożony online; 174/174 testy automatyczne, lint, TypeScript, build 31 tras oraz read-only smoke test `/bookings` i formularza na desktopie/390 px przechodzą. Pełny test wyścigu pozostaje dla odizolowanej bazy.
+
+**Status zbiorczego PR-8 (2026-07-26):** implementacja jest kompletna lokalnie. PR-8d oraz PR-8e1–PR-8e2 działają online; lokalna końcówka obejmuje ustawienia, blokady kalendarza i atomową komendę batchową dla wszystkich pozostałych mutacji. Store nie wysyła już pełnego `PUT /api/state`, a Route Handler tej metody został usunięty. Całość przechodzi 289/289 testów, lint, TypeScript, kontrolę składni integracji i build 33 tras. Migracje `20260726163800`, `20260726165207` i `20260726171329` nie zostały zastosowane online; wymagają jednej publikacji i niedestrukcyjnego smoke. Nie planujemy kolejnych podziałów ani ulepszeń w ramach PR-8.
 
 **Akceptacja etapu 3:** 100 równoległych, kontrolowanych aktualizacji różnych rekordów bez konfliktu globalnego; konflikt tego samego rekordu nie traci danych i daje czytelny wynik 409; brak pełnego delete/reinsert przy pojedynczej zmianie.
 
@@ -264,7 +266,8 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 #### 5.1 PR-10a — wspólny fundament UX i wydajność
 
 - [ ] Jeden komponent `Dialog` i `ConfirmDialog`: focus trap, Escape, restore focus, scroll lock, `aria-describedby`.
-- [ ] Zastąpić `window.confirm` w anulowaniu, blokadach i resecie.
+- [x] Zastąpić `window.confirm` w blokadach kalendarza dostępnym dialogiem z focus trap, Escape i przywróceniem fokusu.
+- [ ] Zastąpić `window.confirm` w pozostałych anulowaniach i resecie.
 - [ ] Testy klawiatury dla nowej rezerwacji, edycji, anulowania, płatności i profilu gościa.
 - [ ] Paginacja/wirtualizacja listy rezerwacji i CRM.
 - [ ] Minimalny tekst krytyczny 12–14 px; informacja nie zależy wyłącznie od koloru.

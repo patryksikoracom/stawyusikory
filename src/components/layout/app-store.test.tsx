@@ -13,7 +13,7 @@ describe("AppStoreProvider w trybie chmurowym", () => {
     vi.unstubAllGlobals();
   });
 
-  it("nie pokazuje demo i nie wysyła PUT przed zakończeniem pobierania", async () => {
+  it("nie pokazuje demo i nie zapisuje ustawień przed zakończeniem pobierania", async () => {
     vi.useFakeTimers();
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "test-anon-key");
@@ -35,7 +35,26 @@ describe("AppStoreProvider w trybie chmurowym", () => {
     });
     const fetchMock = vi.fn()
       .mockImplementationOnce(() => loadResponse)
-      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ version: 2 }) });
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          settings: {
+            organizationName: "Zapis po gotowości",
+            timezone: "Europe/Warsaw",
+            cleaningContactName: "",
+            cleaningPhone: "",
+            defaultCheckIn: "16:00",
+            defaultCheckOut: "11:00",
+            aiApprovalRequired: true,
+            version: 2,
+            updatedAt: "2026-07-26T16:45:00.000Z",
+          },
+          recordVersion: 2,
+          stateVersion: 2,
+          savedAt: "2026-07-26T16:45:00.000Z",
+        }),
+      });
     vi.stubGlobal("fetch", fetchMock);
 
     const { AppStoreProvider, useAppStore } = await import("./app-store");
@@ -87,13 +106,192 @@ describe("AppStoreProvider w trybie chmurowym", () => {
     expect(store?.data.bookings).toHaveLength(0);
     fireEvent.click(screen.getByRole("button", { name: "Zmień ustawienia" }));
     await act(async () => {
-      vi.advanceTimersByTime(701);
       await Promise.resolve();
       await Promise.resolve();
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock).toHaveBeenLastCalledWith("/api/state", expect.objectContaining({ method: "PUT" }));
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/settings", expect.objectContaining({ method: "PATCH" }));
+    expect(fetchMock.mock.calls.filter(([, options]) => options?.method === "PUT")).toHaveLength(0);
+    const commandBody = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(commandBody).toMatchObject({
+      expectedRecordVersion: 0,
+      settings: { organizationName: "Zapis po gotowości", version: 1 },
+    });
+  });
+
+  it("zapisuje pozostałe mutacje jedną komendą batchową bez pełnego PUT", async () => {
+    vi.useFakeTimers();
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "test-anon-key");
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        clear: vi.fn(),
+        getItem: vi.fn(() => null),
+        key: vi.fn(() => null),
+        length: 0,
+        removeItem: vi.fn(),
+        setItem: vi.fn(),
+      },
+    });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: {}, version: 8, recordVersions: {} }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          stateVersion: 9,
+          savedAt: "2026-07-26T18:00:01.000Z",
+          changes: [{
+            entityType: "issues",
+            entityId: "ISSUE-BATCH",
+            operation: "upsert",
+            recordVersion: 1,
+          }],
+        }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { AppStoreProvider, useAppStore } = await import("./app-store");
+    let store: ReturnType<typeof useAppStore> | undefined;
+    function Probe() {
+      store = useAppStore();
+      return (
+        <button onClick={() => store?.addIssue({
+          id: "ISSUE-BATCH",
+          title: "Test batcha",
+          status: "Otwarte",
+          createdAt: "2026-07-26T18:00:00.000Z",
+        })}>
+          Dodaj usterkę
+        </button>
+      );
+    }
+
+    render(<AppStoreProvider><Probe /></AppStoreProvider>);
+    await act(async () => {
+      vi.advanceTimersByTime(0);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Dodaj usterkę" }));
+    expect(store?.data.issues[0]?.id).toBe("ISSUE-BATCH");
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/records/batch", expect.objectContaining({
+      method: "POST",
+    }));
+    const body = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(body.changes).toEqual([
+      expect.objectContaining({
+        entityType: "issues",
+        entityId: "ISSUE-BATCH",
+        operation: "upsert",
+        expectedRecordVersion: 0,
+      }),
+    ]);
+    expect(fetchMock.mock.calls.filter(([, options]) => options?.method === "PUT")).toHaveLength(0);
+    expect(store?.syncMode).toBe("cloud");
+  });
+
+  it("zatrzymuje konflikt ustawień na wersji rekordu i nie wysyła pełnego PUT", async () => {
+    vi.useFakeTimers();
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "test-anon-key");
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        clear: vi.fn(),
+        getItem: vi.fn(() => null),
+        key: vi.fn(() => null),
+        length: 0,
+        removeItem: vi.fn(),
+        setItem: vi.fn(),
+      },
+    });
+
+    const cloudSettings: AppData["settings"] = {
+      organizationName: "Stan bazowy",
+      timezone: "Europe/Warsaw",
+      cleaningContactName: "",
+      cleaningPhone: "",
+      defaultCheckIn: "16:00",
+      defaultCheckOut: "11:00",
+      aiApprovalRequired: true,
+      version: 3,
+      updatedAt: "2026-07-26T16:00:00.000Z",
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: { settings: cloudSettings }, version: 10 }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        json: async () => ({
+          requestId: "request-settings-conflict",
+          currentRecordVersion: 7,
+          detectedAt: "2026-07-26T16:50:00.000Z",
+        }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { AppStoreProvider, useAppStore } = await import("./app-store");
+    let store: ReturnType<typeof useAppStore> | undefined;
+
+    function Probe() {
+      store = useAppStore();
+      return (
+        <button onClick={() => store?.updateSettings({
+          ...store.data.settings,
+          organizationName: "Lokalna nazwa",
+        })}>
+          Zapisz ustawienia
+        </button>
+      );
+    }
+
+    render(<AppStoreProvider><Probe /></AppStoreProvider>);
+    await act(async () => {
+      vi.advanceTimersByTime(0);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Zapisz ustawienia" }));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/settings", expect.objectContaining({
+      method: "PATCH",
+    }));
+    const commandBody = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(commandBody).toMatchObject({
+      expectedRecordVersion: 3,
+      settings: { organizationName: "Lokalna nazwa", version: 4 },
+    });
+    expect(store?.syncMode).toBe("conflict");
+    expect(store?.syncConflict).toMatchObject({
+      source: "server-rejection",
+      expectedVersion: 3,
+      currentVersion: 7,
+    });
+    expect(store?.data.settings.organizationName).toBe("Lokalna nazwa");
+    expect(fetchMock.mock.calls.filter(([, options]) => options?.method === "PUT")).toHaveLength(0);
   });
 
   it("zatrzymuje zapis z brudnej karty po sygnale z drugiej sesji i zachowuje lokalne zmiany", async () => {
@@ -174,9 +372,11 @@ describe("AppStoreProvider w trybie chmurowym", () => {
     function Probe() {
       store = useAppStore();
       return (
-        <button onClick={() => store?.updateSettings({
-          ...store.data.settings,
-          organizationName: "Moja niezapisana zmiana",
+        <button onClick={() => store?.addIssue({
+          id: "ISSUE-LOCAL",
+          title: "Moja niezapisana zmiana",
+          status: "Otwarte",
+          createdAt: "2026-07-25T18:10:00.000Z",
         })}>
           Zmień lokalnie
         </button>
@@ -192,7 +392,7 @@ describe("AppStoreProvider w trybie chmurowym", () => {
     expect(store?.dataStatus).toBe("ready");
 
     fireEvent.click(screen.getByRole("button", { name: "Zmień lokalnie" }));
-    expect(store?.data.settings.organizationName).toBe("Moja niezapisana zmiana");
+    expect(store?.data.issues[0]?.title).toBe("Moja niezapisana zmiana");
 
     await act(async () => {
       FakeBroadcastChannel.instances[0]?.emit({
@@ -209,14 +409,14 @@ describe("AppStoreProvider w trybie chmurowym", () => {
     });
 
     expect(store?.syncMode).toBe("conflict");
-    expect(store?.data.settings.organizationName).toBe("Moja niezapisana zmiana");
+    expect(store?.data.issues[0]?.title).toBe("Moja niezapisana zmiana");
     expect(store?.syncConflict).toMatchObject({
       source: "another-tab",
       expectedVersion: 4,
       currentVersion: 5,
     });
     expect(store?.syncConflict?.changes).toEqual(expect.arrayContaining([
-      expect.objectContaining({ key: "settings", localChanges: 1 }),
+      expect.objectContaining({ key: "issues", localChanges: 1 }),
     ]));
     expect(fetchMock.mock.calls.filter(([, options]) => options?.method === "PUT")).toHaveLength(0);
 
@@ -1298,5 +1498,188 @@ describe("AppStoreProvider w trybie chmurowym", () => {
       updatedAt: "2099-07-26T15:00:01.000Z",
     });
     expect(store?.syncMode).toBe("cloud");
+  });
+
+  it("tworzy blokadę komendą rekordową bez pełnego PUT stanu", async () => {
+    vi.useFakeTimers();
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "test-anon-key");
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        clear: vi.fn(),
+        getItem: vi.fn(() => null),
+        key: vi.fn(() => null),
+        length: 0,
+        removeItem: vi.fn(),
+        setItem: vi.fn(),
+      },
+    });
+
+    const block = {
+      id: "BLOCK-STORE-1",
+      unitId: "D1",
+      dateFrom: "2099-08-10",
+      dateTo: "2099-08-12",
+      blockType: "Serwis" as const,
+      reason: "Przegląd pompy",
+      status: "Aktywna" as const,
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: { blocks: [] }, version: 40 }),
+      })
+      .mockImplementationOnce(async (_url: string, options?: RequestInit) => {
+        const body = JSON.parse(String(options?.body));
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            block: {
+              ...body.block,
+              version: 1,
+              updatedAt: "2099-07-26T17:00:01.000Z",
+            },
+            recordVersion: 1,
+            stateVersion: 41,
+            savedAt: "2099-07-26T17:00:01.000Z",
+          }),
+        };
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { AppStoreProvider, useAppStore } = await import("./app-store");
+    let store: ReturnType<typeof useAppStore> | undefined;
+
+    function Probe() {
+      store = useAppStore();
+      return <button onClick={() => void store?.addBlock(block)}>Dodaj blokadę</button>;
+    }
+
+    render(<AppStoreProvider><Probe /></AppStoreProvider>);
+    await act(async () => {
+      vi.advanceTimersByTime(0);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Dodaj blokadę" }));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      vi.advanceTimersByTime(800);
+      await Promise.resolve();
+    });
+
+    const commandCalls = fetchMock.mock.calls.filter(
+      ([url, options]) => String(url) === "/api/calendar-blocks" && options?.method === "POST",
+    );
+    expect(commandCalls).toHaveLength(1);
+    expect(JSON.parse(String(commandCalls[0]?.[1]?.body))).toMatchObject({
+      block: { ...block, version: 1 },
+      expectedRecordVersion: 0,
+    });
+    expect(fetchMock.mock.calls.filter(([, options]) => options?.method === "PUT")).toHaveLength(0);
+    expect(store?.data.blocks[0]).toMatchObject({
+      ...block,
+      version: 1,
+      updatedAt: "2099-07-26T17:00:01.000Z",
+    });
+    expect(store?.syncMode).toBe("cloud");
+  });
+
+  it("po konflikcie anulowania przywraca aktywną blokadę i nie zwalnia terminu", async () => {
+    vi.useFakeTimers();
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "test-anon-key");
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        clear: vi.fn(),
+        getItem: vi.fn(() => null),
+        key: vi.fn(() => null),
+        length: 0,
+        removeItem: vi.fn(),
+        setItem: vi.fn(),
+      },
+    });
+
+    const block = {
+      id: "BLOCK-STORE-2",
+      unitId: "D1",
+      dateFrom: "2099-08-10",
+      dateTo: "2099-08-12",
+      blockType: "Serwis" as const,
+      reason: "Przegląd pompy",
+      status: "Aktywna" as const,
+      version: 3,
+      updatedAt: "2099-07-26T16:00:00.000Z",
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: { blocks: [block] }, version: 40 }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        json: async () => ({
+          requestId: "request-block-conflict",
+          currentRecordVersion: 7,
+          detectedAt: "2099-07-26T17:10:01.000Z",
+        }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { AppStoreProvider, useAppStore } = await import("./app-store");
+    let store: ReturnType<typeof useAppStore> | undefined;
+
+    function Probe() {
+      store = useAppStore();
+      return (
+        <button onClick={() => void store?.updateBlock({ ...block, status: "Anulowana" })}>
+          Anuluj blokadę
+        </button>
+      );
+    }
+
+    render(<AppStoreProvider><Probe /></AppStoreProvider>);
+    await act(async () => {
+      vi.advanceTimersByTime(0);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Anuluj blokadę" }));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/calendar-blocks/BLOCK-STORE-2",
+      expect.objectContaining({ method: "PATCH" }),
+    );
+    const commandBody = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(commandBody).toMatchObject({
+      expectedRecordVersion: 3,
+      block: { status: "Anulowana", version: 4 },
+    });
+    expect(store?.data.blocks[0]).toMatchObject({
+      id: "BLOCK-STORE-2",
+      status: "Aktywna",
+      version: 3,
+    });
+    expect(store?.syncMode).toBe("conflict");
+    expect(store?.syncConflict).toMatchObject({
+      expectedVersion: 3,
+      currentVersion: 7,
+    });
+    expect(fetchMock.mock.calls.filter(([, options]) => options?.method === "PUT")).toHaveLength(0);
   });
 });

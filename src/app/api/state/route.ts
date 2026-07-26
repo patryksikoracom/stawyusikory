@@ -1,14 +1,5 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-
-const payloadSchema = z.object({
-  data: z.record(z.string(), z.unknown()),
-  expectedVersion: z.number().int().nonnegative(),
-  requestId: z.string().trim().min(8).max(128),
-  clientSentAt: z.iso.datetime(),
-  tabId: z.string().trim().min(8).max(128),
-});
 
 const entityTypes = [
   "units", "bookings", "guests", "consents", "tasks", "media", "blocks",
@@ -42,23 +33,6 @@ function isBundledDemoState(value: unknown) {
   return ["G001", "G002", "G003", "G004"].every((id) => ids.has(id));
 }
 
-function arrayOfRecords(value: unknown) {
-  return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object") : [];
-}
-
-async function syncCommunicationRows(supabase: Awaited<ReturnType<typeof createClient>>, organizationId: string, state: Record<string, unknown>) {
-  if (!supabase) return "Supabase nie jest skonfigurowany";
-  const templates = arrayOfRecords(state.messageTemplates).map((item) => ({ organization_id: organizationId, id: item.id, name: item.name, purpose: item.purpose, channel: item.channel, language: item.language, subject: item.subject, body: item.body, allowed_variables: item.allowedVariables, version: item.version, active: item.active }));
-  const rules = arrayOfRecords(state.automationRules).map((item) => ({ organization_id: organizationId, id: item.id, name: item.name, template_id: item.templateId, trigger_event: item.trigger, offset_days: item.offsetDays, send_time: item.sendTime, mode: item.mode, conditions: { channels: item.channels, unitIds: item.unitIds, paymentStatuses: item.paymentStatuses, minimumNights: item.minimumNights }, active: item.active }));
-  const messages = arrayOfRecords(state.scheduledMessages).map((item) => ({ organization_id: organizationId, id: item.id, booking_id: item.bookingId, rule_id: item.ruleId, template_id: item.templateId, template_version: item.templateVersion, due_at: item.dueAt, channel: item.channel, recipient: item.recipient, subject: item.subject, rendered_body: item.renderedBody, status: item.status, blocked_reason: item.blockedReason, approved_at: item.approvedAt, provider_result: item.providerResult ? { result: item.providerResult } : null, idempotency_key: item.idempotencyKey, booking_fingerprint: item.bookingFingerprint, created_at: item.createdAt }));
-  const debriefs = arrayOfRecords(state.departureDebriefs).map((item) => ({ organization_id: organizationId, id: item.id, booking_id: item.bookingId, status: item.status, payload: item, last_prompted_at: item.lastPromptedAt, snoozed_until: item.snoozedUntil, completed_at: item.completedAt }));
-  const touchpoints = arrayOfRecords(state.marketingTouchpoints).map((item) => ({ organization_id: organizationId, id: item.id, booking_id: item.bookingId, recorded_at: item.recordedAt, source: item.source, method: item.method, utm_source: item.utmSource, utm_medium: item.utmMedium, utm_campaign: item.utmCampaign, utm_content: item.utmContent, landing_page: item.landingPage, note: item.note }));
-  if (templates.length) { const { error } = await supabase.from("message_templates").upsert(templates, { onConflict: "organization_id,id" }); if (error) return `message_templates: ${error.message}`; }
-  if (rules.length) { const { error } = await supabase.from("automation_rules").upsert(rules, { onConflict: "organization_id,id" }); if (error) return `automation_rules: ${error.message}`; }
-  if (messages.length) { const { error } = await supabase.from("scheduled_messages").upsert(messages, { onConflict: "organization_id,id" }); if (error) return `scheduled_messages: ${error.message}`; }
-  if (debriefs.length) { const { error } = await supabase.from("departure_debriefs").upsert(debriefs, { onConflict: "organization_id,id" }); if (error) return `departure_debriefs: ${error.message}`; }
-  if (touchpoints.length) { const { error } = await supabase.from("marketing_touchpoints").upsert(touchpoints, { onConflict: "organization_id,id" }); if (error) return `marketing_touchpoints: ${error.message}`; }
-}
 
 export async function GET() {
   const result = await context();
@@ -89,7 +63,13 @@ export async function GET() {
     for (const record of records) {
       const type = record.entity_type as EntityType;
       if (!entityTypes.includes(type)) continue;
-      if (type === "settings") state.settings = record.payload;
+      if (type === "settings") {
+        state.settings = {
+          ...(record.payload as Record<string, unknown>),
+          version: record.record_version,
+          updatedAt: record.updated_at,
+        };
+      }
       else if (
         type === "bookings"
         || type === "consents"
@@ -97,6 +77,7 @@ export async function GET() {
         || type === "checklistItems"
         || type === "payments"
         || type === "scheduledMessages"
+        || type === "blocks"
       ) {
         (state[type] as unknown[]).push({
           ...(record.payload as Record<string, unknown>),
@@ -110,6 +91,12 @@ export async function GET() {
       version: revision?.version ?? 0,
       updatedAt: revision?.updated_at,
       source: "records",
+      recordVersions: Object.fromEntries(
+        records.map((record) => [
+          `${record.entity_type}:${record.entity_id}`,
+          Number(record.record_version),
+        ]),
+      ),
     }, { headers: { "cache-control": "private, no-store" } });
   }
 
@@ -136,51 +123,4 @@ export async function GET() {
     updatedAt: legacy?.updated_at,
     source: legacy?.state ? "legacy_snapshot" : "empty",
   }, { headers: { "cache-control": "private, no-store" } });
-}
-
-export async function PUT(request: Request) {
-  const result = await context();
-  if (result.error) return result.error;
-  if (result.role !== "owner" && result.role !== "admin") return NextResponse.json({ error: "Konto nie ma dostępu do pełnego zapisu" }, { status: 403 });
-  const contentLength = Number(request.headers.get("content-length") ?? 0);
-  if (contentLength > 5_000_000) return NextResponse.json({ error: "Stan aplikacji jest zbyt duży" }, { status: 413 });
-  const parsed = payloadSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Nieprawidłowy stan aplikacji" }, { status: 400 });
-  if (isBundledDemoState(parsed.data.data)) {
-    return NextResponse.json({ error: "Dane demonstracyjne zostały zablokowane przed zapisem do chmury." }, { status: 422 });
-  }
-
-  const { data, error } = await result.supabase!.rpc("replace_operational_state_v2", {
-    p_expected_version: parsed.data.expectedVersion,
-    p_state: parsed.data.data,
-    p_request_id: parsed.data.requestId,
-    p_client_sent_at: parsed.data.clientSentAt,
-    p_tab_id: parsed.data.tabId,
-  });
-  if (error) {
-    if (error.code === "40001" || error.message.includes("Wersja danych uległa zmianie")) {
-      return NextResponse.json({ error: "Dane zmieniły się na innym urządzeniu. Odśwież aplikację." }, { status: 409 });
-    }
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-  const committedVersion = Number(data);
-  if (committedVersion < 0) {
-    const currentVersion = -committedVersion - 1;
-    return NextResponse.json({
-      error: "Dane zmieniły się na innym urządzeniu. Odśwież aplikację.",
-      requestId: parsed.data.requestId,
-      expectedVersion: parsed.data.expectedVersion,
-      currentVersion,
-      detectedAt: new Date().toISOString(),
-    }, { status: 409 });
-  }
-  const workflowSyncWarning = await syncCommunicationRows(result.supabase!, result.organizationId, parsed.data.data);
-  return NextResponse.json({
-    ok: true,
-    requestId: parsed.data.requestId,
-    expectedVersion: parsed.data.expectedVersion,
-    version: committedVersion,
-    savedAt: new Date().toISOString(),
-    workflowSyncWarning,
-  });
 }

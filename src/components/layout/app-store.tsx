@@ -43,6 +43,10 @@ import type {
   BookingMutationAggregate,
   BookingMutationOperation,
 } from "@/lib/domain/booking-command";
+import type {
+  BatchEntityType,
+  RecordBatchCommandResult,
+} from "@/lib/domain/record-batch-command";
 import {
   conflictBackup,
   summarizeSyncChanges,
@@ -76,8 +80,8 @@ type AppStore = {
   skipDepartureDebrief: (bookingId: string, reason: string) => void;
   saveDepartureDebrief: (debrief: DepartureDebrief, issue?: IssueReport) => void;
   updateScheduledMessage: (message: ScheduledMessage) => void;
-  addBlock: (block: CalendarBlock) => void;
-  updateBlock: (block: CalendarBlock) => void;
+  addBlock: (block: CalendarBlock) => Promise<boolean>;
+  updateBlock: (block: CalendarBlock) => Promise<boolean>;
   addPayment: (payment: PaymentTransaction) => void;
   addInvoice: (invoice: InvoiceRecord) => void;
   addMessage: (message: MessageRecord) => void;
@@ -91,7 +95,7 @@ type AppStore = {
   deleteRate: (rateId: string) => void;
   upsertCostSetting: (cost: CostSetting) => void;
   deleteCostSetting: (costId: string) => void;
-  updateSettings: (settings: AppData["settings"]) => void;
+  updateSettings: (settings: AppData["settings"]) => Promise<boolean>;
   replaceWithImportedBookings: (bookings: Booking[], contacts?: ContactConsent[]) => void;
   exportSnapshot: () => Promise<void>;
   exportPricingAnalysis: () => void;
@@ -116,8 +120,110 @@ type CloudStatePayload = {
   data?: Partial<AppData> | null;
   updatedAt?: string;
   version?: number;
+  recordVersions?: Record<string, number>;
   quarantinedDemo?: boolean;
 };
+
+type BatchCollectionKey =
+  | "units"
+  | "bookings"
+  | "guests"
+  | "consents"
+  | "tasks"
+  | "media"
+  | "rates"
+  | "costSettings"
+  | "imports"
+  | "sourceConnections"
+  | "invoices"
+  | "checklistItems"
+  | "issues"
+  | "messages"
+  | "departureDebriefs"
+  | "scheduledMessages"
+  | "marketingTouchpoints";
+
+const batchCollections: Array<{
+  key: BatchCollectionKey;
+  entityType: BatchEntityType;
+  id: (record: Record<string, unknown>) => string;
+}> = [
+  { key: "units", entityType: "units", id: (record) => String(record.id ?? "") },
+  { key: "bookings", entityType: "bookings", id: (record) => String(record.id ?? "") },
+  { key: "guests", entityType: "guests", id: (record) => String(record.bookingId ?? "") },
+  { key: "consents", entityType: "consents", id: (record) => String(record.bookingId ?? "") },
+  { key: "tasks", entityType: "tasks", id: (record) => String(record.id ?? "") },
+  { key: "media", entityType: "media", id: (record) => String(record.id ?? "") },
+  { key: "rates", entityType: "rates", id: (record) => String(record.id ?? "") },
+  { key: "costSettings", entityType: "costSettings", id: (record) => String(record.id ?? "") },
+  { key: "imports", entityType: "imports", id: (record) => String(record.id ?? "") },
+  { key: "sourceConnections", entityType: "sourceConnections", id: (record) => String(record.id ?? "") },
+  { key: "invoices", entityType: "invoices", id: (record) => String(record.id ?? "") },
+  { key: "checklistItems", entityType: "checklistItems", id: (record) => String(record.id ?? "") },
+  { key: "issues", entityType: "issues", id: (record) => String(record.id ?? "") },
+  { key: "messages", entityType: "messages", id: (record) => String(record.id ?? "") },
+  { key: "departureDebriefs", entityType: "departureDebriefs", id: (record) => String(record.id ?? "") },
+  { key: "scheduledMessages", entityType: "scheduledMessages", id: (record) => String(record.id ?? "") },
+  { key: "marketingTouchpoints", entityType: "marketingTouchpoints", id: (record) => String(record.id ?? "") },
+];
+
+type RecordBatchChange = {
+  entityType: BatchEntityType;
+  entityId: string;
+  operation: "upsert" | "delete";
+  expectedRecordVersion: number;
+  payload?: Record<string, unknown>;
+};
+
+function withoutRecordMetadata(record: Record<string, unknown>) {
+  const payload = { ...record };
+  delete payload.version;
+  delete payload.updatedAt;
+  return payload;
+}
+
+function buildRecordBatchChanges(
+  previous: AppData,
+  next: AppData,
+  versions: Map<string, number>,
+) {
+  const changes: RecordBatchChange[] = [];
+  for (const collection of batchCollections) {
+    const previousRecords = previous[collection.key] as unknown as Record<string, unknown>[];
+    const nextRecords = next[collection.key] as unknown as Record<string, unknown>[];
+    const previousById = new Map(previousRecords.map((record) => [collection.id(record), record]));
+    const nextById = new Map(nextRecords.map((record) => [collection.id(record), record]));
+    for (const [entityId, record] of nextById) {
+      if (!entityId) continue;
+      const previousRecord = previousById.get(entityId);
+      if (
+        previousRecord
+        && JSON.stringify(withoutRecordMetadata(previousRecord))
+          === JSON.stringify(withoutRecordMetadata(record))
+      ) continue;
+      changes.push({
+        entityType: collection.entityType,
+        entityId,
+        operation: "upsert",
+        expectedRecordVersion: versions.get(`${collection.entityType}:${entityId}`) ?? 0,
+        payload: record,
+      });
+    }
+    for (const [entityId] of previousById) {
+      if (!entityId || nextById.has(entityId)) continue;
+      const expectedRecordVersion = versions.get(`${collection.entityType}:${entityId}`) ?? 0;
+      if (expectedRecordVersion > 0) {
+        changes.push({
+          entityType: collection.entityType,
+          entityId,
+          operation: "delete",
+          expectedRecordVersion,
+        });
+      }
+    }
+  }
+  return changes;
+}
 
 export function clearPersistedAppData() {
   if (typeof window === "undefined") return;
@@ -175,7 +281,10 @@ function normalizeData(parsed?: Partial<AppData> | null, fallback: AppData = ini
       version: task.version ?? 1,
     })),
     media: parsed?.media ?? fallback.media,
-    blocks: parsed?.blocks ?? fallback.blocks,
+    blocks: (parsed?.blocks ?? fallback.blocks).map((block) => ({
+      ...block,
+      version: block.version ?? 1,
+    })),
     rates,
     costSettings: parsed?.costSettings ?? fallback.costSettings,
     imports: parsed?.imports ?? fallback.imports,
@@ -566,6 +675,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const checklistRecordVersions = useRef<Map<string, number>>(new Map());
   const paymentRecordVersions = useRef<Map<string, number>>(new Map());
   const scheduledMessageRecordVersions = useRef<Map<string, number>>(new Map());
+  const blockRecordVersions = useRef<Map<string, number>>(new Map());
+  const batchRecordVersions = useRef<Map<string, number>>(new Map());
+  const blockCommandsInFlight = useRef<Set<string>>(new Set());
+  const settingsRecordVersion = useRef(0);
   const pendingRecordCommands = useRef(0);
   const reloadAfterRecordCommands = useRef(false);
   const baseData = useRef<AppData>(cloudConfigured ? emptyCloudData() : normalizeData());
@@ -574,7 +687,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const tabId = useRef(uid("TAB"));
   const syncChannel = useRef<BroadcastChannel | null>(null);
   const conflictGeneration = useRef(0);
-  const skipNextCloudSave = useRef(false);
   const cloudSaveQueue = useRef<Promise<void>>(Promise.resolve());
 
   const compareConflictWithCloud = useCallback(async (
@@ -622,6 +734,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         scheduledMessageRecordVersions.current = new Map(
           localData.scheduledMessages.map((message) => [message.id, message.version ?? 1]),
         );
+        blockRecordVersions.current = new Map(
+          localData.blocks.map((block) => [block.id, block.version ?? 1]),
+        );
+        settingsRecordVersion.current = localData.settings.version ?? 0;
         setData(localData);
         dataReady.current = true;
         setDataStatus("ready");
@@ -686,6 +802,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           const payload = await response.json() as CloudStatePayload;
           const loadedData = payload.data ? normalizeData(payload.data, emptyCloudData()) : emptyCloudData();
           stateVersion.current = payload.version ?? 0;
+          batchRecordVersions.current = new Map(Object.entries(payload.recordVersions ?? {}));
           bookingRecordVersions.current = new Map(loadedData.bookings.map((booking) => [booking.id, booking.version ?? 1]));
           consentRecordVersions.current = new Map(loadedData.consents.map((consent) => [consent.bookingId, consent.version ?? 1]));
           taskRecordVersions.current = new Map(loadedData.tasks.map((task) => [task.id, task.version ?? 1]));
@@ -694,11 +811,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           scheduledMessageRecordVersions.current = new Map(
             loadedData.scheduledMessages.map((message) => [message.id, message.version ?? 1]),
           );
+          blockRecordVersions.current = new Map(
+            loadedData.blocks.map((block) => [block.id, block.version ?? 1]),
+          );
+          settingsRecordVersion.current = loadedData.settings.version ?? 0;
           conflictGeneration.current += 1;
           baseData.current = loadedData;
           localRevision.current = 0;
           savedRevision.current = 0;
-          skipNextCloudSave.current = true;
           setData(loadedData);
           cloudReady.current = true;
           dataReady.current = true;
@@ -728,96 +848,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!hydrated || dataStatus !== "ready") return;
     if (!cloudConfigured) window.localStorage.setItem(storageKey, JSON.stringify(data));
-    if (!cloudReady.current) return;
-    if (skipNextCloudSave.current) {
-      skipNextCloudSave.current = false;
-      return;
-    }
-    if (localRevision.current === savedRevision.current) return;
-    const revisionToSave = localRevision.current;
-    const timeout = window.setTimeout(() => {
-      // Zmiany mogą pojawić się, gdy poprzedni PUT nadal trwa. Kolejka gwarantuje,
-      // że każda operacja odczyta wersję dopiero po zakończeniu poprzedniej.
-      cloudSaveQueue.current = cloudSaveQueue.current.then(async () => {
-        if (!cloudReady.current) return;
-        const requestId = typeof crypto !== "undefined" && crypto.randomUUID
-          ? crypto.randomUUID()
-          : uid("REQ");
-        const clientSentAt = new Date().toISOString();
-        const expectedVersion = stateVersion.current;
-        try {
-          const response = await fetch("/api/state", {
-            method: "PUT",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              data,
-              expectedVersion,
-              requestId,
-              clientSentAt,
-              tabId: tabId.current,
-            }),
-          });
-          if (response.status === 409) {
-            // Konflikt wymaga świadomego przeładowania danych. Bez tej blokady
-            // każda kolejna lokalna mutacja ponawiała ten sam błędny zapis.
-            const payload = await response.json().catch(() => ({})) as {
-              currentVersion?: number;
-              requestId?: string;
-              detectedAt?: string;
-            };
-            cloudReady.current = false;
-            setSyncMode("conflict");
-            const conflict = {
-              source: "server-rejection",
-              detectedAt: payload.detectedAt ?? new Date().toISOString(),
-              expectedVersion,
-              currentVersion: payload.currentVersion,
-              requestId: payload.requestId ?? requestId,
-            } as const;
-            const generation = ++conflictGeneration.current;
-            setSyncConflict({
-              ...conflict,
-              changes: summarizeSyncChanges(baseData.current, latestData.current),
-            });
-            void compareConflictWithCloud(conflict, latestData.current, generation);
-            return;
-          }
-          if (!response.ok) throw new Error("save failed");
-          const payload = await response.json() as { version?: number; savedAt?: string };
-          if (typeof payload.version === "number") {
-            stateVersion.current = payload.version;
-            // Legacy PUT replaces every record and assigns the committed global
-            // version. Keep migrated record locks aligned until this path is gone.
-            bookingRecordVersions.current = new Map(data.bookings.map((booking) => [booking.id, payload.version!]));
-            consentRecordVersions.current = new Map(data.consents.map((consent) => [consent.bookingId, payload.version!]));
-            taskRecordVersions.current = new Map(data.tasks.map((task) => [task.id, payload.version!]));
-            checklistRecordVersions.current = new Map(data.checklistItems.map((item) => [item.id, payload.version!]));
-            paymentRecordVersions.current = new Map(data.payments.map((payment) => [payment.id, payload.version!]));
-            scheduledMessageRecordVersions.current = new Map(
-              data.scheduledMessages.map((message) => [message.id, payload.version!]),
-            );
-          }
-          savedRevision.current = Math.max(savedRevision.current, revisionToSave);
-          baseData.current = data;
-          setSyncMode("cloud");
-          const savedAt = payload.savedAt ?? new Date().toISOString();
-          setLastSavedAt(savedAt);
-          if (typeof payload.version === "number") {
-            syncChannel.current?.postMessage({
-              type: "state-committed",
-              tabId: tabId.current,
-              requestId,
-              version: payload.version,
-              savedAt,
-            } satisfies StateCommittedMessage);
-          }
-        } catch {
-          setSyncMode("error");
-        }
-      });
-    }, 700);
-    return () => window.clearTimeout(timeout);
-  }, [compareConflictWithCloud, data, dataStatus, hydrated]);
+  }, [data, dataStatus, hydrated]);
 
   const mutate = useCallback((fn: (current: AppData) => AppData) => {
     if (!dataReady.current) return;
@@ -839,6 +870,126 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setSyncMode("checking");
     setLoadRequest((request) => request + 1);
   }, []);
+
+  const batchMutate = useCallback((fn: (current: AppData) => AppData) => {
+    if (!dataReady.current) return;
+    if (!cloudConfigured) {
+      mutate(fn);
+      return;
+    }
+    if (!cloudReady.current) return;
+
+    const previous = latestData.current;
+    const next = fn(previous);
+    if (next === previous) return;
+    const revision = ++localRevision.current;
+    pendingRecordCommands.current += 1;
+    latestData.current = next;
+    setData(next);
+
+    cloudSaveQueue.current = cloudSaveQueue.current.then(async () => {
+      if (!cloudReady.current) {
+        finishRecordCommand();
+        return;
+      }
+      const changes = buildRecordBatchChanges(previous, next, batchRecordVersions.current);
+      if (!changes.length) {
+        savedRevision.current = Math.max(savedRevision.current, revision);
+        finishRecordCommand();
+        return;
+      }
+
+      const requestId = typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : uid("REQ");
+      const clientSentAt = new Date().toISOString();
+      try {
+        const response = await fetch("/api/records/batch", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            changes,
+            requestId,
+            clientSentAt,
+            tabId: tabId.current,
+          }),
+        });
+        if (response.status === 409) {
+          const conflictPayload = await response.json().catch(() => ({})) as {
+            currentRecordVersion?: number;
+            requestId?: string;
+            detectedAt?: string;
+          };
+          latestData.current = previous;
+          setData(previous);
+          cloudReady.current = false;
+          setSyncMode("conflict");
+          const conflict = {
+            source: "server-rejection" as const,
+            detectedAt: conflictPayload.detectedAt ?? new Date().toISOString(),
+            expectedVersion: stateVersion.current,
+            currentVersion: stateVersion.current,
+            requestId: conflictPayload.requestId ?? requestId,
+          };
+          const generation = ++conflictGeneration.current;
+          setSyncConflict({
+            ...conflict,
+            changes: summarizeSyncChanges(baseData.current, next),
+          });
+          void compareConflictWithCloud(conflict, next, generation);
+          return;
+        }
+        if (!response.ok) throw new Error("batch save failed");
+        const payload = await response.json() as RecordBatchCommandResult;
+        if (
+          typeof payload.stateVersion !== "number"
+          || !Array.isArray(payload.changes)
+        ) throw new Error("incomplete batch result");
+
+        for (const committed of payload.changes) {
+          const key = `${committed.entityType}:${committed.entityId}`;
+          if (committed.operation === "delete") batchRecordVersions.current.delete(key);
+          else batchRecordVersions.current.set(key, committed.recordVersion);
+          if (committed.entityType === "bookings") {
+            if (committed.operation === "delete") bookingRecordVersions.current.delete(committed.entityId);
+            else bookingRecordVersions.current.set(committed.entityId, committed.recordVersion);
+          } else if (committed.entityType === "consents") {
+            if (committed.operation === "delete") consentRecordVersions.current.delete(committed.entityId);
+            else consentRecordVersions.current.set(committed.entityId, committed.recordVersion);
+          } else if (committed.entityType === "tasks") {
+            if (committed.operation === "delete") taskRecordVersions.current.delete(committed.entityId);
+            else taskRecordVersions.current.set(committed.entityId, committed.recordVersion);
+          } else if (committed.entityType === "checklistItems") {
+            if (committed.operation === "delete") checklistRecordVersions.current.delete(committed.entityId);
+            else checklistRecordVersions.current.set(committed.entityId, committed.recordVersion);
+          } else if (committed.entityType === "scheduledMessages") {
+            if (committed.operation === "delete") scheduledMessageRecordVersions.current.delete(committed.entityId);
+            else scheduledMessageRecordVersions.current.set(committed.entityId, committed.recordVersion);
+          }
+        }
+        stateVersion.current = payload.stateVersion;
+        savedRevision.current = Math.max(savedRevision.current, revision);
+        baseData.current = next;
+        setSyncMode("cloud");
+        const savedAt = payload.savedAt ?? new Date().toISOString();
+        setLastSavedAt(savedAt);
+        syncChannel.current?.postMessage({
+          type: "state-committed",
+          tabId: tabId.current,
+          requestId,
+          version: payload.stateVersion,
+          savedAt,
+        } satisfies StateCommittedMessage);
+      } catch {
+        // Wynik sieci może być niejednoznaczny. Zostawiamy lokalny obraz i
+        // wymagamy ponownego pobrania zamiast ryzykować wtórną komendę.
+        cloudReady.current = false;
+        setSyncMode("error");
+      } finally {
+        finishRecordCommand();
+      }
+    });
+  }, [compareConflictWithCloud, finishRecordCommand, mutate]);
 
   const createBooking = useCallback((booking: Booking, contact?: ContactConsent) => {
     if (!dataReady.current) return;
@@ -1533,6 +1684,412 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     });
   }, [finishRecordCommand, mutate]);
 
+  const createCalendarBlock = useCallback(async (block: CalendarBlock) => {
+    if (
+      !dataReady.current
+      || blockCommandsInFlight.current.has(block.id)
+      || latestData.current.blocks.some((candidate) => candidate.id === block.id)
+    ) return false;
+
+    const clientSentAt = new Date().toISOString();
+    const optimisticBlock: CalendarBlock = {
+      ...block,
+      version: 1,
+      updatedAt: clientSentAt,
+    };
+
+    if (!cloudConfigured) {
+      mutate((current) => ({
+        ...current,
+        blocks: [optimisticBlock, ...current.blocks],
+        auditLog: [
+          audit("block", block.id, "created", block.reason),
+          ...current.auditLog,
+        ],
+      }));
+      return true;
+    }
+    if (!cloudReady.current) return false;
+
+    const requestId = typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : uid("REQ");
+    blockRecordVersions.current.set(block.id, 1);
+    blockCommandsInFlight.current.add(block.id);
+    pendingRecordCommands.current += 1;
+    setData((current) => ({
+      ...current,
+      blocks: [optimisticBlock, ...current.blocks],
+    }));
+
+    let commandSucceeded = false;
+    cloudSaveQueue.current = cloudSaveQueue.current.then(async () => {
+      if (!cloudReady.current) {
+        blockCommandsInFlight.current.delete(block.id);
+        blockRecordVersions.current.delete(block.id);
+        setData((current) => ({
+          ...current,
+          blocks: current.blocks.filter((candidate) => candidate.id !== block.id),
+        }));
+        finishRecordCommand();
+        return;
+      }
+      try {
+        const response = await fetch("/api/calendar-blocks", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            block: optimisticBlock,
+            expectedRecordVersion: 0,
+            requestId,
+            clientSentAt,
+            tabId: tabId.current,
+          }),
+        });
+        if (!response.ok) {
+          blockRecordVersions.current.delete(block.id);
+          setData((current) => ({
+            ...current,
+            blocks: current.blocks.filter((candidate) => candidate.id !== block.id),
+          }));
+          cloudReady.current = false;
+          setSyncMode(response.status === 409 ? "conflict" : "error");
+          if (response.status === 409) {
+            const payload = await response.json().catch(() => ({})) as {
+              currentRecordVersion?: number;
+              detectedAt?: string;
+              requestId?: string;
+            };
+            setSyncConflict({
+              source: "server-rejection",
+              detectedAt: payload.detectedAt ?? new Date().toISOString(),
+              expectedVersion: 0,
+              currentVersion: payload.currentRecordVersion,
+              requestId: payload.requestId ?? requestId,
+              changes: summarizeSyncChanges(baseData.current, latestData.current),
+            });
+          }
+          return;
+        }
+
+        const payload = await response.json() as {
+          block: CalendarBlock;
+          recordVersion: number;
+          stateVersion: number;
+          savedAt?: string;
+        };
+        const committedBlock = {
+          ...payload.block,
+          version: payload.recordVersion,
+        };
+        blockRecordVersions.current.set(block.id, payload.recordVersion);
+        stateVersion.current = payload.stateVersion;
+        setData((current) => ({
+          ...current,
+          blocks: current.blocks.map((candidate) => candidate.id === block.id
+            ? committedBlock
+            : candidate),
+        }));
+        baseData.current = {
+          ...baseData.current,
+          blocks: [
+            committedBlock,
+            ...baseData.current.blocks.filter((candidate) => candidate.id !== block.id),
+          ],
+        };
+        setSyncMode("cloud");
+        const savedAt = payload.savedAt ?? new Date().toISOString();
+        setLastSavedAt(savedAt);
+        commandSucceeded = true;
+        syncChannel.current?.postMessage({
+          type: "state-committed",
+          tabId: tabId.current,
+          requestId,
+          version: payload.stateVersion,
+          savedAt,
+        } satisfies StateCommittedMessage);
+      } catch {
+        // Niepewny zapis nowej blokady pozostaje widoczny i konserwatywnie
+        // pomniejsza dostępność do czasu ponownego pobrania danych.
+        cloudReady.current = false;
+        setSyncMode("error");
+      } finally {
+        blockCommandsInFlight.current.delete(block.id);
+        finishRecordCommand();
+      }
+    });
+    await cloudSaveQueue.current;
+    return commandSucceeded;
+  }, [finishRecordCommand, mutate]);
+
+  const updateCalendarBlock = useCallback(async (block: CalendarBlock) => {
+    if (!dataReady.current || blockCommandsInFlight.current.has(block.id)) return false;
+    const currentBlock = latestData.current.blocks.find((candidate) => candidate.id === block.id);
+    if (!currentBlock) return false;
+
+    if (!cloudConfigured) {
+      mutate((current) => ({
+        ...current,
+        blocks: current.blocks.map((candidate) => candidate.id === block.id ? block : candidate),
+        auditLog: [
+          audit("block", block.id, "updated", block.reason),
+          ...current.auditLog,
+        ],
+      }));
+      return true;
+    }
+    if (!cloudReady.current) return false;
+
+    const expectedRecordVersion = blockRecordVersions.current.get(block.id)
+      ?? currentBlock.version
+      ?? 1;
+    const requestId = typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : uid("REQ");
+    const clientSentAt = new Date().toISOString();
+    const optimisticBlock: CalendarBlock = {
+      ...block,
+      version: expectedRecordVersion + 1,
+      updatedAt: clientSentAt,
+    };
+
+    blockRecordVersions.current.set(block.id, expectedRecordVersion + 1);
+    blockCommandsInFlight.current.add(block.id);
+    pendingRecordCommands.current += 1;
+    setData((current) => ({
+      ...current,
+      blocks: current.blocks.map((candidate) => candidate.id === block.id
+        ? optimisticBlock
+        : candidate),
+    }));
+
+    let commandSucceeded = false;
+    cloudSaveQueue.current = cloudSaveQueue.current.then(async () => {
+      if (!cloudReady.current) {
+        blockCommandsInFlight.current.delete(block.id);
+        blockRecordVersions.current.set(block.id, expectedRecordVersion);
+        setData((current) => ({
+          ...current,
+          blocks: current.blocks.map((candidate) => candidate.id === block.id
+            ? currentBlock
+            : candidate),
+        }));
+        finishRecordCommand();
+        return;
+      }
+      try {
+        const response = await fetch(`/api/calendar-blocks/${encodeURIComponent(block.id)}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            block: optimisticBlock,
+            expectedRecordVersion,
+            requestId,
+            clientSentAt,
+            tabId: tabId.current,
+          }),
+        });
+        if (!response.ok) {
+          blockRecordVersions.current.set(block.id, expectedRecordVersion);
+          setData((current) => ({
+            ...current,
+            blocks: current.blocks.map((candidate) => candidate.id === block.id
+              ? currentBlock
+              : candidate),
+          }));
+          cloudReady.current = false;
+          setSyncMode(response.status === 409 ? "conflict" : "error");
+          if (response.status === 409) {
+            const payload = await response.json().catch(() => ({})) as {
+              currentRecordVersion?: number;
+              detectedAt?: string;
+              requestId?: string;
+            };
+            setSyncConflict({
+              source: "server-rejection",
+              detectedAt: payload.detectedAt ?? new Date().toISOString(),
+              expectedVersion: expectedRecordVersion,
+              currentVersion: payload.currentRecordVersion,
+              requestId: payload.requestId ?? requestId,
+              changes: summarizeSyncChanges(baseData.current, latestData.current),
+            });
+          }
+          return;
+        }
+
+        const payload = await response.json() as {
+          block: CalendarBlock;
+          recordVersion: number;
+          stateVersion: number;
+          savedAt?: string;
+        };
+        const committedBlock = {
+          ...payload.block,
+          version: payload.recordVersion,
+        };
+        blockRecordVersions.current.set(block.id, payload.recordVersion);
+        stateVersion.current = payload.stateVersion;
+        setData((current) => ({
+          ...current,
+          blocks: current.blocks.map((candidate) => candidate.id === block.id
+            ? committedBlock
+            : candidate),
+        }));
+        baseData.current = {
+          ...baseData.current,
+          blocks: baseData.current.blocks.map((candidate) => candidate.id === block.id
+            ? committedBlock
+            : candidate),
+        };
+        setSyncMode("cloud");
+        const savedAt = payload.savedAt ?? new Date().toISOString();
+        setLastSavedAt(savedAt);
+        commandSucceeded = true;
+        syncChannel.current?.postMessage({
+          type: "state-committed",
+          tabId: tabId.current,
+          requestId,
+          version: payload.stateVersion,
+          savedAt,
+        } satisfies StateCommittedMessage);
+      } catch {
+        // Anulowanie bez potwierdzenia nie może zwolnić terminu. Przywracamy
+        // ostatni potwierdzony rekord i wymagamy ponownego pobrania danych.
+        blockRecordVersions.current.set(block.id, expectedRecordVersion);
+        setData((current) => ({
+          ...current,
+          blocks: current.blocks.map((candidate) => candidate.id === block.id
+            ? currentBlock
+            : candidate),
+        }));
+        cloudReady.current = false;
+        setSyncMode("error");
+      } finally {
+        blockCommandsInFlight.current.delete(block.id);
+        finishRecordCommand();
+      }
+    });
+    await cloudSaveQueue.current;
+    return commandSucceeded;
+  }, [finishRecordCommand, mutate]);
+
+  const updateSettings = useCallback(async (settings: AppData["settings"]) => {
+    if (!dataReady.current) return false;
+    if (!cloudConfigured) {
+      mutate((current) => ({
+        ...current,
+        settings,
+        auditLog: [
+          audit("settings", "organization", "updated", "Zmieniono ustawienia organizacji"),
+          ...current.auditLog,
+        ],
+      }));
+      return true;
+    }
+    if (!cloudReady.current) return false;
+
+    const expectedRecordVersion = settingsRecordVersion.current
+      || latestData.current.settings.version
+      || 0;
+    const requestId = typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : uid("REQ");
+    const clientSentAt = new Date().toISOString();
+    const optimisticSettings = {
+      ...settings,
+      version: expectedRecordVersion + 1,
+      updatedAt: clientSentAt,
+    };
+
+    settingsRecordVersion.current = expectedRecordVersion + 1;
+    pendingRecordCommands.current += 1;
+    setData((current) => ({ ...current, settings: optimisticSettings }));
+
+    let commandSucceeded = false;
+    cloudSaveQueue.current = cloudSaveQueue.current.then(async () => {
+      if (!cloudReady.current) {
+        finishRecordCommand();
+        return;
+      }
+      try {
+        const response = await fetch("/api/settings", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            settings: optimisticSettings,
+            expectedRecordVersion,
+            requestId,
+            clientSentAt,
+            tabId: tabId.current,
+          }),
+        });
+        if (response.status === 409) {
+          const payload = await response.json().catch(() => ({})) as {
+            currentRecordVersion?: number;
+            detectedAt?: string;
+            requestId?: string;
+          };
+          cloudReady.current = false;
+          setSyncMode("conflict");
+          setSyncConflict({
+            source: "server-rejection",
+            detectedAt: payload.detectedAt ?? new Date().toISOString(),
+            expectedVersion: expectedRecordVersion,
+            currentVersion: payload.currentRecordVersion,
+            requestId: payload.requestId ?? requestId,
+            changes: summarizeSyncChanges(baseData.current, latestData.current),
+          });
+          return;
+        }
+        if (!response.ok) throw new Error("settings command failed");
+
+        const payload = await response.json() as {
+          settings: AppData["settings"];
+          recordVersion: number;
+          stateVersion: number;
+          savedAt?: string;
+        };
+        settingsRecordVersion.current = Math.max(
+          settingsRecordVersion.current,
+          payload.recordVersion,
+        );
+        stateVersion.current = payload.stateVersion;
+        const committedSettings = {
+          ...payload.settings,
+          version: payload.recordVersion,
+        };
+        setData((current) => ({
+          ...current,
+          settings: (current.settings.version ?? 0) <= payload.recordVersion
+            ? committedSettings
+            : current.settings,
+        }));
+        baseData.current = {
+          ...baseData.current,
+          settings: committedSettings,
+        };
+        setSyncMode("cloud");
+        const savedAt = payload.savedAt ?? new Date().toISOString();
+        setLastSavedAt(savedAt);
+        commandSucceeded = true;
+        syncChannel.current?.postMessage({
+          type: "state-committed",
+          tabId: tabId.current,
+          requestId,
+          version: payload.stateVersion,
+          savedAt,
+        } satisfies StateCommittedMessage);
+      } catch {
+        cloudReady.current = false;
+        setSyncMode("error");
+      } finally {
+        finishRecordCommand();
+      }
+    });
+    await cloudSaveQueue.current;
+    return commandSucceeded;
+  }, [finishRecordCommand, mutate]);
+
   const retryDataLoad = useCallback(() => {
     if (!cloudConfigured) return;
     conflictGeneration.current += 1;
@@ -1613,12 +2170,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     },
     updateTask,
     toggleChecklistItem: updateChecklistItem,
-    addIssue: (issue) => mutate((current) => ({
+    addIssue: (issue) => batchMutate((current) => ({
       ...current,
       issues: [issue, ...current.issues],
       auditLog: [audit("issue", issue.id, "created", issue.title), ...current.auditLog],
     })),
-    updateIssue: (issue) => mutate((current) => ({
+    updateIssue: (issue) => batchMutate((current) => ({
       ...current,
       issues: current.issues.map((item) => item.id === issue.id ? issue : item),
       tasks: current.tasks.map((task) => task.issueId === issue.id ? {
@@ -1629,7 +2186,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       } : task),
       auditLog: [audit("issue", issue.id, "updated", `${issue.title}: ${issue.status}`), ...current.auditLog],
     })),
-    prepareDepartureDebriefs: (bookingIds) => mutate((current) => {
+    prepareDepartureDebriefs: (bookingIds) => batchMutate((current) => {
       const missing = bookingIds.filter((bookingId) => !current.departureDebriefs.some((item) => item.bookingId === bookingId));
       if (!missing.length) return current;
       const next: AppData = {
@@ -1638,21 +2195,21 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       };
       return next;
     }),
-    markDeparturePrompted: (bookingId) => mutate((current) => ({
+    markDeparturePrompted: (bookingId) => batchMutate((current) => ({
       ...current,
       departureDebriefs: current.departureDebriefs.map((item) => item.bookingId === bookingId ? { ...item, lastPromptedAt: new Date().toISOString(), lastPromptedOn: todayInPoland() } : item),
     })),
-    snoozeDepartureDebrief: (bookingId) => mutate((current) => ({
+    snoozeDepartureDebrief: (bookingId) => batchMutate((current) => ({
       ...current,
       departureDebriefs: current.departureDebriefs.map((item) => item.bookingId === bookingId ? { ...item, lastPromptedAt: new Date().toISOString(), lastPromptedOn: todayInPoland(), snoozedUntil: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString() } : item),
     })),
-    skipDepartureDebrief: (bookingId, reason) => mutate((current) => ({
+    skipDepartureDebrief: (bookingId, reason) => batchMutate((current) => ({
       ...current,
       departureDebriefs: current.departureDebriefs.map((item) => item.bookingId === bookingId ? { ...item, status: "Pominięty", skipReason: reason, completedAt: new Date().toISOString() } : item),
       bookings: current.bookings.map((item) => item.id === bookingId ? { ...item, workflowStatus: "Po pobycie" } : item),
       auditLog: [audit("debrief", `DEB-${bookingId}`, "skipped", reason), ...current.auditLog],
     })),
-    saveDepartureDebrief: (debrief, issue) => mutate((current) => {
+    saveDepartureDebrief: (debrief, issue) => batchMutate((current) => {
       const booking = current.bookings.find((item) => item.id === debrief.bookingId);
       if (!booking) return current;
       const existingProfile = current.guests.find((item) => item.bookingId === booking.id) ?? { bookingId: booking.id };
@@ -1671,92 +2228,87 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       next.scheduledMessages = reconcileScheduledMessages(next);
       return next;
     }),
-    updateScheduledMessage: (message) => mutate((current) => ({
+    updateScheduledMessage: (message) => batchMutate((current) => ({
       ...current,
       scheduledMessages: current.scheduledMessages.map((item) => item.id === message.id ? message : item),
       auditLog: [audit("scheduled_message", message.id, "updated", `${message.status}: ${message.channel}`), ...current.auditLog],
     })),
-    addBlock: (block) => mutate((current) => ({
-      ...current,
-      blocks: [block, ...current.blocks],
-      auditLog: [audit("block", block.id, "created", block.reason), ...current.auditLog],
-    })),
-    updateBlock: (block) => mutate((current) => ({
-      ...current,
-      blocks: current.blocks.map((item) => item.id === block.id ? block : item),
-      auditLog: [audit("block", block.id, "updated", block.reason), ...current.auditLog],
-    })),
+    addBlock: createCalendarBlock,
+    updateBlock: updateCalendarBlock,
     addPayment: createPayment,
-    addInvoice: (invoice) => mutate((current) => ({
+    addInvoice: (invoice) => batchMutate((current) => ({
       ...current,
       invoices: [invoice, ...current.invoices],
       auditLog: [audit("invoice", invoice.id, "created", `Dokument ${invoice.number}`), ...current.auditLog],
     })),
-    addMessage: (message) => mutate((current) => ({
+    addMessage: (message) => batchMutate((current) => ({
       ...current,
       messages: [message, ...current.messages],
       auditLog: [audit("message", message.id, "created", `${message.channel}: ${message.status}`), ...current.auditLog],
     })),
-    addMedia: (media) => mutate((current) => ({
+    addMedia: (media) => batchMutate((current) => ({
       ...current,
       media: [media, ...current.media],
       auditLog: [audit("media", media.id, "created", media.caption ?? media.type), ...current.auditLog],
     })),
-    updateMedia: (media) => mutate((current) => ({
+    updateMedia: (media) => batchMutate((current) => ({
       ...current,
       media: current.media.map((item) => item.id === media.id ? media : item),
       auditLog: [audit("media", media.id, "updated", `Status: ${media.usageStatus}`), ...current.auditLog],
     })),
-    updateGuest: (profile) => mutate((current) => ({
+    updateGuest: (profile) => batchMutate((current) => ({
       ...current,
       guests: current.guests.some((item) => item.bookingId === profile.bookingId)
         ? current.guests.map((item) => item.bookingId === profile.bookingId ? profile : item)
         : [profile, ...current.guests],
       auditLog: [audit("guest", profile.bookingId, "updated", "Zaktualizowano profil gościa"), ...current.auditLog],
     })),
-    updateConsent: (consent) => mutate((current) => ({
-      ...current,
-      consents: current.consents.some((item) => item.bookingId === consent.bookingId)
-        ? current.consents.map((item) => item.bookingId === consent.bookingId ? consent : item)
-        : [consent, ...current.consents],
-      auditLog: [audit("consent", consent.bookingId, "updated", "Zaktualizowano dane kontaktowe i zgody"), ...current.auditLog],
-    })),
-    updateConnection: (connection) => mutate((current) => ({
+    updateConsent: (consent) => batchMutate((current) => {
+      const normalizedConsent = {
+        ...consent,
+        phone: consent.phone?.trim() || undefined,
+        email: consent.email?.trim() || undefined,
+      };
+      return {
+        ...current,
+        consents: current.consents.some((item) => item.bookingId === consent.bookingId)
+          ? current.consents.map((item) => item.bookingId === consent.bookingId ? normalizedConsent : item)
+          : [normalizedConsent, ...current.consents],
+        auditLog: [audit("consent", consent.bookingId, "updated", "Zaktualizowano dane kontaktowe i zgody"), ...current.auditLog],
+      };
+    }),
+    updateConnection: (connection) => batchMutate((current) => ({
       ...current,
       sourceConnections: current.sourceConnections.map((item) => item.id === connection.id ? connection : item),
       auditLog: [audit("connection", connection.id, "updated", `${connection.platform}: ${connection.status}`), ...current.auditLog],
     })),
-    updateUnit: (unit) => mutate((current) => ({
+    updateUnit: (unit) => batchMutate((current) => ({
       ...current,
       units: current.units.map((item) => item.id === unit.id ? unit : item),
       auditLog: [audit("unit", unit.id, "updated", `Zmieniono ceny i koszty: ${unit.name}`), ...current.auditLog],
     })),
-    upsertRate: (rate) => mutate((current) => ({
+    upsertRate: (rate) => batchMutate((current) => ({
       ...current,
       rates: current.rates.some((item) => item.id === rate.id) ? current.rates.map((item) => item.id === rate.id ? rate : item) : [rate, ...current.rates],
       auditLog: [audit("rate", rate.id, "updated", `${rate.season}: ${rate.pricePerNight} PLN`), ...current.auditLog],
     })),
-    deleteRate: (rateId) => mutate((current) => ({
+    deleteRate: (rateId) => batchMutate((current) => ({
       ...current,
       rates: current.rates.filter((item) => item.id !== rateId),
       auditLog: [audit("rate", rateId, "deleted", "Usunięto regułę sezonową"), ...current.auditLog],
     })),
-    upsertCostSetting: (cost) => mutate((current) => ({
+    upsertCostSetting: (cost) => batchMutate((current) => ({
       ...current,
       costSettings: current.costSettings.some((item) => item.id === cost.id) ? current.costSettings.map((item) => item.id === cost.id ? cost : item) : [cost, ...current.costSettings],
       auditLog: [audit("cost", cost.id, "updated", `${cost.label}: ${cost.value}/${cost.unit}`), ...current.auditLog],
     })),
-    deleteCostSetting: (costId) => mutate((current) => ({
+    deleteCostSetting: (costId) => batchMutate((current) => ({
       ...current,
       costSettings: current.costSettings.filter((item) => item.id !== costId),
       auditLog: [audit("cost", costId, "deleted", "Usunięto założenie kosztowe"), ...current.auditLog],
     })),
-    updateSettings: (settings) => mutate((current) => ({
-      ...current,
-      settings,
-      auditLog: [audit("settings", "organization", "updated", "Zmieniono ustawienia organizacji"), ...current.auditLog],
-    })),
-    replaceWithImportedBookings: (bookings, contacts = []) => mutate((current) => {
+    updateSettings,
+    replaceWithImportedBookings: (bookings, contacts = []) => batchMutate((current) => {
       const existingById = new Map(current.bookings.map((booking) => [booking.id, booking]));
       const created = bookings.filter((booking) => !existingById.has(booking.id));
       const createdIds = new Set(created.map((booking) => booking.id));
@@ -1789,19 +2341,22 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       clearPersistedAppData();
     },
   }), [
+    batchMutate,
     copyConflictChanges,
     commitBookingMutation,
     createBooking,
+    createCalendarBlock,
     createPayment,
     data,
     dataStatus,
     lastSavedAt,
-    mutate,
     reloadAfterConflict,
     retryDataLoad,
     syncConflict,
     syncMode,
     updateChecklistItem,
+    updateCalendarBlock,
+    updateSettings,
     updateTask,
   ]);
 
