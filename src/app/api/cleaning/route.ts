@@ -21,8 +21,8 @@ function forbidden() {
   return NextResponse.json({ error: "Ten endpoint jest dostępny wyłącznie dla konta sprzątania." }, { status: 403 });
 }
 
-export async function GET() {
-  const context = await requireOrganization();
+export async function GET(request: Request) {
+  const context = await requireOrganization(request);
   if (context.error) return context.error;
   if (context.role !== "cleaning") return forbidden();
   const service = createServiceClient();
@@ -41,7 +41,7 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  const context = await requireOrganization();
+  const context = await requireOrganization(request);
   if (context.error) return context.error;
   if (context.role !== "cleaning") return forbidden();
   const parsed = mutationSchema.safeParse(await request.json().catch(() => null));

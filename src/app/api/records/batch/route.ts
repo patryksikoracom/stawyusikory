@@ -8,7 +8,7 @@ import { isOrganizationEditor, requireOrganization } from "@/lib/supabase/auth-c
 const maxPayloadBytes = 4_000_000;
 
 export async function POST(request: Request) {
-  const context = await requireOrganization();
+  const context = await requireOrganization(request);
   if (context.error) return context.error;
   if (!isOrganizationEditor(context.role)) {
     return NextResponse.json({ error: "Konto nie ma dostępu do zapisu rekordów." }, { status: 403 });

@@ -6,13 +6,16 @@ describe("tożsamość widoczna w aplikacji", () => {
     expect(buildAppIdentity({
       email: "codex-test@stawyusikory.pl",
       metadata: {},
+      organizationId: "org-stawy",
       role: "admin",
       organizationName: "Stawy u Sikory",
     })).toEqual({
+      availableOrganizations: [],
       authenticated: true,
       displayName: "codex-test",
       email: "codex-test@stawyusikory.pl",
       initials: "CT",
+      organizationId: "org-stawy",
       organizationName: "Stawy u Sikory",
       role: "admin",
       roleLabel: "Administrator",
@@ -39,6 +42,7 @@ describe("tożsamość widoczna w aplikacji", () => {
       displayName: "Konto",
       email: null,
       initials: "KO",
+      organizationId: null,
       role: null,
       roleLabel: "Rola nieustalona",
     });
@@ -51,5 +55,11 @@ describe("tożsamość widoczna w aplikacji", () => {
       metadata: { display_name: "Jadzia" },
       role: "cleaning",
     })).toMatchObject({ displayName: "Jadzia", initials: "JA", role: "cleaning", roleLabel: "Sprzątanie" });
+  });
+
+  it("rozpoznaje nowe role bez odczytywania ich z user metadata", () => {
+    expect(roleLabel("manager")).toBe("Manager");
+    expect(roleLabel("marketing")).toBe("Marketing");
+    expect(roleLabel("accounting")).toBe("Księgowość");
   });
 });

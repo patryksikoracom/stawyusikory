@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { isOrganizationEditor, requireOrganization } from "@/lib/supabase/auth-context";
 
 export async function GET(request: Request) {
-  const context = await requireOrganization();
+  const context = await requireOrganization(request);
   if (context.error) return context.error;
   if (!isOrganizationEditor(context.role)) return NextResponse.json({ error: "Brak uprawnień do kalendarzy." }, { status: 403 });
   const { data, error } = await context.supabase!

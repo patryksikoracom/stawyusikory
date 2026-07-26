@@ -13,7 +13,7 @@ type RouteContext = {
 const maxPayloadBytes = 512_000;
 
 export async function PATCH(request: Request, { params }: RouteContext) {
-  const context = await requireOrganization();
+  const context = await requireOrganization(request);
   if (context.error) return context.error;
   if (!isOrganizationEditor(context.role)) {
     return NextResponse.json({ error: "Konto nie ma dostępu do zapisu rezerwacji." }, { status: 403 });

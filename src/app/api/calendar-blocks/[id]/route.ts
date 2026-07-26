@@ -11,7 +11,7 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const context = await requireOrganization();
+  const context = await requireOrganization(request);
   if (context.error) return context.error;
   if (!isOrganizationEditor(context.role)) {
     return NextResponse.json(

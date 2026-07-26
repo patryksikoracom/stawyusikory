@@ -5,7 +5,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 
 const invitationSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(254),
-  role: z.enum(["admin", "viewer", "cleaning"]),
+  role: z.enum(["admin", "manager", "cleaning", "marketing", "accounting", "viewer"]),
 });
 
 function invitationRedirect(request: Request) {
@@ -18,7 +18,7 @@ function invitationRedirect(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const context = await requireOrganization();
+  const context = await requireOrganization(request);
   if (context.error) return context.error;
   if (context.role !== "owner" && context.role !== "admin") {
     return NextResponse.json({ error: "Brak uprawnień do zapraszania użytkowników." }, { status: 403 });

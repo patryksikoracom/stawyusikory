@@ -2,7 +2,7 @@
 
 To jest jedno źródło prawdy dla luźnych pomysłów produktowych. Pomysł nie musi być gotową specyfikacją. Najpierw go zapisujemy, potem porównujemy z istniejącym systemem, zawężamy do małego testu i dopiero wtedy kierujemy do realizacji.
 
-Ostatnia aktualizacja: 2026-07-25.
+Ostatnia aktualizacja: 2026-07-26.
 
 ## Jak dodawać pomysły
 
@@ -47,14 +47,19 @@ Priorytet nie wynika z atrakcyjności funkcji. Liczą się: waga problemu, częs
 
 | Kolejność | ID | Pomysł | Status | Priorytet | Najbliższy krok |
 |---:|---|---|---|---|---|
-| 1 | POM-008 | Mobilny kalendarz dostępności jako ekran startowy operatora | Gotowy do realizacji | P1 — teraz | Przetestować prototyp na telefonie taty z jego powiększonym tekstem i przejść wybór zakresu dwoma tapnięciami. |
-| 2 | POM-006 | Cennik zgodny z Mobile Calendar: sezony, święta i długie weekendy | Do walidacji | P1 — teraz | Wyeksportować lub sfotografować obowiązujące stawki i porównać 10 terminów z kalkulatorem Stawy OS. |
-| 3 | POM-005 | Szybka wycena i zapis rezerwacji podczas rozmowy z gościem | Gotowy do realizacji | P1 — teraz | Przejść z tatą 10 rzeczywistych zapytań telefonicznych i zmierzyć zgodność ceny, czas wyceny oraz brakujące pola. |
-| 4 | POM-007 | E-mail z aplikacji: szablon, zatwierdzenie, wysyłka i status | Do walidacji | P1 — teraz | Zebrać używane szablony i ustalić, które wiadomości Mobile Calendar wysyła, z jakiego adresu oraz z jakim potwierdzeniem. |
-| 5 | POM-004 | Czytelny stan obiektu: kto jest i co wydarzy się następne | Gotowy do realizacji | P1 — teraz | Po kalendarzu sprawdzić karty domków na rzeczywistym tygodniu, w tym zmianę gości tego samego dnia. |
-| 6 | POM-001 | Ogólny rejestr faktycznych kosztów | Do pilotażu | P1 — teraz | Wprowadzić ręcznie koszty jednego zamkniętego miesiąca i porównać sumę z rachunkami. |
-| 7 | POM-002 | Odczyty liczników i koszt energii | Do pilotażu | P2 — następne | Zapisać 2–3 kolejne odczyty jednego licznika ze zdjęciami i ręcznie potwierdzonymi wartościami. |
-| 8 | POM-003 | Rejestr zdarzeń operacyjnych, np. wcześniejszy wyjazd | Do walidacji | P3 — później | Zebrać pięć rzeczywistych przykładów i sprawdzić, których nie obsługuje już podsumowanie pobytu, zadanie lub usterka. |
+| 1 | POM-009 | Odizolowany test migracji RLS dla dwóch organizacji i siedmiu ról | Gotowy do realizacji | P1 — teraz | Sprawdzić dostępność i koszt gałęzi Supabase, a następnie utworzyć tymczasowe środowisko testowe. |
+| 2 | POM-010 | Interfejs dopasowany do roli użytkownika | Do walidacji | P1 — teraz | Przejść po aplikacji jako manager, marketing, accounting i viewer; spisać dozwolone ekrany oraz akcje. |
+| 3 | POM-011 | E2E separacji tenantów i lokalnego cache | Gotowy do realizacji | P1 — teraz | Po POM-009 zautomatyzować scenariusz dwóch kont i dwóch organizacji, w tym przełączenie organizacji w jednej przeglądarce. |
+| 4 | POM-008 | Mobilny kalendarz dostępności jako ekran startowy operatora | Gotowy do realizacji | P1 — teraz | Przetestować prototyp na telefonie taty z jego powiększonym tekstem i przejść wybór zakresu dwoma tapnięciami. |
+| 5 | POM-006 | Cennik zgodny z Mobile Calendar: sezony, święta i długie weekendy | Do walidacji | P1 — teraz | Wyeksportować lub sfotografować obowiązujące stawki i porównać 10 terminów z kalkulatorem Stawy OS. |
+| 6 | POM-005 | Szybka wycena i zapis rezerwacji podczas rozmowy z gościem | Wstrzymany | P1 — teraz | Przejść z tatą 10 rzeczywistych zapytań telefonicznych i zmierzyć zgodność ceny, czas wyceny oraz brakujące pola. |
+| 7 | POM-007 | E-mail z aplikacji: szablon, zatwierdzenie, wysyłka i status | Do walidacji | P1 — teraz | Zebrać używane szablony i ustalić, które wiadomości Mobile Calendar wysyła, z jakiego adresu oraz z jakim potwierdzeniem. |
+| 8 | POM-004 | Czytelny stan obiektu: kto jest i co wydarzy się następne | Do walidacji | P1 — teraz | Po kalendarzu sprawdzić karty domków na rzeczywistym tygodniu, w tym zmianę gości tego samego dnia. |
+| 9 | POM-001 | Ogólny rejestr faktycznych kosztów | Do pilotażu | P1 — teraz | Wprowadzić ręcznie koszty jednego zamkniętego miesiąca i porównać sumę z rachunkami. |
+| 10 | POM-012 | Audyt zmian ról i przełączeń organizacji | Do walidacji | P2 — następne | Ustalić minimalny zestaw zdarzeń audytu, retencję oraz osobę przeglądającą log. |
+| 11 | POM-013 | Uprawnienia zapisu dla managera | Do walidacji | P2 — następne | Zatwierdzić listę operacji, które manager może wykonać bez dostępu do pełnych finansów. |
+| 12 | POM-002 | Odczyty liczników i koszt energii | Do pilotażu | P2 — następne | Zapisać 2–3 kolejne odczyty jednego licznika ze zdjęciami i ręcznie potwierdzonymi wartościami. |
+| 13 | POM-003 | Rejestr zdarzeń operacyjnych, np. wcześniejszy wyjazd | Do walidacji | P3 — później | Zebrać pięć rzeczywistych przykładów i sprawdzić, których nie obsługuje już podsumowanie pobytu, zadanie lub usterka. |
 
 ---
 
@@ -241,7 +246,7 @@ Zebrać pięć rzeczywistych przykładów zdarzeń, które warto zachować. Dla 
 ## POM-004 — Czytelny stan obiektu: kto jest i co wydarzy się następne
 
 **Data dodania:** 2026-07-24<br>
-**Status:** Gotowy do realizacji<br>
+**Status:** Do walidacji<br>
 **Priorytet:** P1 — teraz<br>
 **Źródło:** rozmowa z Patrykiem
 
@@ -338,7 +343,7 @@ Próba powinna obejmować domek wolny, pobyt wielodniowy, przyjazd jutro oraz wy
 ## POM-005 — Szybka wycena i zapis rezerwacji podczas rozmowy z gościem
 
 **Data dodania:** 2026-07-25<br>
-**Status:** Gotowy do realizacji<br>
+**Status:** Wstrzymany<br>
 **Priorytet:** P1 — teraz<br>
 **Źródło:** rozmowa Patryka z tatą
 
@@ -671,3 +676,165 @@ Ekran startowy roli operatora ma od razu pokazać wizualną dostępność Czapli
 - PR-10d dla kalendarza i wyboru zakresu na telefonie.
 - POM-005 dla wyceny i zapisu po wyborze terminu.
 - PR-7/PR-8 i Etap 7 dla uczciwego stanu konfliktu oraz synchronizacji.
+
+---
+
+## POM-009 — Odizolowany test migracji RLS dla dwóch organizacji i siedmiu ról
+
+**Data dodania:** 2026-07-26<br>
+**Status:** Do walidacji<br>
+**Priorytet:** P1 — teraz<br>
+**Źródło:** weryfikacja PR-9a
+
+### Problem i oczekiwany efekt
+
+PR-9a definiuje organizacje, role i RLS, ale projekt operacyjny nie może służyć do destrukcyjnych testów migracji. Bez odizolowanej bazy nie ma dowodu, że konto z organizacji A nie odczyta ani nie zmieni danych B po zastosowaniu migracji.
+
+Efektem jest powtarzalny, jednorazowy test na tymczasowej gałęzi Supabase z raportem wyników RLS i Advisorów.
+
+### Co już istnieje
+
+- Migracja `20260726180725_pr9a_organization_rbac.sql` oraz testy kontraktu dla aktywnej organizacji, ról i projekcji danych.
+- Preview Vercel i testy lokalne przechodzą.
+- Brakuje odizolowanej gałęzi bazy, na której można bezpiecznie zastosować DDL oraz dane dwóch tenantów.
+
+### Najmniejszy sensowny zakres
+
+- utworzyć tymczasową gałąź Supabase od aktualnego projektu;
+- zastosować pełną historię migracji wraz z PR-9a;
+- utworzyć organizacje A/B i po jednym użytkowniku dla każdej z siedmiu ról;
+- potwierdzić pozytywne i negatywne odczyty/zapisy, w tym PII, finanse i panel sprzątania;
+- ponowić Security i Performance Advisor;
+- usunąć gałąź po zapisaniu niezbędnego raportu, bez kopiowania danych produkcyjnych.
+
+### Walidacja
+
+Test przechodzi, jeśli każda rola ma wyłącznie przewidziane uprawnienia, organizacja A nie może dotknąć B, surowe rekordy nie są dostępne rolom ograniczonym, a Advisor nie pokazuje nowych ostrzeżeń poza zaakceptowanym HIBP na planie Free.
+
+### Ryzyka i zależności
+
+- Wymaga uprawnień i ewentualnej zgody kosztowej na Supabase Branching.
+- Nie wykonywać na projekcie operacyjnym ani na danych gości.
+
+---
+
+## POM-010 — Interfejs dopasowany do roli użytkownika
+
+**Data dodania:** 2026-07-26<br>
+**Status:** Do walidacji<br>
+**Priorytet:** P1 — teraz<br>
+**Źródło:** weryfikacja PR-9a
+
+### Problem i oczekiwany efekt
+
+API i projekcja danych ograniczają dostęp według roli, ale widoczne moduły aplikacji nadal są w dużej mierze wspólne. Użytkownik może więc zobaczyć ekran, który zwróci pusty stan albo odmowę akcji.
+
+Efektem ma być prostsza nawigacja: każda rola widzi tylko ekrany i akcje, które mogą być dla niej użyteczne.
+
+### Co już istnieje
+
+- Macierz `read/write/PII/finance/send/export` i dedykowany panel `cleaning`.
+- Projekcja danych ogranicza PII i finanse w ogólnym stanie.
+- Brakuje zatwierdzonej mapy ekranów dla managera, marketingu, księgowości i viewer.
+
+### Najmniejszy sensowny zakres
+
+- ustalić macierz: rola → startowy ekran → widoczne moduły → dozwolone akcje;
+- ukryć nawigację i przyciski, których rola nie może użyć;
+- zapewnić zrozumiały stan „brak dostępu” dla wejścia z zapisanego linku;
+- nie rozszerzać uprawnień API wyłącznie po to, aby usunąć pusty ekran.
+
+### Walidacja
+
+Przejść każdy ekran jako manager, marketing, accounting i viewer. Żadna rola nie widzi ceny, kontaktu, eksportu ani wysyłki bez właściwego uprawnienia; nie ma martwych przycisków ani mylących pustych widoków.
+
+### Zależności
+
+POM-009 jako potwierdzenie RLS; POM-008 dla startowego ekranu operatora.
+
+---
+
+## POM-011 — E2E separacji tenantów i lokalnego cache
+
+**Data dodania:** 2026-07-26<br>
+**Status:** Wstrzymany<br>
+**Priorytet:** P1 — teraz<br>
+**Źródło:** weryfikacja PR-9a
+
+### Problem i oczekiwany efekt
+
+Jednostkowe testy sprawdzają resolver organizacji i redakcję danych, ale nie odtwarzają całej ścieżki przeglądarki. Szczególnie istotne jest, aby przełączenie organizacji nie zostawiło danych poprzedniego tenanta w local storage, Service Workerze ani widoku.
+
+Efektem jest automatyczny test dwóch kont i dwóch organizacji, który zatrzymuje regresję izolacji przed merge.
+
+### Co już istnieje
+
+- Przełącznik organizacji czyści lokalny cache przed przeładowaniem.
+- Testy jednostkowe obejmują obcą organizację i `HttpOnly` cookie.
+- Brakuje testu E2E z realnymi sesjami oraz asercją zawartości po przełączeniu.
+
+### Najmniejszy sensowny zakres
+
+- konto A ma dostęp wyłącznie do A, konto B wyłącznie do B;
+- konto wieloorganizacyjne przełącza A → B w jednej przeglądarce;
+- test sprawdza brak danych A po przełączeniu, brak 403 dla poprawnego członkostwa i 403 dla obcego ID;
+- test jest uruchamiany wyłącznie na odizolowanym Supabase.
+
+### Walidacja
+
+Każdy scenariusz przechodzi w CI; zrzut local storage i odpowiedź `/api/state` po przełączeniu nie zawierają identyfikatorów ani danych poprzedniej organizacji.
+
+### Zależności
+
+POM-009 i narzędzie E2E z bezpiecznymi kontami testowymi.
+
+---
+
+## POM-012 — Audyt zmian ról i przełączeń organizacji
+
+**Data dodania:** 2026-07-26<br>
+**Status:** Do walidacji<br>
+**Priorytet:** P2 — następne<br>
+**Źródło:** weryfikacja PR-9a
+
+### Problem i oczekiwany efekt
+
+Istnieje audyt komend operacyjnych, lecz nie ma uzgodnionego śladu zmian członkostwa, roli ani przełączenia kontekstu organizacji. Przy dostępie do PII i finansów potrzebne jest odtworzenie: kto zmienił dostęp, kiedy i w jakiej organizacji.
+
+### Najmniejszy sensowny zakres
+
+- audytować zaproszenie, zmianę roli, odebranie dostępu i przełączenie aktywnej organizacji;
+- zapisywać aktora, organizację, zmianę przed/po oraz request ID, bez sekretów i nadmiarowego PII;
+- udostępnić odczyt tylko owner/admin i zdefiniować retencję.
+
+### Walidacja i pytania
+
+Na testowej organizacji wykonać każdą zmianę i potwierdzić kompletny wpis. Do decyzji: retencja, eksport audytu, zakres widoczności oraz czy zwykłe przełączenie organizacji jest zdarzeniem bezpieczeństwa czy wyłącznie telemetryką.
+
+---
+
+## POM-013 — Uprawnienia zapisu dla managera
+
+**Data dodania:** 2026-07-26<br>
+**Status:** Do walidacji<br>
+**Priorytet:** P2 — następne<br>
+**Źródło:** weryfikacja PR-9a
+
+### Problem i oczekiwany efekt
+
+PR-9a zachowuje zapis ogólnego stanu dla owner/admin, dlatego manager ma obecnie bezpieczny dostęp operacyjny do odczytu bez pełnych finansów. Przed nadaniem zapisu trzeba zdecydować, które konkretne czynności są potrzebne operatorowi i nie otwierają drogi do zmiany cen, eksportu lub danych księgowych.
+
+### Najmniejszy sensowny zakres
+
+- zebrać 10 realnych działań managera;
+- dla każdego wskazać komendę, rekord, skutki uboczne i wymagane dane;
+- nadać tylko jawne uprawnienia per komenda, np. status zadania lub blokada kalendarza;
+- wykluczyć ceny, płatności, eksport i zarządzanie członkostwem, dopóki nie zostaną osobno zatwierdzone.
+
+### Walidacja
+
+Manager wykonuje zatwierdzone działania, a próby zmiany finansów, ról, eksportu i wysyłki kończą się 403 zarówno w UI, jak i API.
+
+### Zależności
+
+POM-009 oraz PR‑9b dla zleceń i turnoveru.

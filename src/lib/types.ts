@@ -1,4 +1,11 @@
-export type UserRole = "owner" | "admin" | "viewer" | "cleaning";
+export type UserRole =
+  | "owner"
+  | "admin"
+  | "manager"
+  | "cleaning"
+  | "marketing"
+  | "accounting"
+  | "viewer";
 
 export type Currency = "PLN" | "EUR";
 

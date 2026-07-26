@@ -1,18 +1,26 @@
 import type { UserRole } from "@/lib/types";
 
 export type AppIdentity = {
+  availableOrganizations: Array<{
+    id: string;
+    name: string;
+    role: UserRole;
+  }>;
   authenticated: boolean;
   displayName: string;
   email: string | null;
   initials: string;
+  organizationId: string | null;
   organizationName: string | null;
   role: UserRole | null;
   roleLabel: string;
 };
 
 type IdentityInput = {
+  availableOrganizations?: AppIdentity["availableOrganizations"];
   email?: string | null;
   metadata?: Record<string, unknown> | null;
+  organizationId?: string | null;
   organizationName?: string | null;
   role?: string | null;
 };
@@ -20,12 +28,21 @@ type IdentityInput = {
 const roleLabels: Record<UserRole, string> = {
   owner: "Właściciel",
   admin: "Administrator",
+  manager: "Manager",
   viewer: "Podgląd",
   cleaning: "Sprzątanie",
+  marketing: "Marketing",
+  accounting: "Księgowość",
 };
 
 export function isUserRole(value: unknown): value is UserRole {
-  return value === "owner" || value === "admin" || value === "viewer" || value === "cleaning";
+  return value === "owner"
+    || value === "admin"
+    || value === "manager"
+    || value === "viewer"
+    || value === "cleaning"
+    || value === "marketing"
+    || value === "accounting";
 }
 
 export function roleLabel(role: UserRole | null) {
@@ -50,17 +67,26 @@ function metadataName(metadata?: Record<string, unknown> | null) {
   return null;
 }
 
-export function buildAppIdentity({ email, metadata, organizationName, role }: IdentityInput): AppIdentity {
+export function buildAppIdentity({
+  availableOrganizations = [],
+  email,
+  metadata,
+  organizationId,
+  organizationName,
+  role,
+}: IdentityInput): AppIdentity {
   const normalizedEmail = email?.trim() || null;
   const emailName = normalizedEmail?.split("@")[0]?.trim() || null;
   const displayName = metadataName(metadata) ?? emailName ?? "Konto";
   const validRole = isUserRole(role) ? role : null;
 
   return {
+    availableOrganizations,
     authenticated: Boolean(normalizedEmail),
     displayName,
     email: normalizedEmail,
     initials: initialsFor(displayName),
+    organizationId: organizationId?.trim() || null,
     organizationName: organizationName?.trim() || null,
     role: validRole,
     roleLabel: roleLabel(validRole),

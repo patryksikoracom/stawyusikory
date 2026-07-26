@@ -8,7 +8,7 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
-  const context = await requireOrganization();
+  const context = await requireOrganization(request);
   if (context.error) return context.error;
   if (!isOrganizationEditor(context.role)) return NextResponse.json({ error: "Brak uprawnień do importu." }, { status: 403 });
   const parsed = schema.safeParse(await request.json().catch(() => null));

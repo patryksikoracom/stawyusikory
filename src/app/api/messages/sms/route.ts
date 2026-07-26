@@ -13,7 +13,7 @@ const schema = z.object({
 export async function POST(request: Request) {
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Sprawdź numer telefonu i treść SMS." }, { status: 400 });
-  const context = await requireOrganization();
+  const context = await requireOrganization(request);
   if (context.error) return context.error;
   if (!isOrganizationEditor(context.role)) return NextResponse.json({ error: "Brak uprawnień do wysyłania wiadomości." }, { status: 403 });
   if (!isSmsDeliveryEnabled()) return NextResponse.json({ error: smsDeliveryDisabledMessage, deliveryEnabled: false }, { status: 423 });
