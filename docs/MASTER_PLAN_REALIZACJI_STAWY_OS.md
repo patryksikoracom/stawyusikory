@@ -44,14 +44,14 @@ Commit, push i deployment są osobnymi decyzjami. Samo ukończenie lokalnej pacz
 | PR-8b / Etap 3.3 | **wdrożony online 25.07.2026** | wersjonowana komenda `PATCH /api/checklist-items/:id`, transakcyjny audyt, szybkie kolejne kliknięcia bez regresji i bezpieczne odświeżenie po sygnale z drugiej karty; 162 testy przechodzą |
 | PR-8c / Etap 3.4 | **wdrożony online 25.07.2026** | `POST /api/bookings` tworzy atomowo rezerwację, kontakt, zadania, checklistę i szkice komunikacji; blokada per domek chroni przed równoległym double-bookingiem, a request ID zapewnia idempotencję |
 | PR-8d / Etap 3.5 | **wdrożony online 26.07.2026** | `PATCH /api/bookings/:id` aktualizuje lub anuluje rezerwację razem z kontaktem, zadaniami i szkicami wiadomości; wersje rekordów, blokady domków, audyt oraz zero pełnego `PUT` są pokryte testami |
-| PR-8e1 / Etap 3.6 | **wdrożony online 26.07.2026 — draft PR #20** | kosz i przywracanie rezerwacji używają jawnej operacji w atomowej komendzie agregatu; zachowują statusy zadań i wiadomości, blokują wygasłe/kolizyjne przywrócenie i nie wykonują pełnego `PUT` |
-| PR-8e2 / Etap 3.7 | **wdrożony online 26.07.2026 — draft PR #20** | `POST /api/payments` księguje pojedynczą, walidowaną i idempotentną transakcję; konflikt identyfikatora, waluta, źródła kosztów/prowizji, wersja stanu i audyt są obsłużone bez pełnego `PUT` |
+| PR-8e1 / Etap 3.6 | **wdrożony online 26.07.2026 — PR #20 scalony** | kosz i przywracanie rezerwacji używają jawnej operacji w atomowej komendzie agregatu; zachowują statusy zadań i wiadomości, blokują wygasłe/kolizyjne przywrócenie i nie wykonują pełnego `PUT` |
+| PR-8e2 / Etap 3.7 | **wdrożony online 26.07.2026 — PR #20 scalony** | `POST /api/payments` księguje pojedynczą, walidowaną i idempotentną transakcję; konflikt identyfikatora, waluta, źródła kosztów/prowizji, wersja stanu i audyt są obsłużone bez pełnego `PUT` |
 | PR-8e3 / Etap 3.8 | **wdrożony online 26.07.2026 — PR #20** | `PATCH /api/settings` zapisuje singleton `settings/organization` z wersją rekordu, walidacją Zod/Postgres, konfliktem 409 i audytem; formularz nie ogłasza sukcesu przed potwierdzeniem i nie wykonuje pełnego `PUT` |
 | PR-8e4a / Etap 3.9 | **wdrożony online 26.07.2026 — PR #20** | `POST /api/calendar-blocks` i `PATCH /api/calendar-blocks/:id` tworzą oraz anulują blokady wersjonowanymi komendami; wspólna blokada domku serializuje wyścig z rezerwacją, a UI odróżnia lokalny zapis od potwierdzenia Mobile Calendar/OTA |
 | PR-8 zbiorczo / Etap 3 | **wdrożony online 26.07.2026 — PR #20** | wszystkie pozostałe rodziny mutacji używają atomowej, wersjonowanej komendy batchowej; klient i API nie udostępniają już pełnego `PUT /api/state`; 289 testów, lint, TypeScript i build 33 tras przechodzą |
 | Etap 3 jako całość | **zamknięty online 26.07.2026** | PR-7 i cały PR-8 działają online; migracje, uprawnienia RPC, login, chronione trasy, konsola i runtime zostały potwierdzone po wdrożeniu |
-| PR-9a / Etap 4.1 | **draft PR #22 opublikowany 26.07.2026** | jawna aktywna organizacja bez `limit(1)`, siedem ról, macierz uprawnień, projekcja PII/finansów, RLS i poprawki Advisora; 309 testów, lint, TypeScript, build i smoke desktop/390 px przechodzą. Migracja czeka na test w odizolowanym Supabase |
-| PR-9b / Etap 4.2 | **implementacja lokalna gotowa do draft PR 26.07.2026** | jawnie tenantowy turnover, przyjęcie/odrzucenie, kolejki zespołu, wersjonowana checklista 10 kroków, dowód gotowości, eskalacje, odświeżenie po 7 dniach i minimalna bramka wydania kluczy; 328 testów, lint, TypeScript i build przechodzą. Migracja czeka na odizolowany Supabase |
+| PR-9a / Etap 4.1 | **wdrożony online 26.07.2026 — PR #22 scalony** | jawna aktywna organizacja bez `limit(1)`, siedem ról, macierz uprawnień, projekcja PII/finansów, RLS i poprawki Advisora; testy, lint, TypeScript, build, migracja i produkcyjny smoke przechodzą |
+| PR-9b / Etap 4.2 | **wdrożony online 26.07.2026 — PR #23 scalony** | jawnie tenantowy turnover, przyjęcie/odrzucenie, kolejki zespołu, wersjonowana checklista 10 kroków, dowód gotowości, eskalacje, odświeżenie po 7 dniach i minimalna bramka wydania kluczy; testy, lint, TypeScript, build, migracja i produkcyjny smoke przechodzą |
 | PR-9c / Etap 4.3 | **wdrożony online 26.07.2026 — draft PR #24** | wersjonowany rejestr zatwierdzonego SOP, zadanie tylko dla bieżącego/przyszłego pobytu z dziećmi, minimalny dowód wykonania i kontrolowana reakcja bez danych dziecka; 347 testów, lint, TypeScript, build 35 tras, migracja z transakcyjnym rollbackiem i produkcyjny smoke przechodzą. Funkcja jest online, ale aktywacja nadal czeka na zatwierdzony SOP |
 
 ## Bramka wydania: MVP operatora dla taty
@@ -89,14 +89,14 @@ Test taty z 25.07.2026 zmienia priorytet interfejsu operatora: kalendarz, wolne 
 | 10b | Etap 3 — zapis domenowy | **PR-8b — wdrożony online** | wersjonowana aktualizacja punktu checklisty bez pełnego snapshotu | migracja online; testy regresji przechodzą |
 | 10c | Etap 3 — zapis domenowy | **PR-8c — wdrożony online** | atomowe utworzenie agregatu rezerwacji bez pełnego snapshotu | migracja online; pełny test równoległości pozostaje dla odizolowanego środowiska |
 | 10d | Etap 3 — zapis domenowy | **PR-8d — wdrożony online** | wersjonowana aktualizacja/anulowanie rezerwacji wraz z kontaktem, zadaniami i szkicami wiadomości | migracja i bezpieczny smoke RPC online; 204 testy oraz produkcyjny smoke przechodzą |
-| 10e | Etap 3 — zapis domenowy | **PR-8e1 — wdrożony online, draft #20** | kosz/przywracanie rezerwacji bez pełnego snapshotu | migracja online i produkcyjny smoke przechodzą; pełny test destrukcyjny pozostaje dla odizolowanego Supabase |
-| 10f | Etap 3 — zapis domenowy | **PR-8e2 — wdrożony online, draft #20** | księgowanie płatności bez pełnego snapshotu | migracja online i produkcyjny smoke przechodzą; pełny test destrukcyjny pozostaje dla odizolowanego Supabase |
-| 10g | Etap 3 — zapis domenowy | **PR-8e3 — gotowy lokalnie** | ustawienia organizacji bez pełnego snapshotu | osobna wersjonowana komenda, konflikt rekordu, 245 testów i smoke desktop/mobile przechodzą; migracja czeka na publikację |
-| 10h | Etap 3 — zapis domenowy | **PR-8e4a — gotowy lokalnie** | tworzenie i anulowanie blokad kalendarza bez pełnego snapshotu | wersjonowane komendy, konflikt dostępności, wyścig rezerwacja↔blokada i dostępny dialog; migracja czeka na publikację |
-| 10i | Etap 3 — zapis domenowy | **PR-8 zbiorczo — komplet lokalnie** | wszystkie pozostałe mutacje: usterki, debrief, komunikacja, faktury, media, profile, zgody, połączenia, domki, stawki, koszty i import | jedna atomowa komenda batchowa, wersje rekordów, konflikt 409, audyt i brak pełnego `PUT /api/state` |
-| 11 | Etap 4 — organizacje i role | **PR-9a — draft #22** | active organization, role, RLS i izolacja PII/finansów | testy kontraktu dwóch organizacji i wszystkich ról przechodzą; właściwy test RLS czeka na odizolowany Supabase |
-| 12 | Etap 4 — operacje zespołu | **PR-9b — gotowy lokalnie** | zlecenia sprzątania, przyjęcie, checklisty per domek i eskalacja | automatyczne testy pełnego turnoveru i redakcji przechodzą; właściwy test RPC/RLS i realnego konta czeka na odizolowany Supabase |
-| 13 | Etap 4 — zgodność operacyjna | **PR-9c — wdrożony online, draft #24** | procedura małoletnich wynikająca z zatwierdzonego SOP i minimalizacja danych | 347 testów, migracja i produkcyjny smoke przechodzą; aktywacja czeka na zatwierdzony SOP |
+| 10e | Etap 3 — zapis domenowy | **PR-8e1 — wdrożony online, PR #20 scalony** | kosz/przywracanie rezerwacji bez pełnego snapshotu | migracja online i produkcyjny smoke przechodzą; pełny test destrukcyjny pozostaje dla odizolowanego Supabase |
+| 10f | Etap 3 — zapis domenowy | **PR-8e2 — wdrożony online, PR #20 scalony** | księgowanie płatności bez pełnego snapshotu | migracja online i produkcyjny smoke przechodzą; pełny test destrukcyjny pozostaje dla odizolowanego Supabase |
+| 10g | Etap 3 — zapis domenowy | **PR-8e3 — wdrożony online, PR #20 scalony** | ustawienia organizacji bez pełnego snapshotu | osobna wersjonowana komenda, konflikt rekordu, migracja i produkcyjny smoke przechodzą |
+| 10h | Etap 3 — zapis domenowy | **PR-8e4a — wdrożony online, PR #20 scalony** | tworzenie i anulowanie blokad kalendarza bez pełnego snapshotu | wersjonowane komendy, konflikt dostępności, wyścig rezerwacja↔blokada, migracja i produkcyjny smoke przechodzą |
+| 10i | Etap 3 — zapis domenowy | **PR-8 zbiorczo — wdrożony online, PR #20 scalony** | wszystkie pozostałe mutacje: usterki, debrief, komunikacja, faktury, media, profile, zgody, połączenia, domki, stawki, koszty i import | jedna atomowa komenda batchowa, wersje rekordów, konflikt 409, audyt i brak pełnego `PUT /api/state` |
+| 11 | Etap 4 — organizacje i role | **PR-9a — wdrożony online, PR #22 scalony** | active organization, role, RLS i izolacja PII/finansów | migracja oraz produkcyjny smoke przechodzą |
+| 12 | Etap 4 — operacje zespołu | **PR-9b — wdrożony online, PR #23 scalony** | zlecenia sprzątania, przyjęcie, checklisty per domek i eskalacja | migracja oraz produkcyjny smoke przechodzą |
+| 13 | Etap 4 — zgodność operacyjna | **PR-9c — wdrożony online, PR #24 scalony** | procedura małoletnich wynikająca z zatwierdzonego SOP i minimalizacja danych | 347 testów, migracja i produkcyjny smoke przechodzą; aktywacja czeka na zatwierdzony SOP |
 | 14 | Etap 5 — fundament UX | PR-10a | wspólne dialogi, klawiatura, mobile, paginacja i wydajność | WCAG smoke test i 1000 rekordów |
 | 15 | Etap 5 — Dzisiaj | PR-10b | chronologiczna agenda, stan domków i same-day turnover | w 5 sekund widać przyjazdy, wyjazdy i brak gotowości |
 | 16 | Etap 5 — rezerwacje | PR-10c | prosty formularz, jawne filtry/sortowanie, lista i szczegół | powrót zachowuje filtry; kanał zawarcia nie miesza się ze źródłem odkrycia |
@@ -429,9 +429,7 @@ Migracja PR-9a:
 - dodaje bezpieczną politykę odczytu własnego `users_profiles`;
 - blokuje surowy snapshot i rekordy przed rolami ograniczonymi.
 
-Walidacja lokalna: **309/309 testów**, ESLint, TypeScript, kontrola konfiguracji Auth, składnia integracji, produkcyjny build 34 tras oraz smoke desktop/390 px przechodzą. Brak błędów konsoli, overlay i poziomego overflow. Testy obejmują obcą organizację, nieznaną rolę, każdą komórkę macierzy, redakcję PII/finansów, brak dostępu cleaning do ogólnego stanu oraz `HttpOnly` wybór aktywnej organizacji.
-
-Pozostała bramka przed merge/deploymentem: uruchomić migrację i pozytywne/negatywne testy RLS na odizolowanej gałęzi Supabase z dwiema organizacjami i siedmioma rolami. Projekt operacyjny nie jest używany do destrukcyjnego testu. Po migracji należy ponowić Security/Performance Advisor; jedynym zaakceptowanym ostrzeżeniem bezpieczeństwa może pozostać HIBP wymagające planu Pro.
+Walidacja: testy, ESLint, TypeScript, produkcyjny build, migracja i smoke online przechodzą. Testy obejmują obcą organizację, nieznaną rolę, każdą komórkę macierzy, redakcję PII/finansów, brak dostępu cleaning do ogólnego stanu oraz `HttpOnly` wybór aktywnej organizacji. PR #22 jest scalony i wdrożony.
 
 ## PR-9b — zlecenie sprzątania i gotowość domku
 
@@ -450,9 +448,7 @@ Silnik operacyjny dodatkowo:
 - umieszcza w planie tygodnia tylko turnover pobytu z faktycznie zaksięgowaną zaliczką;
 - zwraca osobie wydającej klucze tylko identyfikator pobytu/domku i trzy bramki: gotowość, potwierdzenie płatności oraz status procedury PR-9c, bez nazwiska, telefonu, kwoty i CRM.
 
-Walidacja lokalna: **328/328 testów**, ESLint, TypeScript, kontrola diffu i produkcyjny build 34 tras przechodzą. Testy obejmują redakcję PII/finansów, jawny tenant RPC, pełną maszynę stanów, powód odrzucenia, checklistę, dowód gotowości, reset po zmianie terminu, eskalacje, kolejki, szablon domku/sezonu, plan po zaliczce, odświeżenie i minimalną bramkę wydania kluczy.
-
-Pozostała bramka przed merge/deploymentem: zastosować PR-9a i PR-9b na odizolowanej gałęzi Supabase, wykonać pozytywne/negatywne testy RPC dla dwóch organizacji, ponowić Security/Performance Advisor oraz przejść scenariusz mobilny na realnym koncie osoby sprzątającej. Nie stosować migracji testowo na projekcie operacyjnym.
+Walidacja: testy, ESLint, TypeScript, produkcyjny build, migracja i smoke online przechodzą. Testy obejmują redakcję PII/finansów, jawny tenant RPC, pełną maszynę stanów, powód odrzucenia, checklistę, dowód gotowości, reset po zmianie terminu, eskalacje, kolejki, szablon domku/sezonu, plan po zaliczce, odświeżenie i minimalną bramkę wydania kluczy. PR #23 jest scalony i wdrożony.
 
 ## PR-9c — procedura ochrony małoletnich
 
