@@ -288,6 +288,8 @@ Migracje PR-7–PR-8c działają online. Pełny test tworzenia, idempotencji i w
 - skrypt integracyjny obejmuje create → update → konflikt starej wersji → konflikt blokady → cancel oraz sprawdzenie audytu i `scheduled_messages`;
 - migracja `20260726140440_update_operational_booking_commands` została sprawdzona w transakcji z rollbackiem, zastosowana online i potwierdzona bezpiecznym smoke RPC bez zapisu danych;
 - podgląd i produkcja Vercel są `READY`; login na domenie docelowej, widok 390 px oraz skan konsoli i runtime przechodzą bez błędów;
+- zależności produkcyjne zostały podniesione do bezpiecznych wydań Next.js 16.2.12, PostCSS 8.5.23 i Sharp 0.35.3; `npm audit --omit=dev` nie wykrywa podatności;
+- pełny audyt nadal zgłasza 9 ostrzeżeń wysokiego poziomu wyłącznie w narzędziach deweloperskich ESLint/minimatch; brak bezpiecznej poprawki zgodnej z obecną konfiguracją, a lint, TypeScript, testy i build przechodzą;
 - pełny destrukcyjny scenariusz integracyjny nie został uruchomiony przeciwko bazie operacyjnej; pozostaje przygotowany wyłącznie dla odizolowanego projektu testowego.
 
 PR-7–PR-8d działają online. Następny mały wycinek Etapu 3 powinien objąć kosz/przywracanie rezerwacji albo księgowanie płatności; ustawienia pozostają kolejną osobną komendą. Pełne próby wyścigów i sprzątania danych nadal wykonujemy wyłącznie na dedykowanym Supabase.
