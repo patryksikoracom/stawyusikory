@@ -13,7 +13,7 @@ import { formatPolishDate } from "@/lib/date";
 type BookingDefaults = Partial<Pick<Booking, "unitId" | "checkIn" | "checkOut" | "arrivalTime" | "departureTime">>;
 
 export function NewBookingDialog({ onClose, onAdded, booking, defaults }: { onClose: () => void; onAdded: () => void; booking?: Booking; defaults?: BookingDefaults }) {
-  const { data, addBooking, updateBooking, updateConsent, deleteBooking } = useAppStore();
+  const { data, addBooking, updateBooking, deleteBooking } = useAppStore();
   const dialogRef = useRef<HTMLElement>(null);
   const [step, setStep] = useState(1);
   const [error, setError] = useState("");
@@ -147,7 +147,7 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults }: { onCl
       phone: form.phone.trim() || undefined,
       email: form.email.trim() || undefined,
     };
-    if (booking) { updateBooking(savedBooking); updateConsent(contact); }
+    if (booking) updateBooking(savedBooking, contact);
     else addBooking(savedBooking, contact);
     onAdded();
   }

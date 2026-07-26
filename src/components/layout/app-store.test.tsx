@@ -757,4 +757,186 @@ describe("AppStoreProvider w trybie chmurowym", () => {
     expect(store?.data.scheduledMessages.filter((message) => message.bookingId === booking.id)).toHaveLength(8);
     expect(store?.syncMode).toBe("cloud");
   });
+
+  it("edytuje i anuluje rezerwację komendami rekordowymi bez pełnego PUT", async () => {
+    vi.useFakeTimers();
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "test-anon-key");
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        clear: vi.fn(),
+        getItem: vi.fn(() => null),
+        key: vi.fn(() => null),
+        length: 0,
+        removeItem: vi.fn(),
+        setItem: vi.fn(),
+      },
+    });
+
+    const booking = {
+      id: "BOOKING-UPDATE-1",
+      bookingDate: "2099-07-25",
+      source: "Panel Stawy OS",
+      platform: "Bezpośrednio" as const,
+      unitId: "domek-4",
+      checkIn: "2099-08-10",
+      checkOut: "2099-08-13",
+      arrivalTime: "16:00",
+      departureTime: "11:00",
+      adults: 2,
+      children: 1,
+      guestLabel: "Anna Testowa",
+      grossPrice: 2100,
+      paymentStatus: "Zaliczka" as const,
+      workflowStatus: "Potwierdzona" as const,
+      createdBy: "Stawy OS",
+      version: 3,
+    };
+    const contact = {
+      bookingId: booking.id,
+      phone: "+48 600 000 000",
+      email: "anna@example.com",
+      marketingConsent: "Do dopytania" as const,
+      photoFbConsent: "Do dopytania" as const,
+      photoSiteAdsConsent: "Do dopytania" as const,
+      version: 2,
+    };
+    const task = {
+      id: "TASK-BOOKING-UPDATE-1",
+      bookingId: booking.id,
+      type: "Sprzątanie" as const,
+      priority: "Wysoki" as const,
+      status: "Do zrobienia" as const,
+      dueDate: booking.checkOut,
+      owner: "Pani Ewa",
+      unitId: booking.unitId,
+      title: "Wykonać turnover domku po wyjeździe.",
+      version: 5,
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: {
+            bookings: [booking],
+            consents: [contact],
+            tasks: [task],
+          },
+          version: 20,
+        }),
+      })
+      .mockImplementation(async (_url: string, options?: RequestInit) => {
+        const body = JSON.parse(String(options?.body));
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            aggregate: body.aggregate,
+            recordVersion: body.aggregate.booking.version,
+            stateVersion: body.aggregate.booking.workflowStatus === "Anulowana" ? 22 : 21,
+            savedAt: "2099-07-25T20:00:01.000Z",
+          }),
+        };
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { AppStoreProvider, useAppStore } = await import("./app-store");
+    let store: ReturnType<typeof useAppStore> | undefined;
+
+    function Probe() {
+      store = useAppStore();
+      const current = store.data.bookings[0];
+      return (
+        <>
+          <button onClick={() => current && store?.updateBooking(
+            { ...current, checkOut: "2099-08-14", grossPrice: 2300 },
+            { ...contact, phone: "+48 700 000 000" },
+          )}>
+            Edytuj rezerwację
+          </button>
+          <button onClick={() => current && store?.cancelBooking(current.id)}>
+            Anuluj rezerwację
+          </button>
+        </>
+      );
+    }
+
+    render(<AppStoreProvider><Probe /></AppStoreProvider>);
+    await act(async () => {
+      vi.advanceTimersByTime(0);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Edytuj rezerwację" }));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      vi.advanceTimersByTime(800);
+      await Promise.resolve();
+    });
+
+    expect(store?.data.bookings[0]).toMatchObject({
+      checkOut: "2099-08-14",
+      grossPrice: 2300,
+      version: 4,
+    });
+    expect(store?.data.consents[0]).toMatchObject({
+      phone: "+48 700 000 000",
+      version: 3,
+    });
+    expect(store?.data.tasks[0]).toMatchObject({
+      dueDate: "2099-08-14",
+      version: 6,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Anuluj rezerwację" }));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      vi.advanceTimersByTime(800);
+      await Promise.resolve();
+    });
+
+    const bookingPatchCalls = fetchMock.mock.calls.filter(
+      ([url, options]) => String(url).includes("/api/bookings/") && options?.method === "PATCH",
+    );
+    expect(bookingPatchCalls).toHaveLength(2);
+    expect(fetchMock.mock.calls.filter(([, options]) => options?.method === "PUT")).toHaveLength(0);
+
+    const updateBody = JSON.parse(String(bookingPatchCalls[0]?.[1]?.body));
+    expect(updateBody).toMatchObject({
+      expectedRecordVersion: 3,
+      aggregate: {
+        booking: { id: booking.id, checkOut: "2099-08-14", version: 4 },
+        contact: { phone: "+48 700 000 000", version: 3 },
+        tasks: [{ id: task.id, dueDate: "2099-08-14", version: 6 }],
+      },
+    });
+
+    const cancelBody = JSON.parse(String(bookingPatchCalls[1]?.[1]?.body));
+    expect(cancelBody).toMatchObject({
+      expectedRecordVersion: 4,
+      aggregate: {
+        booking: { id: booking.id, workflowStatus: "Anulowana", version: 5 },
+        tasks: [{ id: task.id, status: "Nie dotyczy", version: 7 }],
+      },
+    });
+    expect(cancelBody.aggregate.scheduledMessages.every(
+      (message: { status: string }) => message.status === "Anulowana",
+    )).toBe(true);
+    expect(store?.data.bookings[0]).toMatchObject({
+      workflowStatus: "Anulowana",
+      version: 5,
+    });
+    expect(store?.data.tasks[0]).toMatchObject({
+      status: "Nie dotyczy",
+      version: 7,
+    });
+    expect(store?.syncMode).toBe("cloud");
+  });
 });

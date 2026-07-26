@@ -83,6 +83,8 @@ export const operationalContactConsentSchema = z.object({
   consentSource: optionalText(500),
   consentDate: z.iso.date().optional(),
   consentWithdrawnAt: z.iso.datetime().optional(),
+  version: z.number().int().positive().optional(),
+  updatedAt: z.iso.datetime().optional(),
 });
 
 export const operationalScheduledMessageSchema = z.object({
@@ -106,6 +108,8 @@ export const operationalScheduledMessageSchema = z.object({
   idempotencyKey: z.string().trim().min(1).max(500),
   bookingFingerprint: z.string().max(2_000),
   createdAt: z.iso.datetime(),
+  version: z.number().int().positive().optional(),
+  updatedAt: z.iso.datetime().optional(),
 });
 
 export const bookingAggregateSchema = z.object({
@@ -160,7 +164,106 @@ export const createBookingCommandSchema = z.object({
   }
 });
 
+export const bookingMutationAggregateSchema = z.object({
+  booking: operationalBookingSchema,
+  contact: operationalContactConsentSchema.optional(),
+  tasks: z.array(operationalTaskSchema).max(100),
+  scheduledMessages: z.array(operationalScheduledMessageSchema).max(100),
+}).superRefine((aggregate, context) => {
+  const bookingId = aggregate.booking.id;
+  if (!aggregate.booking.version) {
+    context.addIssue({
+      code: "custom",
+      message: "Brak wersji rezerwacji.",
+      path: ["booking", "version"],
+    });
+  }
+  if (aggregate.contact && aggregate.contact.bookingId !== bookingId) {
+    context.addIssue({
+      code: "custom",
+      message: "Kontakt nie należy do rezerwacji.",
+      path: ["contact", "bookingId"],
+    });
+  }
+  if (aggregate.contact && !aggregate.contact.version) {
+    context.addIssue({
+      code: "custom",
+      message: "Brak wersji kontaktu.",
+      path: ["contact", "version"],
+    });
+  }
+
+  const taskIds = new Set<string>();
+  for (const [index, task] of aggregate.tasks.entries()) {
+    if (taskIds.has(task.id)) {
+      context.addIssue({
+        code: "custom",
+        message: "Identyfikatory zadań muszą być unikalne.",
+        path: ["tasks", index, "id"],
+      });
+    }
+    taskIds.add(task.id);
+    if (task.bookingId !== bookingId) {
+      context.addIssue({
+        code: "custom",
+        message: "Zadanie nie należy do rezerwacji.",
+        path: ["tasks", index, "bookingId"],
+      });
+    }
+    if (!task.version) {
+      context.addIssue({
+        code: "custom",
+        message: "Brak wersji zadania.",
+        path: ["tasks", index, "version"],
+      });
+    }
+  }
+
+  const messageIds = new Set<string>();
+  for (const [index, message] of aggregate.scheduledMessages.entries()) {
+    if (messageIds.has(message.id)) {
+      context.addIssue({
+        code: "custom",
+        message: "Identyfikatory wiadomości muszą być unikalne.",
+        path: ["scheduledMessages", index, "id"],
+      });
+    }
+    messageIds.add(message.id);
+    if (message.bookingId !== bookingId) {
+      context.addIssue({
+        code: "custom",
+        message: "Wiadomość nie należy do rezerwacji.",
+        path: ["scheduledMessages", index, "bookingId"],
+      });
+    }
+    if (!message.version) {
+      context.addIssue({
+        code: "custom",
+        message: "Brak wersji wiadomości.",
+        path: ["scheduledMessages", index, "version"],
+      });
+    }
+  }
+});
+
+export const updateBookingCommandSchema = z.object({
+  aggregate: bookingMutationAggregateSchema,
+  expectedRecordVersion: z.number().int().positive(),
+  requestId: z.string().trim().min(8).max(128),
+  clientSentAt: z.iso.datetime(),
+  tabId: z.string().trim().min(8).max(128),
+}).superRefine((command, context) => {
+  if (command.aggregate.booking.version !== command.expectedRecordVersion + 1) {
+    context.addIssue({
+      code: "custom",
+      message: "Wersja rezerwacji nie odpowiada wersji oczekiwanej.",
+      path: ["aggregate", "booking", "version"],
+    });
+  }
+});
+
 export type BookingAggregate = z.infer<typeof bookingAggregateSchema>;
+export type BookingMutationAggregate = z.infer<typeof bookingMutationAggregateSchema>;
 export type CreateBookingCommandResult = {
   status: "committed" | "already_committed" | "exists" | "availability_conflict" | "unit_not_found";
   aggregate?: BookingAggregate;
@@ -168,4 +271,22 @@ export type CreateBookingCommandResult = {
   conflictId?: string;
   stateVersion?: number;
   savedAt?: string;
+};
+
+export type UpdateBookingCommandResult = {
+  status:
+    | "committed"
+    | "conflict"
+    | "not_found"
+    | "unit_not_found"
+    | "availability_conflict"
+    | "related_record_conflict";
+  aggregate?: BookingMutationAggregate;
+  recordVersion?: number;
+  stateVersion?: number;
+  savedAt?: string;
+  conflictType?: "booking" | "block";
+  conflictId?: string;
+  conflictEntityType?: "contact" | "task" | "scheduled_message";
+  conflictRecordVersion?: number;
 };
