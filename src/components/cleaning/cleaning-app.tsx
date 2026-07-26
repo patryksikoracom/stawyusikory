@@ -20,11 +20,13 @@ function dayLabel(date?: string) {
   return formatPolishDate(date, { year: false });
 }
 
-function statusCopy(status: CleaningJob["status"]) {
-  if (status === "W toku") return "W trakcie";
-  if (status === "Zrobione") return "Gotowe";
-  if (status === "Zablokowane") return "Problem";
-  return "Do zrobienia";
+function statusCopy(job: CleaningJob) {
+  if (job.assignmentStatus === "Odrzucone") return "Odrzucone";
+  if (job.status === "W toku") return "W trakcie";
+  if (job.status === "Zrobione") return "Gotowe";
+  if (job.status === "Zablokowane") return "Problem";
+  if (job.assignmentStatus === "Przyjęte") return "Przyjęte";
+  return "Do przyjęcia";
 }
 
 export function CleaningApp({ identity }: { identity: AppIdentity }) {
@@ -119,7 +121,7 @@ export function CleaningApp({ identity }: { identity: AppIdentity }) {
         <section className="animate-rise relative overflow-hidden rounded-[26px] bg-[#174d3b] px-5 pb-5 pt-6 text-white shadow-[0_18px_50px_rgba(23,77,59,.18)]">
           <div className="absolute -right-14 -top-20 size-52 rounded-full border-[28px] border-white/[.05]" />
           <p className="relative text-[10px] font-black uppercase tracking-[.18em] text-[#cdd9a8]">{new Intl.DateTimeFormat("pl-PL", { weekday: "long", day: "numeric", month: "long" }).format(new Date())}</p>
-          <h1 className="relative mt-1 font-display text-[34px] font-semibold leading-tight tracking-[-.035em]">Dzień dobry, Jadziu</h1>
+          <h1 className="relative mt-1 font-display text-[34px] font-semibold leading-tight tracking-[-.035em]">Dzień dobry, {identity.displayName}</h1>
           <p className="relative mt-2 max-w-lg text-sm leading-6 text-white/70">Tu jest tylko plan przygotowania domków. Bez danych gości, cen i pozostałych modułów.</p>
           <div className="relative mt-5 grid grid-cols-2 gap-2">
             <div className="rounded-2xl bg-white/[.09] p-3.5"><p className="font-display text-3xl font-semibold">{todayCount}</p><p className="text-[10px] font-black uppercase tracking-[.12em] text-white/55">na dzisiaj</p></div>
@@ -148,12 +150,15 @@ export function CleaningApp({ identity }: { identity: AppIdentity }) {
 }
 
 function JobCard({ job, busy, onMutate, onReport }: { job: CleaningJob; busy: string; onMutate: (payload: Record<string, unknown>, success: string) => Promise<void>; onReport: () => void }) {
+  const [proposedStartTime, setProposedStartTime] = useState(job.proposedStartTime ?? "");
+  const [rejecting, setRejecting] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
   const checklistDone = job.checklist.length > 0 && job.checklist.every((item) => item.done);
   const isBusy = Boolean(busy);
   return <article className="overflow-hidden rounded-[24px] border border-[#d4d8cb] bg-[#fffdf8] shadow-[0_12px_34px_rgba(44,63,52,.07)]">
     <div className="flex items-start justify-between gap-3 border-b border-[#e3e4db] p-5">
       <div className="flex items-center gap-3"><span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[#e3ecdf] text-[#316449]"><Icon className="size-6" name="home"/></span><div><p className="text-[10px] font-black uppercase tracking-[.14em] text-[#7a8750]">{dayLabel(job.dueDate)}</p><h2 className="font-display text-[24px] font-semibold leading-7">{job.unit.name}</h2></div></div>
-      <span className={`rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-[.08em] ${job.status === "Zablokowane" ? "bg-[#f7ddd5] text-[#963e28]" : job.status === "Zrobione" ? "bg-[#dfeede] text-[#2d6849]" : job.status === "W toku" ? "bg-[#dceced] text-[#286265]" : "bg-[#f4e8c9] text-[#795b19]"}`}>{statusCopy(job.status)}</span>
+      <span className={`rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-[.08em] ${job.status === "Zablokowane" || job.assignmentStatus === "Odrzucone" ? "bg-[#f7ddd5] text-[#963e28]" : job.status === "Zrobione" ? "bg-[#dfeede] text-[#2d6849]" : job.status === "W toku" || job.assignmentStatus === "Przyjęte" ? "bg-[#dceced] text-[#286265]" : "bg-[#f4e8c9] text-[#795b19]"}`}>{statusCopy(job)}</span>
     </div>
 
     <div className="p-5">
@@ -168,10 +173,20 @@ function JobCard({ job, busy, onMutate, onReport }: { job: CleaningJob; busy: st
       {job.handoffNote ? <div className="mt-3 rounded-2xl border-l-4 border-[#e4aa44] bg-[#fff8e8] p-4"><p className="text-[9px] font-black uppercase tracking-[.13em] text-[#8a671f]">Ważne po poprzednim pobycie</p><p className="mt-1.5 text-sm font-semibold leading-6 text-[#5f5540]">{job.handoffNote}</p></div> : null}
       {job.blocker ? <div className="mt-3 flex gap-3 rounded-2xl bg-[#fff0eb] p-4 text-sm font-bold leading-5 text-[#8f402c]"><Icon className="size-5 shrink-0" name="warning"/>{job.blocker}</div> : null}
 
-      <div className="mt-5"><div className="mb-3 flex items-center justify-between"><h3 className="text-xs font-black uppercase tracking-[.13em] text-[#607068]">Checklista</h3><span className="text-xs font-black text-[#6f7a74]">{job.checklist.filter((item) => item.done).length}/{job.checklist.length}</span></div><div className="grid gap-2">{job.checklist.map((item) => <button aria-pressed={item.done} className={`flex min-h-12 items-center gap-3 rounded-2xl border px-3.5 text-left text-sm font-bold transition ${item.done ? "border-[#c6dcc5] bg-[#eaf3e7] text-[#356249]" : "border-[#d8d9d1] bg-white text-[#42584f]"}`} disabled={isBusy || job.status === "Zrobione"} key={item.id} onClick={() => onMutate({ action: "checklist", taskId: job.id, itemId: item.id, done: !item.done }, item.done ? "Punkt cofnięty." : "Punkt wykonany.")} type="button"><span className={`grid size-7 shrink-0 place-items-center rounded-xl border-2 ${item.done ? "border-[#4f8c67] bg-[#4f8c67] text-white" : "border-[#bcc4bc] bg-white"}`}>{item.done ? <Icon className="size-4" name="check"/> : null}</span><span className={item.done ? "line-through decoration-[#8aa08e]" : ""}>{item.label}</span></button>)}</div></div>
+      <div className="mt-5"><div className="mb-3 flex items-center justify-between"><h3 className="text-xs font-black uppercase tracking-[.13em] text-[#607068]">Checklista</h3><span className="text-xs font-black text-[#6f7a74]">{job.checklist.filter((item) => item.done).length}/{job.checklist.length}</span></div><div className="grid gap-2">{job.checklist.map((item) => <button aria-pressed={item.done} className={`flex min-h-12 items-center gap-3 rounded-2xl border px-3.5 text-left text-sm font-bold transition ${item.done ? "border-[#c6dcc5] bg-[#eaf3e7] text-[#356249]" : "border-[#d8d9d1] bg-white text-[#42584f]"}`} disabled={isBusy || job.status !== "W toku"} key={item.id} onClick={() => onMutate({ action: "checklist", taskId: job.id, itemId: item.id, done: !item.done }, item.done ? "Punkt cofnięty." : "Punkt wykonany.")} type="button"><span className={`grid size-7 shrink-0 place-items-center rounded-xl border-2 ${item.done ? "border-[#4f8c67] bg-[#4f8c67] text-white" : "border-[#bcc4bc] bg-white"}`}>{item.done ? <Icon className="size-4" name="check"/> : null}</span><span className={item.done ? "line-through decoration-[#8aa08e]" : ""}>{item.label}</span></button>)}</div>{job.status !== "W toku" && job.status !== "Zrobione" ? <p className="mt-2 text-xs font-semibold text-[#7b756b]">Checklista odblokuje się po przyjęciu i rozpoczęciu pracy.</p> : null}</div>
     </div>
 
-    {job.status !== "Zrobione" ? <div className="grid gap-2 border-t border-[#e3e4db] bg-[#faf9f4] p-4 sm:grid-cols-[1fr_auto]">{job.status === "Do zrobienia" ? <button className="min-h-12 rounded-2xl bg-[#174d3b] px-5 text-sm font-black text-white shadow-sm disabled:opacity-50" disabled={isBusy} onClick={() => onMutate({ action: "start", taskId: job.id }, "Sprzątanie rozpoczęte.")} type="button"><span className="inline-flex items-center gap-2"><Icon className="size-4" name="clock"/>Rozpocznij sprzątanie</span></button> : null}{job.status === "W toku" ? <button className="min-h-12 rounded-2xl bg-[#174d3b] px-5 text-sm font-black text-white shadow-sm disabled:opacity-45" disabled={isBusy || !checklistDone} onClick={() => onMutate({ action: "complete", taskId: job.id }, "Domek oznaczony jako gotowy.")} title={checklistDone ? "" : "Najpierw ukończ checklistę"} type="button"><span className="inline-flex items-center gap-2"><Icon className="size-4" name="check"/>Potwierdź: domek gotowy</span></button> : null}<button className="min-h-12 rounded-2xl border border-[#d4c6bd] bg-white px-4 text-sm font-black text-[#8b432f] disabled:opacity-50" disabled={isBusy} onClick={onReport} type="button">Zgłoś problem</button>{job.status === "W toku" && !checklistDone ? <p className="text-xs font-semibold text-[#7b756b] sm:col-span-2">Zaznacz wszystkie punkty, aby potwierdzić gotowość.</p> : null}</div> : null}
+    {job.status !== "Zrobione" ? <div className="grid gap-2 border-t border-[#e3e4db] bg-[#faf9f4] p-4 sm:grid-cols-[1fr_auto]">
+      {job.status === "Do zrobienia" && job.assignmentStatus === "Do przyjęcia" ? <>
+        <label className="grid gap-1 text-[10px] font-black uppercase tracking-[.12em] text-[#68756f]">Planowana godzina <span className="font-semibold normal-case tracking-normal">(opcjonalnie)</span><input className="min-h-12 rounded-2xl border border-[#d4cfc4] bg-white px-4 text-sm font-bold" onChange={(event) => setProposedStartTime(event.target.value)} type="time" value={proposedStartTime}/></label>
+        <button className="min-h-12 self-end rounded-2xl bg-[#174d3b] px-5 text-sm font-black text-white shadow-sm disabled:opacity-50" disabled={isBusy} onClick={() => onMutate({ action: "accept", taskId: job.id, proposedStartTime: proposedStartTime || undefined }, "Zlecenie przyjęte.")} type="button">Przyjmuję</button>
+        {!rejecting ? <button className="min-h-12 rounded-2xl border border-[#d4c6bd] bg-white px-4 text-sm font-black text-[#8b432f] sm:col-span-2" disabled={isBusy} onClick={() => setRejecting(true)} type="button">Nie mogę przyjąć</button> : <div className="grid gap-2 sm:col-span-2 sm:grid-cols-[1fr_auto]"><label className="grid gap-1 text-[10px] font-black uppercase tracking-[.12em] text-[#8b432f]">Powód odrzucenia<input className="min-h-12 rounded-2xl border border-[#dfbfb5] bg-white px-4 text-sm font-semibold normal-case tracking-normal" maxLength={500} onChange={(event) => setRejectReason(event.target.value)} placeholder="np. nie mogę w tym terminie" value={rejectReason}/></label><button className="min-h-12 self-end rounded-2xl bg-[#9a452f] px-5 text-sm font-black text-white disabled:opacity-50" disabled={isBusy || rejectReason.trim().length < 2} onClick={() => onMutate({ action: "reject", taskId: job.id, reason: rejectReason }, "Odrzucenie przekazane operatorowi.")} type="button">Odrzuć</button></div>}
+      </> : null}
+      {job.status === "Do zrobienia" && job.assignmentStatus === "Przyjęte" ? <button className="min-h-12 rounded-2xl bg-[#174d3b] px-5 text-sm font-black text-white shadow-sm disabled:opacity-50" disabled={isBusy} onClick={() => onMutate({ action: "start", taskId: job.id }, "Sprzątanie rozpoczęte.")} type="button"><span className="inline-flex items-center gap-2"><Icon className="size-4" name="clock"/>Rozpocznij sprzątanie</span></button> : null}
+      {job.status === "W toku" ? <button className="min-h-12 rounded-2xl bg-[#174d3b] px-5 text-sm font-black text-white shadow-sm disabled:opacity-45" disabled={isBusy || !checklistDone} onClick={() => onMutate({ action: "complete", taskId: job.id }, "Domek oznaczony jako gotowy.")} title={checklistDone ? "" : "Najpierw ukończ checklistę"} type="button"><span className="inline-flex items-center gap-2"><Icon className="size-4" name="check"/>Potwierdź: domek gotowy</span></button> : null}
+      {job.assignmentStatus !== "Odrzucone" ? <button className="min-h-12 rounded-2xl border border-[#d4c6bd] bg-white px-4 text-sm font-black text-[#8b432f] disabled:opacity-50" disabled={isBusy} onClick={onReport} type="button">Zgłoś problem</button> : null}
+      {job.status === "W toku" && !checklistDone ? <p className="text-xs font-semibold text-[#7b756b] sm:col-span-2">Zaznacz wszystkie punkty, aby potwierdzić gotowość.</p> : null}
+    </div> : null}
   </article>;
 }
 

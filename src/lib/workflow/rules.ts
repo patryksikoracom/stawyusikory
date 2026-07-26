@@ -105,6 +105,7 @@ export function createTasksForBooking(booking: Booking): OpsTask[] {
       status: "Do zrobienia",
       dueDate: booking.depositDueDate || addLocalDays(booking.checkIn, -3),
       owner: "Patryk",
+      assigneeRole: "accounting",
       unitId: booking.unitId,
       title: "Sprawdzić/uzupełnić płatność i zaliczkę.",
     },
@@ -116,6 +117,7 @@ export function createTasksForBooking(booking: Booking): OpsTask[] {
       status: "Do zrobienia",
       dueDate: addLocalDays(booking.checkIn, -1),
       owner: "Operacje",
+      assigneeRole: "manager",
       unitId: booking.unitId,
       title: "Przygotować domek i sprawdzić godzinę przyjazdu.",
     },
@@ -127,6 +129,7 @@ export function createTasksForBooking(booking: Booking): OpsTask[] {
       status: "Do zrobienia",
       dueDate: addLocalDays(booking.checkOut, 1),
       owner: "Patryk",
+      assigneeRole: "marketing",
       unitId: booking.unitId,
       title: "Poprosić o opinię po pobycie.",
     },
@@ -138,6 +141,10 @@ export function createTasksForBooking(booking: Booking): OpsTask[] {
       status: "Do zrobienia",
       dueDate: booking.checkOut,
       owner: "Pani Ewa",
+      assigneeRole: "cleaning",
+      assignmentStatus: "Do przyjęcia",
+      checklistTemplateId: "cleaning-standard-v1",
+      checklistTemplateVersion: 1,
       unitId: booking.unitId,
       title: "Wykonać turnover domku po wyjeździe.",
     },
@@ -148,6 +155,7 @@ export function createTasksForBooking(booking: Booking): OpsTask[] {
       priority: "Średni",
       status: "Do zrobienia",
       owner: "Patryk",
+      assigneeRole: "marketing",
       unitId: booking.unitId,
       title: "Dopytać o zgody na zdjęcia/content, jeśli pojawiły się materiały.",
     },
@@ -163,6 +171,23 @@ export function rescheduleOpenTasksForBooking(tasks: OpsTask[], booking: Booking
         : task.type === "Opinia" ? addLocalDays(booking.checkOut, 1)
           : task.type === "Sprzątanie" ? booking.checkOut
             : undefined;
+    if (task.type === "Sprzątanie" && (task.dueDate !== dueDate || task.unitId !== booking.unitId)) {
+      const rescheduled = { ...task };
+      delete rescheduled.acceptedAt;
+      delete rescheduled.rejectedAt;
+      delete rescheduled.proposedStartTime;
+      delete rescheduled.startedAt;
+      delete rescheduled.readyAt;
+      delete rescheduled.readinessEvidence;
+      delete rescheduled.blocker;
+      return {
+        ...rescheduled,
+        unitId: booking.unitId,
+        dueDate: dueDate ?? task.dueDate,
+        status: "Do zrobienia" as const,
+        assignmentStatus: "Do przyjęcia" as const,
+      };
+    }
     return { ...task, unitId: booking.unitId, dueDate: dueDate ?? task.dueDate };
   });
 }

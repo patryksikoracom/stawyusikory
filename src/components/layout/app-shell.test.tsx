@@ -32,6 +32,7 @@ const identity: AppIdentity = {
   organizationName: "Stawy u Sikory",
   role: "admin",
   roleLabel: "Administrator",
+  userId: "00000000-0000-4000-8000-000000000001",
 };
 
 describe("AppShell przed zakończeniem ładowania", () => {

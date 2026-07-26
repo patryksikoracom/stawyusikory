@@ -18,6 +18,17 @@ export type CleaningJob = {
   unit: { id: string; name: string };
   dueDate?: string;
   status: "Do zrobienia" | "W toku" | "Zrobione" | "Zablokowane";
+  assignmentStatus: "Do przyjęcia" | "Przyjęte" | "Odrzucone";
+  proposedStartTime?: string;
+  acceptedAt?: string;
+  rejectedAt?: string;
+  readyAt?: string;
+  readinessEvidence?: {
+    source: "checklist" | "owner-override";
+    completedItems: number;
+    totalItems: number;
+    reason?: string;
+  };
   priority: "Wysoki" | "Średni" | "Niski";
   departureTime: string;
   nextArrival: null | {
@@ -89,12 +100,35 @@ export function buildCleaningDashboard(records: OperationalRecord[]): CleaningDa
       const status: CleaningJob["status"] = rawStatus === "W toku" || rawStatus === "Zrobione" || rawStatus === "Zablokowane" ? rawStatus : "Do zrobienia";
       const rawPriority = text(task.priority);
       const priority: CleaningJob["priority"] = rawPriority === "Wysoki" || rawPriority === "Niski" ? rawPriority : "Średni";
+      const rawAssignmentStatus = text(task.assignmentStatus);
+      const assignmentStatus: CleaningJob["assignmentStatus"] =
+        rawAssignmentStatus === "Przyjęte" || rawAssignmentStatus === "Odrzucone"
+          ? rawAssignmentStatus
+          : "Do przyjęcia";
+      const evidence = object(task.readinessEvidence);
+      const evidenceSource = text(evidence?.source);
+      const normalizedEvidenceSource: "checklist" | "owner-override" | undefined =
+        evidenceSource === "checklist" || evidenceSource === "owner-override" ? evidenceSource : undefined;
+      const readinessEvidence = evidence && normalizedEvidenceSource
+        ? {
+            source: normalizedEvidenceSource,
+            completedItems: number(evidence.completedItems),
+            totalItems: number(evidence.totalItems),
+            reason: text(evidence.reason),
+          }
+        : undefined;
 
       return {
         id,
         unit: { id: unitId, name: text(unit?.name) ?? "Domek" },
         dueDate,
         status,
+        assignmentStatus,
+        proposedStartTime: text(task.proposedStartTime),
+        acceptedAt: text(task.acceptedAt),
+        rejectedAt: text(task.rejectedAt),
+        readyAt: text(task.readyAt),
+        readinessEvidence,
         priority,
         departureTime: text(previousBooking?.departureTime) ?? defaultCheckOut,
         nextArrival: nextArrivalDate ? {

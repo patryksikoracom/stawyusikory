@@ -6,6 +6,9 @@ export const operationalChecklistItemSchema = z.object({
   label: z.string().trim().min(1).max(500),
   done: z.boolean(),
   completedAt: z.iso.datetime().optional(),
+  kind: z.enum(["stały", "sezonowy", "jednorazowy", "handoff", "usterka"]).optional(),
+  templateId: z.string().trim().min(1).max(128).optional(),
+  templateVersion: z.number().int().positive().optional(),
   version: z.number().int().positive().optional(),
   updatedAt: z.iso.datetime().optional(),
 });

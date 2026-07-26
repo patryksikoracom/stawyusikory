@@ -34,7 +34,19 @@ export function deriveShellAlerts(data: AppData, today = todayInPoland()): Shell
     const finance = calculateBookingFinance(booking, data.payments);
     return finance.balanceStatus !== "settled" || finance.perspectives.receivables.completeness !== "complete";
   }).length;
-  const blockedTaskCount = data.tasks.filter((task) => task.status === "Zablokowane").length;
+  const blockedTaskCount = data.tasks.filter(
+    (task) => task.status === "Zablokowane"
+      && !(task.type === "Sprzątanie" && task.assignmentStatus === "Odrzucone"),
+  ).length;
+  const rejectedTurnoverCount = data.tasks.filter(
+    (task) => task.type === "Sprzątanie" && task.assignmentStatus === "Odrzucone",
+  ).length;
+  const unansweredTurnoverCount = data.tasks.filter(
+    (task) => task.type === "Sprzątanie"
+      && task.assignmentStatus === "Do przyjęcia"
+      && Boolean(task.dueDate)
+      && task.dueDate! <= today,
+  ).length;
 
   return [
     ...connectionAlerts,
@@ -49,6 +61,18 @@ export function deriveShellAlerts(data: AppData, today = todayInPoland()): Shell
       icon: "wallet" as const,
       title: `${formatPolishCount(paymentCount, "płatność", "płatności", "płatności")} do sprawdzenia`,
       body: "Dotyczy bieżących lub nadchodzących rezerwacji z saldem, nadpłatą albo niepełnym dowodem płatności.",
+    }] : []),
+    ...(rejectedTurnoverCount ? [{
+      id: "rejected-turnovers",
+      icon: "cleaning" as const,
+      title: `${formatPolishCount(rejectedTurnoverCount, "turnover odrzucony", "turnovery odrzucone", "turnoverów odrzuconych")}`,
+      body: "Przydziel zlecenie innej osobie albo uzgodnij nowe okno.",
+    }] : []),
+    ...(unansweredTurnoverCount ? [{
+      id: "unanswered-turnovers",
+      icon: "cleaning" as const,
+      title: `${formatPolishCount(unansweredTurnoverCount, "turnover bez odpowiedzi", "turnovery bez odpowiedzi", "turnoverów bez odpowiedzi")}`,
+      body: "Termin już nadszedł, a zlecenie nie zostało przyjęte.",
     }] : []),
     ...(blockedTaskCount ? [{
       id: "blocked-tasks",

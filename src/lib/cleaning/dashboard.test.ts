@@ -22,10 +22,40 @@ describe("panel sprzątania", () => {
       nextArrival: { time: "15:30", people: 3 },
       bedsToPrepare: 3,
       handoffNote: "Sprawdź lampkę przy łóżku",
+      assignmentStatus: "Do przyjęcia",
     });
     const serialized = JSON.stringify(dashboard);
     for (const secret of ["Jan Kowalski", "Anna Nowak", "9000", "+48123456789", "+48111222333", "Nie zapłacił", "kod alarmu 1234", "Dopłata 1000 zł"]) {
       expect(serialized).not.toContain(secret);
     }
+  });
+
+  it("zwraca stan przyjęcia i dowód gotowości bez danych aktora", () => {
+    const dashboard = buildCleaningDashboard([
+      { entity_type: "units", entity_id: "u1", payload: { id: "u1", name: "Czapla" } },
+      {
+        entity_type: "tasks",
+        entity_id: "t1",
+        payload: {
+          id: "t1",
+          bookingId: "b1",
+          unitId: "u1",
+          type: "Sprzątanie",
+          status: "Zrobione",
+          assignmentStatus: "Przyjęte",
+          proposedStartTime: "12:30",
+          readyAt: "2026-07-26T14:00:00.000Z",
+          assigneeUserId: "secret-user-id",
+          readinessEvidence: { source: "checklist", completedItems: 10, totalItems: 10 },
+        },
+      },
+    ]);
+
+    expect(dashboard.jobs[0]).toMatchObject({
+      assignmentStatus: "Przyjęte",
+      proposedStartTime: "12:30",
+      readinessEvidence: { source: "checklist", completedItems: 10, totalItems: 10 },
+    });
+    expect(JSON.stringify(dashboard)).not.toContain("secret-user-id");
   });
 });

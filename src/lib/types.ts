@@ -232,6 +232,22 @@ export type OpsTask = {
   status: TaskStatus;
   dueDate?: string;
   owner: string;
+  assigneeUserId?: string;
+  assigneeRole?: UserRole;
+  assignmentStatus?: "Do przyjęcia" | "Przyjęte" | "Odrzucone";
+  acceptedAt?: string;
+  rejectedAt?: string;
+  proposedStartTime?: string;
+  startedAt?: string;
+  readyAt?: string;
+  readinessEvidence?: {
+    source: "checklist" | "owner-override";
+    completedItems: number;
+    totalItems: number;
+    reason?: string;
+  };
+  checklistTemplateId?: string;
+  checklistTemplateVersion?: number;
   unitId?: string;
   title: string;
   blocker?: string;
@@ -280,8 +296,25 @@ export type TaskChecklistItem = {
   label: string;
   done: boolean;
   completedAt?: string;
+  kind?: "stały" | "sezonowy" | "jednorazowy" | "handoff" | "usterka";
+  templateId?: string;
+  templateVersion?: number;
   version?: number;
   updatedAt?: string;
+};
+
+export type CleaningChecklistTemplate = {
+  id: string;
+  unitId?: string;
+  version: number;
+  effectiveFrom: string;
+  effectiveTo?: string;
+  items: Array<{
+    id: string;
+    label: string;
+    kind: "stały" | "sezonowy";
+    activeMonths?: number[];
+  }>;
 };
 
 export type IssueReport = {

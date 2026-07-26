@@ -52,6 +52,7 @@ import {
   summarizeSyncChanges,
   type SyncConflict,
 } from "@/lib/sync/state-conflict";
+import { instantiateCleaningChecklist } from "@/lib/cleaning/operations";
 
 export type SyncMode = "checking" | "cloud" | "local" | "error" | "conflict";
 export type DataStatus = "loading" | "ready" | "error";
@@ -239,20 +240,9 @@ function uid(prefix: string) {
 }
 
 function defaultChecklist(tasks: OpsTask[]): TaskChecklistItem[] {
-  const labels = [
-    "Pościel i ręczniki",
-    "Łazienka i kuchnia",
-    "Taras i strefa wejścia",
-    "Zdjęcie po zakończeniu",
-  ];
   return tasks
     .filter((task) => task.type === "Sprzątanie")
-    .flatMap((task) => labels.map((label, index) => ({
-      id: `${task.id}-check-${index}`,
-      taskId: task.id,
-      label,
-      done: false,
-    })));
+    .flatMap((task) => instantiateCleaningChecklist(task, task.dueDate ?? todayInPoland()));
 }
 
 function normalizeData(parsed?: Partial<AppData> | null, fallback: AppData = initialData): AppData {

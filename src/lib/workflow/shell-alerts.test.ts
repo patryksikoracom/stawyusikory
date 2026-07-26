@@ -93,4 +93,39 @@ describe("alerty powłoki aplikacji", () => {
 
     expect(alerts).toEqual([]);
   });
+
+  it("eskaluje odrzucony i przeterminowany turnover na podstawie zadań", () => {
+    const alerts = deriveShellAlerts(fixture({
+      tasks: [
+        {
+          id: "rejected",
+          bookingId: "b1",
+          type: "Sprzątanie",
+          priority: "Wysoki",
+          status: "Zablokowane",
+          owner: "Sprzątanie",
+          title: "Turnover",
+          assignmentStatus: "Odrzucone",
+          dueDate: today,
+        },
+        {
+          id: "unanswered",
+          bookingId: "b2",
+          type: "Sprzątanie",
+          priority: "Wysoki",
+          status: "Do zrobienia",
+          owner: "Sprzątanie",
+          title: "Turnover",
+          assignmentStatus: "Do przyjęcia",
+          dueDate: today,
+        },
+      ],
+    }), today);
+
+    expect(alerts.map((alert) => alert.id)).toEqual(expect.arrayContaining([
+      "rejected-turnovers",
+      "unanswered-turnovers",
+    ]));
+    expect(alerts.map((alert) => alert.id)).not.toContain("blocked-tasks");
+  });
 });
