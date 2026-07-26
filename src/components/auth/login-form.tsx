@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { navigateAfterLogin } from "@/lib/auth/browser-navigation";
 import { Button, Field, inputClass } from "@/components/ui/primitives";
 
 export function LoginForm() {
@@ -19,16 +20,15 @@ export function LoginForm() {
     setBusy(true);
     setMessage("");
     try {
-      const { error } = await client.auth.signInWithPassword({
+      const { data, error } = await client.auth.signInWithPassword({
         email: email.trim().toLowerCase(),
         password,
       });
-      if (error) {
+      if (error || !data.session) {
         setMessage("Nie udało się zalogować. Sprawdź e-mail i hasło.");
         return;
       }
-      router.replace("/dashboard");
-      router.refresh();
+      navigateAfterLogin();
     } catch {
       setMessage("Nie udało się połączyć z logowaniem. Sprawdź internet i spróbuj ponownie.");
     } finally {

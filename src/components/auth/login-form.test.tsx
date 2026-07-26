@@ -7,8 +7,7 @@ import { LoginForm } from "./login-form";
 
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
-  refresh: vi.fn(),
-  replace: vi.fn(),
+  navigateAfterLogin: vi.fn(),
   resetPasswordForEmail: vi.fn(),
   signInWithPassword: vi.fn(),
 }));
@@ -16,9 +15,11 @@ const mocks = vi.hoisted(() => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
     push: mocks.push,
-    refresh: mocks.refresh,
-    replace: mocks.replace,
   }),
+}));
+
+vi.mock("@/lib/auth/browser-navigation", () => ({
+  navigateAfterLogin: mocks.navigateAfterLogin,
 }));
 
 vi.mock("@/lib/supabase/client", () => ({
@@ -42,7 +43,10 @@ function fillCredentials(email = " OWNER@EXAMPLE.COM ") {
 describe("LoginForm", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.signInWithPassword.mockResolvedValue({ error: null });
+    mocks.signInWithPassword.mockResolvedValue({
+      data: { session: { access_token: "test-token" } },
+      error: null,
+    });
     mocks.resetPasswordForEmail.mockResolvedValue({ error: null });
   });
 
@@ -50,7 +54,7 @@ describe("LoginForm", () => {
     cleanup();
   });
 
-  it("normalizuje e-mail i po sukcesie odświeża chronioną trasę", async () => {
+  it("normalizuje e-mail i po pełnej sesji wykonuje twardą nawigację", async () => {
     render(<LoginForm />);
     fillCredentials();
 
@@ -60,19 +64,35 @@ describe("LoginForm", () => {
       email: "owner@example.com",
       password: "bezpieczne-haslo",
     }));
-    expect(mocks.replace).toHaveBeenCalledWith("/dashboard");
-    expect(mocks.refresh).toHaveBeenCalledOnce();
+    expect(mocks.navigateAfterLogin).toHaveBeenCalledOnce();
   });
 
   it("pokazuje bezpieczny komunikat przy odrzuceniu danych", async () => {
-    mocks.signInWithPassword.mockResolvedValue({ error: new Error("invalid credentials") });
+    mocks.signInWithPassword.mockResolvedValue({
+      data: { session: null },
+      error: new Error("invalid credentials"),
+    });
     render(<LoginForm />);
     fillCredentials("konto@example.com");
 
     fireEvent.click(screen.getByRole("button", { name: "Zaloguj się" }));
 
     expect(await screen.findByText("Nie udało się zalogować. Sprawdź e-mail i hasło.")).toBeInTheDocument();
-    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.navigateAfterLogin).not.toHaveBeenCalled();
+  });
+
+  it("nie przechodzi dalej, gdy Auth nie zwróci pełnej sesji", async () => {
+    mocks.signInWithPassword.mockResolvedValue({
+      data: { session: null },
+      error: null,
+    });
+    render(<LoginForm />);
+    fillCredentials("konto@example.com");
+
+    fireEvent.click(screen.getByRole("button", { name: "Zaloguj się" }));
+
+    expect(await screen.findByText("Nie udało się zalogować. Sprawdź e-mail i hasło.")).toBeInTheDocument();
+    expect(mocks.navigateAfterLogin).not.toHaveBeenCalled();
   });
 
   it("wychodzi ze stanu oczekiwania i wyjaśnia awarię połączenia", async () => {
