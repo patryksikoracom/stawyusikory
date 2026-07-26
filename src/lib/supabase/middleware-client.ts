@@ -10,6 +10,7 @@ export function createMiddlewareClient(
   supabaseKey: string,
   cookies: CookieMethodsServer,
 ) {
+  const projectRef = new URL(supabaseUrl).hostname.split(".")[0];
   const storageState = createStorageFromOptions(
     {
       cookies,
@@ -30,6 +31,7 @@ export function createMiddlewareClient(
     detectSessionInUrl: false,
     persistSession: true,
     skipAutoInitialize: true,
+    storageKey: `sb-${projectRef}-auth-token`,
     storage: storageState.storage,
   });
 
