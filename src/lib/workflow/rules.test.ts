@@ -41,12 +41,18 @@ describe("availability rules", () => {
 
   it("reschedules open operational tasks but preserves repairs and completed work", () => {
     const tasks: OpsTask[] = [
-      { id: "clean", bookingId: base.id, type: "Sprzątanie", priority: "Wysoki", status: "Do zrobienia", dueDate: "2026-07-12", owner: "Ewa", title: "Sprzątanie" },
+      { id: "clean", bookingId: base.id, type: "Sprzątanie", priority: "Wysoki", status: "Do zrobienia", dueDate: "2026-07-12", owner: "Ewa", title: "Sprzątanie", assignmentStatus: "Przyjęte", acceptedAt: "2026-07-10T10:00:00.000Z", proposedStartTime: "12:00" },
       { id: "review", bookingId: base.id, type: "Opinia", priority: "Średni", status: "Zrobione", dueDate: "2026-07-13", owner: "Patryk", title: "Opinia" },
       { id: "repair", bookingId: base.id, type: "Naprawa", priority: "Średni", status: "Do zrobienia", planningHorizon: "Po sezonie", owner: "Patryk", title: "Drzwi" },
     ];
     const updated = rescheduleOpenTasksForBooking(tasks, { ...base, checkOut: "2026-07-15" });
     expect(updated.find((item) => item.id === "clean")?.dueDate).toBe("2026-07-15");
+    expect(updated.find((item) => item.id === "clean")).toMatchObject({
+      status: "Do zrobienia",
+      assignmentStatus: "Do przyjęcia",
+    });
+    expect(updated.find((item) => item.id === "clean")).not.toHaveProperty("acceptedAt");
+    expect(updated.find((item) => item.id === "clean")).not.toHaveProperty("proposedStartTime");
     expect(updated.find((item) => item.id === "review")?.dueDate).toBe("2026-07-13");
     expect(updated.find((item) => item.id === "repair")?.planningHorizon).toBe("Po sezonie");
   });

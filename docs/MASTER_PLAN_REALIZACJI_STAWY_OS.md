@@ -50,7 +50,8 @@ Commit, push i deployment są osobnymi decyzjami. Samo ukończenie lokalnej pacz
 | PR-8e4a / Etap 3.9 | **wdrożony online 26.07.2026 — PR #20** | `POST /api/calendar-blocks` i `PATCH /api/calendar-blocks/:id` tworzą oraz anulują blokady wersjonowanymi komendami; wspólna blokada domku serializuje wyścig z rezerwacją, a UI odróżnia lokalny zapis od potwierdzenia Mobile Calendar/OTA |
 | PR-8 zbiorczo / Etap 3 | **wdrożony online 26.07.2026 — PR #20** | wszystkie pozostałe rodziny mutacji używają atomowej, wersjonowanej komendy batchowej; klient i API nie udostępniają już pełnego `PUT /api/state`; 289 testów, lint, TypeScript i build 33 tras przechodzą |
 | Etap 3 jako całość | **zamknięty online 26.07.2026** | PR-7 i cały PR-8 działają online; migracje, uprawnienia RPC, login, chronione trasy, konsola i runtime zostały potwierdzone po wdrożeniu |
-| PR-9a / Etap 4.1 | **implementacja lokalna gotowa do draft PR 26.07.2026** | jawna aktywna organizacja bez `limit(1)`, siedem ról, macierz uprawnień, projekcja PII/finansów, RLS i poprawki Advisora; 309 testów, lint, TypeScript, build i smoke desktop/390 px przechodzą. Migracja czeka na test w odizolowanym Supabase |
+| PR-9a / Etap 4.1 | **draft PR #22 opublikowany 26.07.2026** | jawna aktywna organizacja bez `limit(1)`, siedem ról, macierz uprawnień, projekcja PII/finansów, RLS i poprawki Advisora; 309 testów, lint, TypeScript, build i smoke desktop/390 px przechodzą. Migracja czeka na test w odizolowanym Supabase |
+| PR-9b / Etap 4.2 | **implementacja lokalna gotowa do draft PR 26.07.2026** | jawnie tenantowy turnover, przyjęcie/odrzucenie, kolejki zespołu, wersjonowana checklista 10 kroków, dowód gotowości, eskalacje, odświeżenie po 7 dniach i minimalna bramka wydania kluczy; 328 testów, lint, TypeScript i build przechodzą. Migracja czeka na odizolowany Supabase |
 
 ## Bramka wydania: MVP operatora dla taty
 
@@ -92,8 +93,8 @@ Test taty z 25.07.2026 zmienia priorytet interfejsu operatora: kalendarz, wolne 
 | 10g | Etap 3 — zapis domenowy | **PR-8e3 — gotowy lokalnie** | ustawienia organizacji bez pełnego snapshotu | osobna wersjonowana komenda, konflikt rekordu, 245 testów i smoke desktop/mobile przechodzą; migracja czeka na publikację |
 | 10h | Etap 3 — zapis domenowy | **PR-8e4a — gotowy lokalnie** | tworzenie i anulowanie blokad kalendarza bez pełnego snapshotu | wersjonowane komendy, konflikt dostępności, wyścig rezerwacja↔blokada i dostępny dialog; migracja czeka na publikację |
 | 10i | Etap 3 — zapis domenowy | **PR-8 zbiorczo — komplet lokalnie** | wszystkie pozostałe mutacje: usterki, debrief, komunikacja, faktury, media, profile, zgody, połączenia, domki, stawki, koszty i import | jedna atomowa komenda batchowa, wersje rekordów, konflikt 409, audyt i brak pełnego `PUT /api/state` |
-| 11 | Etap 4 — organizacje i role | **PR-9a — gotowy lokalnie** | active organization, role, RLS i izolacja PII/finansów | testy kontraktu dwóch organizacji i wszystkich ról przechodzą; właściwy test RLS czeka na odizolowany Supabase |
-| 12 | Etap 4 — operacje zespołu | PR-9b | zlecenia sprzątania, przyjęcie, checklisty per domek i eskalacja | sprzątająca wykonuje pełny turnover bez dostępu do PII/finansów |
+| 11 | Etap 4 — organizacje i role | **PR-9a — draft #22** | active organization, role, RLS i izolacja PII/finansów | testy kontraktu dwóch organizacji i wszystkich ról przechodzą; właściwy test RLS czeka na odizolowany Supabase |
+| 12 | Etap 4 — operacje zespołu | **PR-9b — gotowy lokalnie** | zlecenia sprzątania, przyjęcie, checklisty per domek i eskalacja | automatyczne testy pełnego turnoveru i redakcji przechodzą; właściwy test RPC/RLS i realnego konta czeka na odizolowany Supabase |
 | 13 | Etap 4 — zgodność operacyjna | PR-9c | procedura małoletnich wynikająca z zatwierdzonego SOP i minimalizacja danych | zapisuje się wykonanie procedury, nie zbędne dane dziecka |
 | 14 | Etap 5 — fundament UX | PR-10a | wspólne dialogi, klawiatura, mobile, paginacja i wydajność | WCAG smoke test i 1000 rekordów |
 | 15 | Etap 5 — Dzisiaj | PR-10b | chronologiczna agenda, stan domków i same-day turnover | w 5 sekund widać przyjazdy, wyjazdy i brak gotowości |
@@ -430,6 +431,27 @@ Migracja PR-9a:
 Walidacja lokalna: **309/309 testów**, ESLint, TypeScript, kontrola konfiguracji Auth, składnia integracji, produkcyjny build 34 tras oraz smoke desktop/390 px przechodzą. Brak błędów konsoli, overlay i poziomego overflow. Testy obejmują obcą organizację, nieznaną rolę, każdą komórkę macierzy, redakcję PII/finansów, brak dostępu cleaning do ogólnego stanu oraz `HttpOnly` wybór aktywnej organizacji.
 
 Pozostała bramka przed merge/deploymentem: uruchomić migrację i pozytywne/negatywne testy RLS na odizolowanej gałęzi Supabase z dwiema organizacjami i siedmioma rolami. Projekt operacyjny nie jest używany do destrukcyjnego testu. Po migracji należy ponowić Security/Performance Advisor; jedynym zaakceptowanym ostrzeżeniem bezpieczeństwa może pozostać HIBP wymagające planu Pro.
+
+## PR-9b — zlecenie sprzątania i gotowość domku
+
+Implementacja lokalna rozwija istniejący panel sprzątania bez rozszerzania dostępu do surowego stanu. RPC przyjmuje jawną aktywną organizację i ponownie sprawdza dokładne członkostwo `cleaning`; nie wybiera już pierwszej organizacji użytkownika.
+
+Przepływ turnoveru obejmuje `do przyjęcia → przyjęte → w toku → gotowe` oraz odrzucenie i problem. Przyjęcie może zawierać planowaną godzinę rozpoczęcia. Odrzucenie wymaga powodu i tworzy wyliczony alert operatora. Zmiana terminu lub domku resetuje wcześniejszą akceptację, aby nowe okno wymagało ponownego potwierdzenia.
+
+Gotowość wynika z ukończenia wszystkich punktów wersjonowanego szablonu checklisty. Domyślny szablon v1 odwzorowuje 10 kroków przyjętej roboczej instrukcji i model obsługuje wariant per domek, sezon oraz dodatki jednorazowe/handoff/usterka. Awaryjne nadpisanie owner/admin wymaga powodu i zapisuje źródło dowodu, liczbę wykonanych punktów oraz audyt.
+
+Silnik operacyjny dodatkowo:
+
+- dzieli zadania na `moje`, `zespołu` i `przeterminowane`, z przypisaniem do konta lub roli;
+- wylicza powiadomienie z terminu, priorytetu i preferencji odbiorcy;
+- wylicza stan domku bez luźnej etykiety `czysty`;
+- proponuje odświeżenie wyłącznie wtedy, gdy od ostatniego potwierdzonego sprzątania/kontroli minęło ponad 7 dni;
+- umieszcza w planie tygodnia tylko turnover pobytu z faktycznie zaksięgowaną zaliczką;
+- zwraca osobie wydającej klucze tylko identyfikator pobytu/domku i trzy bramki: gotowość, potwierdzenie płatności oraz status procedury PR-9c, bez nazwiska, telefonu, kwoty i CRM.
+
+Walidacja lokalna: **328/328 testów**, ESLint, TypeScript, kontrola diffu i produkcyjny build 34 tras przechodzą. Testy obejmują redakcję PII/finansów, jawny tenant RPC, pełną maszynę stanów, powód odrzucenia, checklistę, dowód gotowości, reset po zmianie terminu, eskalacje, kolejki, szablon domku/sezonu, plan po zaliczce, odświeżenie i minimalną bramkę wydania kluczy.
+
+Pozostała bramka przed merge/deploymentem: zastosować PR-9a i PR-9b na odizolowanej gałęzi Supabase, wykonać pozytywne/negatywne testy RPC dla dwóch organizacji, ponowić Security/Performance Advisor oraz przejść scenariusz mobilny na realnym koncie osoby sprzątającej. Nie stosować migracji testowo na projekcie operacyjnym.
 
 ## Pełne przypisanie ustaleń z walkthrough
 

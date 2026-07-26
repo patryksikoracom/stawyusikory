@@ -5,6 +5,16 @@ import { requireOrganization } from "@/lib/supabase/auth-context";
 import { createServiceClient } from "@/lib/supabase/server";
 
 const mutationSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("accept"),
+    taskId: z.string().min(1).max(160),
+    proposedStartTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
+  }),
+  z.object({
+    action: z.literal("reject"),
+    taskId: z.string().min(1).max(160),
+    reason: z.string().trim().min(2).max(500),
+  }),
   z.object({ action: z.literal("start"), taskId: z.string().min(1).max(160) }),
   z.object({ action: z.literal("complete"), taskId: z.string().min(1).max(160) }),
   z.object({ action: z.literal("checklist"), taskId: z.string().min(1).max(160), itemId: z.string().min(1).max(200), done: z.boolean() }),
@@ -50,12 +60,17 @@ export async function PATCH(request: Request) {
   const payload = parsed.data;
   const details = payload.action === "checklist"
     ? { done: payload.done }
+    : payload.action === "accept"
+      ? { proposedStartTime: payload.proposedStartTime }
+      : payload.action === "reject"
+        ? { reason: payload.reason }
     : payload.action === "report"
       ? { title: payload.title, description: payload.description ?? "", category: payload.category }
       : {};
   const service = createServiceClient();
   if (!service) return NextResponse.json({ error: "Panel sprzątania nie jest skonfigurowany." }, { status: 503 });
   const { data, error } = await service.rpc("mutate_cleaning_task", {
+    p_organization_id: context.organizationId,
     p_actor: context.user.id,
     p_task_id: payload.taskId,
     p_action: payload.action,
@@ -68,7 +83,12 @@ export async function PATCH(request: Request) {
       : error.message.includes("status")
         ? "Status zadania zmienił się. Odśwież widok."
         : "Nie udało się zapisać zmiany.";
-    return NextResponse.json({ error: safeMessage }, { status: error.code === "42501" ? 403 : 409 });
+    const status = error.code === "42501"
+      ? 403
+      : error.code === "22023" || error.code === "22007"
+        ? 422
+        : 409;
+    return NextResponse.json({ error: safeMessage }, { status });
   }
   return NextResponse.json({ ok: true, version: Number(data) });
 }

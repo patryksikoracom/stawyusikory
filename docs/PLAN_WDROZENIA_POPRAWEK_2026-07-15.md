@@ -231,21 +231,21 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 
 #### 4.2 PR-9b — zlecenie sprzątania i gotowość domku
 
-- [ ] Zadania właściciela/managera przypisywać do konta lub roli, nie tylko do dowolnego tekstu `owner`.
-- [ ] Dodać osobne kolejki `moje`, `zespołu`, `przeterminowane` dla zakupów, płatności, napraw i operacji.
-- [ ] Powiadomienie o zadaniu wynika z terminu, priorytetu i preferencji odbiorcy; brak stałego alertu bez rekordu źródłowego.
-- [ ] Zadanie turnoveru wynika z wyjazdu i aktualizuje się po zmianie terminu.
-- [ ] Pokazać okno `można wejść od` → `gotowe do` na podstawie wyjazdu i kolejnego przyjazdu.
-- [ ] Dodać stany: `do przyjęcia`, `przyjęte`, `w toku`, `gotowe`, `problem/odrzucone`.
-- [ ] Osoba sprzątająca może przyjąć lub odrzucić okno; godzina rozpoczęcia jest opcjonalna.
-- [ ] Brak odpowiedzi i odrzucenie tworzą alert dla operatora.
-- [ ] Dodać wersjonowane szablony checklist per domek z punktami stałymi, sezonowymi, jednorazowymi i wynikającymi z handoffu/usterki.
-- [ ] Stan domku wyliczać jako `goście`, `wyjazd dzisiaj`, `do sprzątania`, `w toku`, `gotowy`, `zablokowany usterką`.
-- [ ] `Gotowy` wynika z pełnej checklisty; awaryjne nadpisanie właściciela wymaga powodu i audytu.
-- [ ] Zachować zgłaszanie usterki z oceną ryzyka przed kolejnym pobytem.
-- [ ] Po zaksięgowaniu zaliczki umieścić pobyt w planie sprzątania na najbliższy tydzień, zgodnie z regułą i preferencją operatora.
-- [ ] Jeżeli od ostatniego potwierdzonego sprzątania lub kontroli gotowości minęło ponad siedem dni, zaproponować odświeżenie przed przyjazdem; sama luka między rezerwacjami nie jest dowodem potrzeby.
-- [ ] Osoba wydająca klucze widzi tylko niezbędne potwierdzenia: właściwy pobyt, gotowość, bramkę płatności i wykonanie wymaganej procedury, bez pełnych finansów i CRM.
+- [x] Zadania właściciela/managera przypisywać do konta lub roli, nie tylko do dowolnego tekstu `owner`.
+- [x] Dodać osobne kolejki `moje`, `zespołu`, `przeterminowane` dla zakupów, płatności, napraw i operacji.
+- [x] Powiadomienie o zadaniu wynika z terminu, priorytetu i preferencji odbiorcy; brak stałego alertu bez rekordu źródłowego.
+- [x] Zadanie turnoveru wynika z wyjazdu i aktualizuje się po zmianie terminu.
+- [x] Pokazać okno `można wejść od` → `gotowe do` na podstawie wyjazdu i kolejnego przyjazdu.
+- [x] Dodać stany: `do przyjęcia`, `przyjęte`, `w toku`, `gotowe`, `problem/odrzucone`.
+- [x] Osoba sprzątająca może przyjąć lub odrzucić okno; godzina rozpoczęcia jest opcjonalna.
+- [x] Brak odpowiedzi i odrzucenie tworzą alert dla operatora.
+- [x] Dodać wersjonowane szablony checklist per domek z punktami stałymi, sezonowymi, jednorazowymi i wynikającymi z handoffu/usterki.
+- [x] Stan domku wyliczać jako `goście`, `wyjazd dzisiaj`, `do sprzątania`, `w toku`, `gotowy`, `zablokowany usterką`.
+- [x] `Gotowy` wynika z pełnej checklisty; awaryjne nadpisanie właściciela wymaga powodu i audytu.
+- [x] Zachować zgłaszanie usterki z oceną ryzyka przed kolejnym pobytem.
+- [x] Po zaksięgowaniu zaliczki umieścić pobyt w planie sprzątania na najbliższy tydzień, zgodnie z regułą i preferencją operatora.
+- [x] Jeżeli od ostatniego potwierdzonego sprzątania lub kontroli gotowości minęło ponad siedem dni, zaproponować odświeżenie przed przyjazdem; sama luka między rezerwacjami nie jest dowodem potrzeby.
+- [x] Osoba wydająca klucze widzi tylko niezbędne potwierdzenia: właściwy pobyt, gotowość, bramkę płatności i wykonanie wymaganej procedury, bez pełnych finansów i CRM.
 
 #### 4.3 PR-9c — procedura ochrony małoletnich
 

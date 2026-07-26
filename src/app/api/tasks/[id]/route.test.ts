@@ -123,6 +123,38 @@ describe("PATCH /api/tasks/:id", () => {
     expect(mocks.context.supabase.rpc).not.toHaveBeenCalled();
   });
 
+  it("wymaga powodu awaryjnego nadpisania gotowości", async () => {
+    const response = await PATCH(request({
+      task: {
+        ...task,
+        readinessEvidence: {
+          source: "owner-override",
+          completedItems: 2,
+          totalItems: 4,
+        },
+      },
+    }), routeContext);
+
+    expect(response.status).toBe(400);
+    expect(mocks.context.supabase.rpc).not.toHaveBeenCalled();
+  });
+
+  it("odrzuca niemożliwy licznik dowodu checklisty", async () => {
+    const response = await PATCH(request({
+      task: {
+        ...task,
+        readinessEvidence: {
+          source: "checklist",
+          completedItems: 5,
+          totalItems: 4,
+        },
+      },
+    }), routeContext);
+
+    expect(response.status).toBe(400);
+    expect(mocks.context.supabase.rpc).not.toHaveBeenCalled();
+  });
+
   it("mierzy faktyczny payload i odrzuca go także bez zaufania do Content-Length", async () => {
     const oversized = new Request("https://app.example.com/api/tasks/TASK-1", {
       method: "PATCH",

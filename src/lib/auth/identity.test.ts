@@ -19,6 +19,7 @@ describe("tożsamość widoczna w aplikacji", () => {
       organizationName: "Stawy u Sikory",
       role: "admin",
       roleLabel: "Administrator",
+      userId: null,
     });
 
     expect(initialsFor("Patryk Sikora")).toBe("PS");
@@ -45,6 +46,7 @@ describe("tożsamość widoczna w aplikacji", () => {
       organizationId: null,
       role: null,
       roleLabel: "Rola nieustalona",
+      userId: null,
     });
     expect(roleLabel(null)).toBe("Rola nieustalona");
   });

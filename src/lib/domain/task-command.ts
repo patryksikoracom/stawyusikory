@@ -21,6 +21,22 @@ export const operationalTaskSchema = z.object({
   status: z.enum(["Do zrobienia", "W toku", "Zrobione", "Zablokowane", "Nie dotyczy"]),
   dueDate: z.iso.date().optional(),
   owner: z.string().trim().min(1).max(200),
+  assigneeUserId: z.string().uuid().optional(),
+  assigneeRole: z.enum(["owner", "admin", "manager", "cleaning", "marketing", "accounting", "viewer"]).optional(),
+  assignmentStatus: z.enum(["Do przyjęcia", "Przyjęte", "Odrzucone"]).optional(),
+  acceptedAt: z.iso.datetime().optional(),
+  rejectedAt: z.iso.datetime().optional(),
+  proposedStartTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
+  startedAt: z.iso.datetime().optional(),
+  readyAt: z.iso.datetime().optional(),
+  readinessEvidence: z.object({
+    source: z.enum(["checklist", "owner-override"]),
+    completedItems: z.number().int().nonnegative(),
+    totalItems: z.number().int().nonnegative(),
+    reason: z.string().trim().min(2).max(500).optional(),
+  }).optional(),
+  checklistTemplateId: z.string().trim().min(1).max(128).optional(),
+  checklistTemplateVersion: z.number().int().positive().optional(),
   unitId: z.string().trim().max(128).optional(),
   title: z.string().trim().min(1).max(500),
   blocker: optionalText,
@@ -43,6 +59,21 @@ export const operationalTaskSchema = z.object({
   ]).optional(),
   version: z.number().int().positive().optional(),
   updatedAt: z.iso.datetime().optional(),
+}).superRefine((task, context) => {
+  if (task.readinessEvidence?.source === "owner-override" && !task.readinessEvidence.reason) {
+    context.addIssue({
+      code: "custom",
+      message: "Awaryjne nadpisanie gotowości wymaga powodu.",
+      path: ["readinessEvidence", "reason"],
+    });
+  }
+  if (task.readinessEvidence && task.readinessEvidence.completedItems > task.readinessEvidence.totalItems) {
+    context.addIssue({
+      code: "custom",
+      message: "Liczba ukończonych punktów nie może przekraczać liczby wszystkich punktów.",
+      path: ["readinessEvidence", "completedItems"],
+    });
+  }
 });
 
 export const updateTaskCommandSchema = z.object({

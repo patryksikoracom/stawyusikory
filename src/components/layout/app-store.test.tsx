@@ -950,7 +950,11 @@ describe("AppStoreProvider w trybie chmurowym", () => {
     });
     expect(commandBody.aggregate.tasks).toHaveLength(5);
     expect(commandBody.aggregate.tasks.every((task: { bookingId: string }) => task.bookingId === booking.id)).toBe(true);
-    expect(commandBody.aggregate.checklistItems).toHaveLength(4);
+    expect(commandBody.aggregate.checklistItems).toHaveLength(10);
+    expect(commandBody.aggregate.checklistItems.every((item: {
+      templateId?: string;
+      templateVersion?: number;
+    }) => item.templateId === "cleaning-standard-v1" && item.templateVersion === 1)).toBe(true);
     expect(commandBody.aggregate.scheduledMessages).toHaveLength(8);
     expect(store?.data.bookings[0]).toMatchObject({ id: booking.id, version: 1 });
     expect(store?.data.tasks.filter((task) => task.bookingId === booking.id)).toHaveLength(5);

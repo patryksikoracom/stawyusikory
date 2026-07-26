@@ -14,6 +14,7 @@ export type AppIdentity = {
   organizationName: string | null;
   role: UserRole | null;
   roleLabel: string;
+  userId: string | null;
 };
 
 type IdentityInput = {
@@ -23,6 +24,7 @@ type IdentityInput = {
   organizationId?: string | null;
   organizationName?: string | null;
   role?: string | null;
+  userId?: string | null;
 };
 
 const roleLabels: Record<UserRole, string> = {
@@ -74,6 +76,7 @@ export function buildAppIdentity({
   organizationId,
   organizationName,
   role,
+  userId,
 }: IdentityInput): AppIdentity {
   const normalizedEmail = email?.trim() || null;
   const emailName = normalizedEmail?.split("@")[0]?.trim() || null;
@@ -90,6 +93,7 @@ export function buildAppIdentity({
     organizationName: organizationName?.trim() || null,
     role: validRole,
     roleLabel: roleLabel(validRole),
+    userId: userId?.trim() || null,
   };
 }
 

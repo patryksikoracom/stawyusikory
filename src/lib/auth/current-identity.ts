@@ -62,5 +62,6 @@ export const getCurrentAppIdentity = cache(async () => {
     organizationId: membership?.organization_id,
     organizationName,
     role: membership?.role,
+    userId: user.id,
   });
 });
