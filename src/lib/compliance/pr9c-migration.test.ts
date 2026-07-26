@@ -6,8 +6,25 @@ const migration = fs.readFileSync(
   path.join(process.cwd(), "supabase/migrations/20260726193626_pr9c_minor_protection.sql"),
   "utf8",
 );
+const repairMigration = fs.readFileSync(
+  path.join(
+    process.cwd(),
+    "supabase/migrations/20260726211741_extend_minor_protection_entity_types.sql",
+  ),
+  "utf8",
+);
 
 describe("migracja PR-9c", () => {
+  it.each([migration, repairMigration])(
+    "dopuszcza wszystkie typy wpisów ochrony małoletnich",
+    (sql) => {
+      expect(sql).toContain("drop constraint if exists operational_records_entity_type_check");
+      expect(sql).toContain("'minorProtectionStandards'");
+      expect(sql).toContain("'minorProtectionExecutions'");
+      expect(sql).toContain("'minorProtectionReactions'");
+    },
+  );
+
   it("wiąże mutacje z jawną organizacją i członkostwem", () => {
     expect(migration).toContain("p_organization_id uuid");
     expect(migration).toContain("membership.organization_id = p_organization_id");
