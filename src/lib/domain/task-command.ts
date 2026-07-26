@@ -17,6 +17,7 @@ export const operationalTaskSchema = z.object({
     "Naprawa",
     "Inne",
   ]),
+  complianceKind: z.literal("minor-protection").optional(),
   priority: z.enum(["Wysoki", "Średni", "Niski"]),
   status: z.enum(["Do zrobienia", "W toku", "Zrobione", "Zablokowane", "Nie dotyczy"]),
   dueDate: z.iso.date().optional(),

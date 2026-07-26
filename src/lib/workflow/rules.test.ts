@@ -67,6 +67,29 @@ describe("availability rules", () => {
     expect(cancelled.find((item) => item.id === "repair")?.status).toBe("Do zrobienia");
   });
 
+  it("przesuwa i wyłącza istniejące zadanie ochrony małoletnich", () => {
+    const protectionTask = {
+      id: "A-minor-protection",
+      bookingId: base.id,
+      type: "Przed przyjazdem" as const,
+      complianceKind: "minor-protection" as const,
+      priority: "Wysoki" as const,
+      status: "Do zrobienia" as const,
+      dueDate: base.checkIn,
+      owner: "Operacje",
+      title: "Wykonać SOP.",
+    };
+    const moved = rescheduleOpenTasksForBooking([protectionTask], {
+      ...base,
+      children: 1,
+      checkIn: "2026-07-11",
+    });
+    expect(moved[0]?.dueDate).toBe("2026-07-11");
+
+    const withoutChildren = rescheduleOpenTasksForBooking(moved, { ...base, children: 0 });
+    expect(withoutChildren[0]?.status).toBe("Nie dotyczy");
+  });
+
   it("uses the departure debrief as the next action after checkout", () => {
     const today = todayInPoland();
     const departed = { ...base, checkIn: "2026-07-10", checkOut: today, grossPrice: 1800 };

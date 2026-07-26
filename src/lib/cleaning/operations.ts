@@ -6,6 +6,12 @@ import type {
   TaskChecklistItem,
   UserRole,
 } from "@/lib/types";
+import {
+  deriveMinorProtectionGate,
+  type MinorProtectionExecution,
+  type MinorProtectionReaction,
+  type MinorProtectionStandard,
+} from "@/lib/compliance/minor-protection";
 
 export const defaultCleaningChecklistTemplates: CleaningChecklistTemplate[] = [{
   id: "cleaning-standard-v1",
@@ -231,7 +237,15 @@ export function deriveWeeklyCleaningPlan(data: AppData, today: string) {
   );
 }
 
-export function deriveKeyHandoffGate(data: AppData, bookingId: string) {
+export function deriveKeyHandoffGate(
+  data: AppData,
+  bookingId: string,
+  compliance?: {
+    standard: MinorProtectionStandard | null;
+    execution: MinorProtectionExecution | null;
+    reaction: MinorProtectionReaction | null;
+  },
+) {
   const booking = data.bookings.find((item) => item.id === bookingId);
   if (!booking) return null;
   const readiness = deriveUnitOperationalStates(data, booking.checkIn)
@@ -241,6 +255,11 @@ export function deriveKeyHandoffGate(data: AppData, bookingId: string) {
     unitId: booking.unitId,
     ready: readiness?.state === "Gotowy",
     paymentConfirmed: bookingHasConfirmedDeposit(data, bookingId),
-    minorProcedure: booking.children > 0 ? "Wymaga potwierdzenia PR-9c" as const : "Nie dotyczy" as const,
+    minorProcedure: deriveMinorProtectionGate(
+      booking,
+      compliance?.standard ?? null,
+      compliance?.execution ?? null,
+      compliance?.reaction ?? null,
+    ),
   };
 }

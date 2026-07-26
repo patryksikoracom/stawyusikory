@@ -249,15 +249,16 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 
 #### 4.3 PR-9c — procedura ochrony małoletnich
 
-- [ ] Najpierw przyjąć i wersjonować zatwierdzony SOP dla obiektu; aplikacja nie wymyśla treści procedury.
-- [ ] Dla pobytu z dziećmi tworzyć zadanie wewnętrzne wykonania procedury, nie marketingową ankietę.
-- [ ] Zapisać minimalnie: czy wymagana, czy wykonana, data, osoba, wersja SOP i wynik `bez uwag/wymaga reakcji`.
-- [ ] Nie przechowywać kopii dokumentów ani dodatkowych danych dziecka bez odrębnej, udokumentowanej potrzeby i retencji.
-- [ ] Nie łączyć procedury z marketingiem, ankietą satysfakcji ani zgodą na media.
-- [ ] Dodać kontrolowaną ścieżkę reakcji i audyt dla wyniku wymagającego działania.
-- [ ] SOP określa pełną i skróconą wersję standardów, sposób udostępnienia, przygotowanie personelu, właściciela przeglądu oraz pisemny zapis wniosków z okresowej oceny.
-- [ ] Formularz online powstaje dopiero po zatwierdzeniu SOP, minimalnego zakresu danych, retencji i dostępu.
-- [ ] Nie zakładać, że dowolny podpis DocuSign jest równoważny podpisowi własnoręcznemu; wymagana forma i poziom podpisu podlegają osobnej walidacji prawnej.
+- [ ] Właściciel wraz z osobą kompetentną prawnie i w ochronie danych przyjmuje rzeczywisty SOP dla obiektu; aplikacja nie wymyśla jego treści.
+  - Projekt 0.9 pełny i dziecięcy przygotowano 26.07.2026, zweryfikowano źródła, dostępność i render; checkbox pozostaje otwarty do formalnego zatwierdzenia, uzupełnienia decyzji właściciela i publikacji.
+- [x] Aplikacja wersjonuje wyłącznie zatwierdzony SOP i wymaga wersji pełnej/skróconej, publikacji, wywieszenia, przygotowania personelu, właściciela oraz terminu przeglądu.
+- [x] Dla bieżącego lub przyszłego pobytu z dziećmi tworzyć zadanie wewnętrzne wykonania procedury, nie marketingową ankietę.
+- [x] Zapisać minimalnie: czy wymagana, czy wykonana, data, osoba, wersja SOP i wynik `bez uwag/wymaga reakcji`.
+- [x] Nie przechowywać kopii dokumentów ani dodatkowych danych dziecka bez odrębnej, udokumentowanej potrzeby i retencji.
+- [x] Nie łączyć procedury z marketingiem, ankietą satysfakcji ani zgodą na media.
+- [x] Dodać kontrolowaną ścieżkę reakcji i audyt dla wyniku wymagającego działania.
+- [x] Formularz online pozostaje poza zakresem do czasu zatwierdzenia SOP, minimalnego zakresu danych, retencji i dostępu.
+- [x] Nie zakładać, że dowolny podpis DocuSign jest równoważny podpisowi własnoręcznemu; PR-9c nie wdraża podpisu, a wymagana forma podlega osobnej walidacji prawnej.
 
 **Akceptacja etapu 4:** użytkownik organizacji A nie może odczytać ani zmienić organizacji B; cleaning wykonuje pełny turnover bez finansów/marketingu/pełnego PII; viewer nie zapisuje ani nie wysyła; stan gotowości ma dowód; procedura małoletnich zapisuje tylko zatwierdzone minimum.
 

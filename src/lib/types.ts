@@ -228,6 +228,7 @@ export type OpsTask = {
   id: string;
   bookingId: string;
   type: TaskType;
+  complianceKind?: "minor-protection";
   priority: Priority;
   status: TaskStatus;
   dueDate?: string;

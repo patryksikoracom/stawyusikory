@@ -948,7 +948,13 @@ describe("AppStoreProvider w trybie chmurowym", () => {
       booking: { id: booking.id, version: 1 },
       contact: { bookingId: booking.id },
     });
-    expect(commandBody.aggregate.tasks).toHaveLength(5);
+    expect(commandBody.aggregate.tasks).toHaveLength(6);
+    expect(commandBody.aggregate.tasks).toContainEqual(expect.objectContaining({
+      type: "Przed przyjazdem",
+      complianceKind: "minor-protection",
+      dueDate: booking.checkIn,
+      assigneeRole: "manager",
+    }));
     expect(commandBody.aggregate.tasks.every((task: { bookingId: string }) => task.bookingId === booking.id)).toBe(true);
     expect(commandBody.aggregate.checklistItems).toHaveLength(10);
     expect(commandBody.aggregate.checklistItems.every((item: {
@@ -957,7 +963,7 @@ describe("AppStoreProvider w trybie chmurowym", () => {
     }) => item.templateId === "cleaning-standard-v1" && item.templateVersion === 1)).toBe(true);
     expect(commandBody.aggregate.scheduledMessages).toHaveLength(8);
     expect(store?.data.bookings[0]).toMatchObject({ id: booking.id, version: 1 });
-    expect(store?.data.tasks.filter((task) => task.bookingId === booking.id)).toHaveLength(5);
+    expect(store?.data.tasks.filter((task) => task.bookingId === booking.id)).toHaveLength(6);
     expect(store?.data.scheduledMessages.filter((message) => message.bookingId === booking.id)).toHaveLength(8);
     expect(store?.syncMode).toBe("cloud");
   });
@@ -1119,9 +1125,13 @@ describe("AppStoreProvider w trybie chmurowym", () => {
       aggregate: {
         booking: { id: booking.id, checkOut: "2099-08-14", version: 4 },
         contact: { phone: "+48 700 000 000", version: 3 },
-        tasks: [{ id: task.id, dueDate: "2099-08-14", version: 6 }],
       },
     });
+    expect(updateBody.aggregate.tasks).toContainEqual(expect.objectContaining({
+      id: task.id,
+      dueDate: "2099-08-14",
+      version: 6,
+    }));
 
     const cancelBody = JSON.parse(String(bookingPatchCalls[1]?.[1]?.body));
     expect(cancelBody).toMatchObject({
@@ -1129,9 +1139,11 @@ describe("AppStoreProvider w trybie chmurowym", () => {
       expectedRecordVersion: 4,
       aggregate: {
         booking: { id: booking.id, workflowStatus: "Anulowana", version: 5 },
-        tasks: [{ id: task.id, status: "Nie dotyczy", version: 7 }],
       },
     });
+    expect(cancelBody.aggregate.tasks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: task.id, status: "Nie dotyczy", version: 7 }),
+    ]));
     expect(cancelBody.aggregate.scheduledMessages.every(
       (message: { status: string }) => message.status === "Anulowana",
     )).toBe(true);

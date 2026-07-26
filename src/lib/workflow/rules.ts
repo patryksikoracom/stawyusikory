@@ -7,6 +7,7 @@ import type {
   Unit,
 } from "../types";
 import { addLocalDays, dateDiffDays, todayInPoland } from "../date";
+import { createMinorProtectionTask, requiresMinorProtection } from "../compliance/minor-protection";
 
 export function nightsBetween(checkIn?: string, checkOut?: string) {
   if (!checkIn || !checkOut) return 0;
@@ -96,7 +97,7 @@ export function canClose(data: AppData, booking: Booking) {
 
 export function createTasksForBooking(booking: Booking): OpsTask[] {
   const base = `${booking.id}-${Date.now()}`;
-  return [
+  const tasks: OpsTask[] = [
     {
       id: `${base}-pay`,
       bookingId: booking.id,
@@ -160,14 +161,24 @@ export function createTasksForBooking(booking: Booking): OpsTask[] {
       title: "Dopytać o zgody na zdjęcia/content, jeśli pojawiły się materiały.",
     },
   ];
+  const minorProtection = createMinorProtectionTask(booking, `${base}-minor-protection`);
+  return minorProtection ? [...tasks, minorProtection] : tasks;
 }
 
 export function rescheduleOpenTasksForBooking(tasks: OpsTask[], booking: Booking) {
-  return tasks.map((task) => {
-    if (task.bookingId !== booking.id || ["Zrobione", "Nie dotyczy"].includes(task.status)) return task;
+  const updated = tasks.map((task) => {
+    if (task.bookingId !== booking.id) return task;
+    if (task.complianceKind === "minor-protection") {
+      if (task.status === "Zrobione") return task;
+      return requiresMinorProtection(booking)
+        ? { ...task, unitId: booking.unitId, dueDate: booking.checkIn, status: task.status === "Nie dotyczy" ? "Do zrobienia" as const : task.status }
+        : { ...task, status: "Nie dotyczy" as const };
+    }
+    if (["Zrobione", "Nie dotyczy"].includes(task.status)) return task;
     if (task.type === "Naprawa") return task;
     const dueDate = task.type === "Płatność" ? booking.depositDueDate || addLocalDays(booking.checkIn, -3)
       : task.type === "Przed przyjazdem" ? addLocalDays(booking.checkIn, -1)
+        : task.complianceKind === "minor-protection" ? booking.checkIn
         : task.type === "Opinia" ? addLocalDays(booking.checkOut, 1)
           : task.type === "Sprzątanie" ? booking.checkOut
             : undefined;
@@ -190,6 +201,7 @@ export function rescheduleOpenTasksForBooking(tasks: OpsTask[], booking: Booking
     }
     return { ...task, unitId: booking.unitId, dueDate: dueDate ?? task.dueDate };
   });
+  return updated;
 }
 
 export function cancelOpenStayTasks(tasks: OpsTask[], bookingId: string) {

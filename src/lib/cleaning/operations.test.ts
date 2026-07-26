@@ -189,7 +189,7 @@ describe("operacje zespołu PR-9b", () => {
       unitId: "unit-1",
       ready: true,
       paymentConfirmed: true,
-      minorProcedure: "Wymaga potwierdzenia PR-9c",
+      minorProcedure: "Brak aktywnego SOP",
     });
     expect(JSON.stringify(gate)).not.toContain("Sekret");
   });
