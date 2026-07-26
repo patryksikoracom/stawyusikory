@@ -52,7 +52,7 @@ Commit, push i deployment są osobnymi decyzjami. Samo ukończenie lokalnej pacz
 | Etap 3 jako całość | **zamknięty online 26.07.2026** | PR-7 i cały PR-8 działają online; migracje, uprawnienia RPC, login, chronione trasy, konsola i runtime zostały potwierdzone po wdrożeniu |
 | PR-9a / Etap 4.1 | **draft PR #22 opublikowany 26.07.2026** | jawna aktywna organizacja bez `limit(1)`, siedem ról, macierz uprawnień, projekcja PII/finansów, RLS i poprawki Advisora; 309 testów, lint, TypeScript, build i smoke desktop/390 px przechodzą. Migracja czeka na test w odizolowanym Supabase |
 | PR-9b / Etap 4.2 | **implementacja lokalna gotowa do draft PR 26.07.2026** | jawnie tenantowy turnover, przyjęcie/odrzucenie, kolejki zespołu, wersjonowana checklista 10 kroków, dowód gotowości, eskalacje, odświeżenie po 7 dniach i minimalna bramka wydania kluczy; 328 testów, lint, TypeScript i build przechodzą. Migracja czeka na odizolowany Supabase |
-| PR-9c / Etap 4.3 | **implementacja lokalna gotowa do draft PR 26.07.2026** | wersjonowany rejestr zatwierdzonego SOP, zadanie tylko dla bieżącego/przyszłego pobytu z dziećmi, minimalny dowód wykonania i kontrolowana reakcja bez danych dziecka; 345 testów, lint, TypeScript, build 35 tras i smoke 390 px przechodzą. Aktywacja czeka na zatwierdzony SOP i test migracji w odizolowanym Supabase |
+| PR-9c / Etap 4.3 | **wdrożony online 26.07.2026 — draft PR #24** | wersjonowany rejestr zatwierdzonego SOP, zadanie tylko dla bieżącego/przyszłego pobytu z dziećmi, minimalny dowód wykonania i kontrolowana reakcja bez danych dziecka; 347 testów, lint, TypeScript, build 35 tras, migracja z transakcyjnym rollbackiem i produkcyjny smoke przechodzą. Funkcja jest online, ale aktywacja nadal czeka na zatwierdzony SOP |
 
 ## Bramka wydania: MVP operatora dla taty
 
@@ -96,7 +96,7 @@ Test taty z 25.07.2026 zmienia priorytet interfejsu operatora: kalendarz, wolne 
 | 10i | Etap 3 — zapis domenowy | **PR-8 zbiorczo — komplet lokalnie** | wszystkie pozostałe mutacje: usterki, debrief, komunikacja, faktury, media, profile, zgody, połączenia, domki, stawki, koszty i import | jedna atomowa komenda batchowa, wersje rekordów, konflikt 409, audyt i brak pełnego `PUT /api/state` |
 | 11 | Etap 4 — organizacje i role | **PR-9a — draft #22** | active organization, role, RLS i izolacja PII/finansów | testy kontraktu dwóch organizacji i wszystkich ról przechodzą; właściwy test RLS czeka na odizolowany Supabase |
 | 12 | Etap 4 — operacje zespołu | **PR-9b — gotowy lokalnie** | zlecenia sprzątania, przyjęcie, checklisty per domek i eskalacja | automatyczne testy pełnego turnoveru i redakcji przechodzą; właściwy test RPC/RLS i realnego konta czeka na odizolowany Supabase |
-| 13 | Etap 4 — zgodność operacyjna | **PR-9c — gotowy lokalnie** | procedura małoletnich wynikająca z zatwierdzonego SOP i minimalizacja danych | 345 testów i smoke 390 px przechodzą; aktywacja czeka na zatwierdzony SOP i odizolowany test migracji |
+| 13 | Etap 4 — zgodność operacyjna | **PR-9c — wdrożony online, draft #24** | procedura małoletnich wynikająca z zatwierdzonego SOP i minimalizacja danych | 347 testów, migracja i produkcyjny smoke przechodzą; aktywacja czeka na zatwierdzony SOP |
 | 14 | Etap 5 — fundament UX | PR-10a | wspólne dialogi, klawiatura, mobile, paginacja i wydajność | WCAG smoke test i 1000 rekordów |
 | 15 | Etap 5 — Dzisiaj | PR-10b | chronologiczna agenda, stan domków i same-day turnover | w 5 sekund widać przyjazdy, wyjazdy i brak gotowości |
 | 16 | Etap 5 — rezerwacje | PR-10c | prosty formularz, jawne filtry/sortowanie, lista i szczegół | powrót zachowuje filtry; kanał zawarcia nie miesza się ze źródłem odkrycia |
@@ -464,14 +464,14 @@ Pobyt z dziećmi otrzymuje jawnie oznaczone zadanie `minor-protection`. Migracja
 
 Dowód wykonania zawiera wyłącznie: wymaganie, wykonanie, czas, operatora, identyfikator i wersję SOP oraz wynik `Bez uwag` albo `Wymaga reakcji`. Nie istnieją pola nazwiska, daty urodzenia, PESEL-u, kopii dokumentu, skanu ani swobodnego opisu incydentu. Wynik wymagający reakcji blokuje wydanie kluczy i tworzy osobny stan `Otwarte → Przyjęte → Zamknięte`; zamknięcie wymaga odwołania do właściwego, zewnętrznego rejestru SOP.
 
-Walidacja lokalna: **345/345 testów**, ESLint, TypeScript, kontrola diffu, kontrola konfiguracji Auth i produkcyjny build 35 tras przechodzą. Smoke w aktywnej sesji na desktopie i 390 px potwierdza brak overlay, błędów konsoli i poziomego overflow po otwarciu panelu. Test na rzeczywistych danych wykrył i usunął historyczne pobyty z bieżącej kolejki.
+Walidacja: **347/347 testów**, ESLint, TypeScript, kontrola diffu, kontrola konfiguracji Auth i produkcyjny build 35 tras przechodzą. Smoke w aktywnej sesji na desktopie i 390 px potwierdza brak overlay, błędów konsoli i poziomego overflow po otwarciu panelu. Test na rzeczywistych danych wykrył i usunął historyczne pobyty z bieżącej kolejki. Migracja produkcyjna została sprawdzona pełnym scenariuszem w transakcji z `ROLLBACK`: aktywacja wersji testowej, wykonanie procedury, otwarcie/przyjęcie/zamknięcie reakcji i odmowa dla użytkownika bez członkostwa. Test wykrył brak trzech typów wpisów w ograniczeniu bazy; dodano migrację naprawczą i cały scenariusz przeszedł ponownie.
 
-Pozostałe bramki przed merge/deploymentem:
+Pozostałe bramki przed aktywacją SOP:
 
 - właściciel wraz z osobą kompetentną prawnie i w ochronie danych zatwierdza rzeczywisty SOP, jego wersję pełną i skróconą, kroki, retencję i kanał dokumentowania reakcji;
-- migrację należy uruchomić na odizolowanej gałęzi Supabase i wykonać pozytywne/negatywne testy RPC dla dwóch organizacji oraz ról owner/admin/manager/cleaning/viewer;
-- po migracji należy ponowić Security/Performance Advisor i dopiero potem aktywować zatwierdzoną wersję SOP;
-- nie stosować migracji testowo na projekcie operacyjnym i nie wpisywać do aplikacji danych dziecka ani opisu zdarzenia.
+- po zatwierdzeniu należy wprowadzić rzeczywiste adresy dokumentów, potwierdzenie publikacji/wywieszenia i odwołanie do przygotowania personelu;
+- dopiero wtedy aktywować zatwierdzoną wersję SOP;
+- nie wpisywać do aplikacji danych dziecka ani opisu zdarzenia.
 
 ## Pełne przypisanie ustaleń z walkthrough
 
