@@ -10,26 +10,29 @@ import { unitName } from "@/lib/workflow/rules";
 import { formatPolishDate, todayInPoland } from "@/lib/date";
 import type { AppIdentity } from "@/lib/auth/identity";
 import { deriveTeamTaskQueues } from "@/lib/cleaning/operations";
+import { canExecuteMinorProtection } from "@/lib/compliance/minor-protection";
+import { MinorProtectionPanel } from "@/components/compliance/minor-protection-panel";
 
 function shortDate(value?: string) { return value ? formatPolishDate(value, { year: false }) : "bez terminu"; }
 
 export function TasksView({ identity }: { identity: AppIdentity }) {
   const { data, updateTask, updateIssue } = useAppStore();
-  const [mode, setMode] = useState<"cleaning" | "all" | "issues">("cleaning");
+  const [mode, setMode] = useState<"cleaning" | "all" | "issues" | "minor-protection">("cleaning");
   const [unit, setUnit] = useState("Wszystkie");
   const open = data.tasks.filter((task) => !["Zrobione", "Nie dotyczy"].includes(task.status) && (unit === "Wszystkie" || task.unitId === unit));
   const cleanings = open.filter((task) => task.type === "Sprzątanie").sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || ""));
   const otherTasks = open.filter((task) => task.type !== "Sprzątanie");
   const done = data.tasks.filter((task) => task.status === "Zrobione").length;
 
-  return <div className="grid gap-5">
+  return <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5">
     <section className="animate-rise-2 relative overflow-hidden rounded-[22px] bg-[#244f43] p-5 text-white sm:p-7"><div className="absolute -right-20 -top-20 size-64 rounded-full border-[36px] border-white/[.04]"/><div className="relative grid gap-6 lg:grid-cols-[1fr_auto] lg:items-center"><div><span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-[.14em] text-[#dbe4bc]"><Icon className="size-3.5" name="cleaning"/>Panel sprzątającej</span><h2 className="mt-4 max-w-2xl font-display text-3xl font-semibold leading-tight tracking-[-.03em] sm:text-4xl">Każdy turnover ma osobę, termin i potwierdzenie.</h2><p className="mt-3 max-w-2xl text-sm leading-6 text-white/65">Plan reaguje na zmianę wyjazdu. Pani sprzątająca widzi tylko to, czego potrzebuje — bez cen i danych marketingowych gości.</p></div><div className="grid grid-cols-3 gap-px overflow-hidden rounded-2xl border border-white/10 bg-white/10"><HeroMini value={cleanings.length} label="do zrobienia"/><HeroMini value={cleanings.filter((item) => item.priority === "Wysoki").length} label="pilne"/><HeroMini value={done} label="ukończone"/></div></div></section>
 
-    <div className="animate-rise-3 flex flex-col gap-3 rounded-[18px] border border-[#d9d1c1] bg-[#fffdf8] p-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex overflow-x-auto rounded-xl bg-[#ebe7de] p-1"><button className={`shrink-0 rounded-lg px-4 py-2 text-xs font-black transition ${mode === "cleaning" ? "bg-white text-[#174d3b] shadow-sm" : "text-[#6d7972]"}`} onClick={() => setMode("cleaning")}>Sprzątanie</button><button className={`shrink-0 rounded-lg px-4 py-2 text-xs font-black transition ${mode === "all" ? "bg-white text-[#174d3b] shadow-sm" : "text-[#6d7972]"}`} onClick={() => setMode("all")}>Wszystkie zadania</button><button className={`shrink-0 rounded-lg px-4 py-2 text-xs font-black transition ${mode === "issues" ? "bg-white text-[#174d3b] shadow-sm" : "text-[#6d7972]"}`} onClick={() => setMode("issues")}>Usterki <span className="ml-1 opacity-60">{data.issues.filter((item) => item.status !== "Rozwiązane").length}</span></button></div><select className="min-h-10 rounded-xl border border-[#cec6b7] bg-white px-3 text-sm font-bold" value={unit} onChange={(event) => setUnit(event.target.value)}><option>Wszystkie</option>{data.units.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div>
+    <div className="animate-rise-3 flex flex-col gap-3 rounded-[18px] border border-[#d9d1c1] bg-[#fffdf8] p-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex overflow-x-auto rounded-xl bg-[#ebe7de] p-1"><button className={`shrink-0 rounded-lg px-4 py-2 text-xs font-black transition ${mode === "cleaning" ? "bg-white text-[#174d3b] shadow-sm" : "text-[#6d7972]"}`} onClick={() => setMode("cleaning")}>Sprzątanie</button><button className={`shrink-0 rounded-lg px-4 py-2 text-xs font-black transition ${mode === "all" ? "bg-white text-[#174d3b] shadow-sm" : "text-[#6d7972]"}`} onClick={() => setMode("all")}>Wszystkie zadania</button><button className={`shrink-0 rounded-lg px-4 py-2 text-xs font-black transition ${mode === "issues" ? "bg-white text-[#174d3b] shadow-sm" : "text-[#6d7972]"}`} onClick={() => setMode("issues")}>Usterki <span className="ml-1 opacity-60">{data.issues.filter((item) => item.status !== "Rozwiązane").length}</span></button>{canExecuteMinorProtection(identity.role) ? <button className={`shrink-0 rounded-lg px-4 py-2 text-xs font-black transition ${mode === "minor-protection" ? "bg-white text-[#174d3b] shadow-sm" : "text-[#6d7972]"}`} onClick={() => setMode("minor-protection")}>Małoletni</button> : null}</div>{mode !== "minor-protection" ? <select className="min-h-10 rounded-xl border border-[#cec6b7] bg-white px-3 text-sm font-bold" value={unit} onChange={(event) => setUnit(event.target.value)}><option>Wszystkie</option>{data.units.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select> : null}</div>
 
     {mode === "cleaning" ? <CleaningBoard tasks={cleanings} data={data} identity={identity} updateTask={updateTask}/> : null}
     {mode === "all" ? <AllTasks tasks={otherTasks} data={data} identity={identity} updateTask={updateTask}/> : null}
     {mode === "issues" ? <IssueBoard issues={data.issues.filter((issue) => unit === "Wszystkie" || issue.unitId === unit)} data={data} updateIssue={updateIssue}/> : null}
+    {mode === "minor-protection" && canExecuteMinorProtection(identity.role) ? <MinorProtectionPanel role={identity.role!}/> : null}
   </div>;
 }
 

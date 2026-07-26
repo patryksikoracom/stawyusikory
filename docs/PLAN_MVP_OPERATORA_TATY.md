@@ -170,6 +170,42 @@ Numery PR-ów opisują istniejące paczki, a tabela pokazuje priorytet wartości
 - osoba odpowiedzialna za SOP i przygotowanie osób wydających klucze;
 - dokładna reguła odświeżenia domku po długiej przerwie.
 
+## Lista spotkania z tatą — rzeczy do zatwierdzenia
+
+Lista jest protokołem decyzji, a nie luźnym zbiorem pytań. Przy każdym punkcie należy zapisać: `zatwierdzone / do poprawy / odłożone`, ostateczną wartość, osobę odpowiedzialną i datę obowiązywania.
+
+### Codzienna obsługa
+
+- [ ] Potwierdzić, że kalendarz jest pierwszym ekranem operatora i ustalić najważniejsze informacje widoczne bez przewijania.
+- [ ] Zatwierdzić godziny 16:00/11:00, sposób obsługi wcześniejszego przyjazdu/późniejszego wyjazdu i osobę akceptującą wyjątek.
+- [ ] Zatwierdzić minimalny formularz rezerwacji: kontakt, domek, termin, dorośli, dzieci, zwierzęta, cena, zaliczka, saldo i źródło.
+- [ ] Przejść wspólnie 10 rzeczywistych scenariuszy wyceny i zaakceptować wynik, czas obsługi oraz sposób zapisu wyjątku.
+- [ ] Zatwierdzić moment przekazania rezerwacji do przygotowania domku, odpowiedzialność za sprzątanie oraz regułę odświeżenia po ponad siedmiu dniach.
+
+### Ceny, płatności i rezygnacje
+
+- [ ] Zatwierdzić stawki obu domków, sezony, święta, minimum pobytu, dopłaty, zwierzęta i reguły zaokrąglania.
+- [ ] Zatwierdzić zaliczkę 33%/50%, termin płatności, pełną płatność D-2 i twardą bramkę wydania klucza.
+- [ ] Zatwierdzić zasady anulowania, no-show, zmiany terminu, zwrotu zaliczki i ręcznego rabatu wraz z wymaganym powodem.
+
+### Komunikacja i ciągłość
+
+- [ ] Zatwierdzić cztery wiadomości v1: rezerwacja/zaliczka, potwierdzenie zaliczki, przypomnienie o saldzie i instrukcja przyjazdu.
+- [ ] Potwierdzić nadawcę, adres odpowiedzi, języki, możliwość ręcznej korekty oraz sposób zgłaszania błędu dostarczenia.
+- [ ] Potwierdzić zakres importu z Mobile Calendar, 14-dniowy shadow mode, codzienne porównanie i warunek powrotu do starego procesu.
+
+### Dopracowanie i zatwierdzenie ochrony małoletnich
+
+- [ ] Przejść z tatą pełny projekt 0.9 i trzystronicową wersję dla dzieci; zebrać poprawki do języka, kolejności kroków i realiów wydawania kluczy.
+- [ ] Potwierdzić formalną nazwę podmiotu oraz dokładny zakres obiektów objętych SOP.
+- [ ] Imiennie wyznaczyć koordynatora ochrony małoletnich i zastępcę wraz z numerami kontaktowymi oraz zasadą dyżuru.
+- [ ] Zatwierdzić sześć kroków wykonywanych przed wydaniem klucza/kodu, w tym obsługę samoobsługowego przyjazdu i późnego przyjazdu.
+- [ ] Przećwiczyć pięć scenariuszy: zwykły pobyt, brak dokumentu, dorosły niebędący opiekunem, ujawnienie przemocy i niedostępny koordynator.
+- [ ] Zatwierdzić miejsce bezpiecznego rejestru interwencji, listę osób z dostępem, sposób nadawania numeru sprawy i zakaz zapisywania danych dziecka w Stawy OS.
+- [ ] Przekazać projekt prawnikowi/osobie odpowiedzialnej za RODO do zatwierdzenia podstaw, zakresu danych, retencji i procedury usuwania; okres 24 miesięcy/6 lat pozostaje propozycją do decyzji.
+- [ ] Zatwierdzić pełną i dziecięcą wersję jako 1.0, datę wejścia w życie, termin pierwszego przeglądu, publikację HTTPS i miejsce wywieszenia w obiekcie.
+- [ ] Przeszkolić wszystkie osoby wydające klucz/kod, zebrać oświadczenia i dopiero wtedy aktywować wersję 1.0 w Stawy OS.
+
 ## Plan wykonania
 
 ### Faza 0 — zapis planu
