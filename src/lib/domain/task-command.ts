@@ -34,6 +34,13 @@ export const operationalTaskSchema = z.object({
     "Po sezonie",
     "Backlog",
   ]).optional(),
+  statusBeforeBookingDeletion: z.enum([
+    "Do zrobienia",
+    "W toku",
+    "Zrobione",
+    "Zablokowane",
+    "Nie dotyczy",
+  ]).optional(),
   version: z.number().int().positive().optional(),
   updatedAt: z.iso.datetime().optional(),
 });

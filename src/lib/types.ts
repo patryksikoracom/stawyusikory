@@ -232,6 +232,8 @@ export type OpsTask = {
   comment?: string;
   issueId?: string;
   planningHorizon?: RepairHorizon;
+  /** Status zachowany wyłącznie na czas pobytu rezerwacji w koszu. */
+  statusBeforeBookingDeletion?: TaskStatus;
   version?: number;
   updatedAt?: string;
 };
@@ -251,6 +253,8 @@ export type PaymentTransaction = {
   costCategory?: CostCategory;
   costSettingId?: string;
   unitId?: string;
+  version?: number;
+  updatedAt?: string;
 };
 
 export type InvoiceRecord = {
@@ -357,6 +361,15 @@ export type AutomationRule = {
   minimumNights?: number;
 };
 
+export type ScheduledMessageStatus =
+  | "Wersja robocza"
+  | "Zatwierdzona"
+  | "Wysłana"
+  | "Dostarczona"
+  | "Błąd"
+  | "Anulowana"
+  | "Wymaga sprawdzenia";
+
 export type ScheduledMessage = {
   id: string;
   bookingId: string;
@@ -368,12 +381,15 @@ export type ScheduledMessage = {
   recipient?: string;
   subject?: string;
   renderedBody: string;
-  status: "Wersja robocza" | "Zatwierdzona" | "Wysłana" | "Dostarczona" | "Błąd" | "Anulowana" | "Wymaga sprawdzenia";
+  status: ScheduledMessageStatus;
   blockedReason?: string;
   approvedAt?: string;
   providerResult?: string;
   idempotencyKey: string;
   bookingFingerprint: string;
+  /** Stan roboczy zachowany na czas pobytu rezerwacji w koszu. */
+  statusBeforeBookingDeletion?: ScheduledMessageStatus;
+  bookingFingerprintBeforeDeletion?: string;
   createdAt: string;
   version?: number;
   updatedAt?: string;
@@ -411,6 +427,8 @@ export type AppSettings = {
   defaultCheckIn: string;
   defaultCheckOut: string;
   aiApprovalRequired: boolean;
+  version?: number;
+  updatedAt?: string;
 };
 
 export type MediaAsset = {
@@ -454,6 +472,8 @@ export type CalendarBlock = {
     | "Inne";
   reason: string;
   status: "Planowana" | "Aktywna" | "Zakończona" | "Anulowana";
+  version?: number;
+  updatedAt?: string;
 };
 
 export type RateRule = {

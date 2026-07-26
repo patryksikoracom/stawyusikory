@@ -59,6 +59,7 @@ function command(overrides: Record<string, unknown> = {}) {
       tasks: [task],
       scheduledMessages: [message],
     },
+    operation: "update",
     expectedRecordVersion: 3,
     requestId: "request-booking-update-123",
     clientSentAt: "2026-07-25T20:00:00.000Z",
@@ -78,6 +79,27 @@ describe("komenda aktualizacji rezerwacji", () => {
     }));
 
     expect(parsed.success).toBe(false);
+  });
+
+  it("wymaga pełnego i spójnego stanu dla kosza oraz przywrócenia", () => {
+    const trashedBooking = {
+      ...booking,
+      workflowStatus: "Anulowana",
+      workflowStatusBeforeDeletion: "Potwierdzona",
+      deletedAt: "2026-07-25T20:00:00.000Z",
+      purgeAfter: "2026-08-24",
+    };
+    expect(updateBookingCommandSchema.safeParse(command({
+      operation: "trash",
+      aggregate: { ...command().aggregate, booking: trashedBooking },
+    })).success).toBe(true);
+    expect(updateBookingCommandSchema.safeParse(command({
+      operation: "trash",
+    })).success).toBe(false);
+    expect(updateBookingCommandSchema.safeParse(command({
+      operation: "restore",
+      aggregate: { ...command().aggregate, booking: trashedBooking },
+    })).success).toBe(false);
   });
 
   it.each([

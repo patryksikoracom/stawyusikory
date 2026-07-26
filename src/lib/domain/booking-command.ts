@@ -107,6 +107,11 @@ export const operationalScheduledMessageSchema = z.object({
   providerResult: optionalText(5_000),
   idempotencyKey: z.string().trim().min(1).max(500),
   bookingFingerprint: z.string().max(2_000),
+  statusBeforeBookingDeletion: z.enum([
+    "Wersja robocza", "Zatwierdzona", "Wysłana", "Dostarczona", "Błąd",
+    "Anulowana", "Wymaga sprawdzenia",
+  ]).optional(),
+  bookingFingerprintBeforeDeletion: z.string().max(2_000).optional(),
   createdAt: z.iso.datetime(),
   version: z.number().int().positive().optional(),
   updatedAt: z.iso.datetime().optional(),
@@ -248,22 +253,67 @@ export const bookingMutationAggregateSchema = z.object({
 
 export const updateBookingCommandSchema = z.object({
   aggregate: bookingMutationAggregateSchema,
+  operation: z.enum(["update", "cancel", "trash", "restore"]),
   expectedRecordVersion: z.number().int().positive(),
   requestId: z.string().trim().min(8).max(128),
   clientSentAt: z.iso.datetime(),
   tabId: z.string().trim().min(8).max(128),
 }).superRefine((command, context) => {
-  if (command.aggregate.booking.version !== command.expectedRecordVersion + 1) {
+  const { booking } = command.aggregate;
+  if (booking.version !== command.expectedRecordVersion + 1) {
     context.addIssue({
       code: "custom",
       message: "Wersja rezerwacji nie odpowiada wersji oczekiwanej.",
       path: ["aggregate", "booking", "version"],
     });
   }
+  if (
+    command.operation === "trash"
+    && (
+      booking.workflowStatus !== "Anulowana"
+      || !booking.deletedAt
+      || !booking.purgeAfter
+      || !booking.workflowStatusBeforeDeletion
+    )
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Komenda kosza nie zawiera pełnego stanu usunięcia.",
+      path: ["aggregate", "booking"],
+    });
+  }
+  if (
+    command.operation === "restore"
+    && (booking.deletedAt || booking.purgeAfter || booking.workflowStatusBeforeDeletion)
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Przywracana rezerwacja nadal zawiera stan kosza.",
+      path: ["aggregate", "booking"],
+    });
+  }
+  if (
+    (command.operation === "update" || command.operation === "cancel")
+    && (booking.deletedAt || booking.purgeAfter || booking.workflowStatusBeforeDeletion)
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Zwykła zmiana rezerwacji nie może modyfikować rekordu w koszu.",
+      path: ["aggregate", "booking"],
+    });
+  }
+  if (command.operation === "cancel" && booking.workflowStatus !== "Anulowana") {
+    context.addIssue({
+      code: "custom",
+      message: "Komenda anulowania wymaga statusu Anulowana.",
+      path: ["aggregate", "booking", "workflowStatus"],
+    });
+  }
 });
 
 export type BookingAggregate = z.infer<typeof bookingAggregateSchema>;
 export type BookingMutationAggregate = z.infer<typeof bookingMutationAggregateSchema>;
+export type BookingMutationOperation = z.infer<typeof updateBookingCommandSchema>["operation"];
 export type CreateBookingCommandResult = {
   status: "committed" | "already_committed" | "exists" | "availability_conflict" | "unit_not_found";
   aggregate?: BookingAggregate;

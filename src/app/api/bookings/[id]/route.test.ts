@@ -88,6 +88,7 @@ function request(overrides: Record<string, unknown> = {}) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       aggregate,
+      operation: "update",
       expectedRecordVersion: 3,
       requestId: "request-booking-update-123",
       clientSentAt: "2026-07-25T20:00:00.000Z",
@@ -127,7 +128,7 @@ describe("PATCH /api/bookings/:id", () => {
     const response = await PATCH(request(), routeContext);
 
     expect(response.status).toBe(200);
-    expect(mocks.context.supabase.rpc).toHaveBeenCalledWith("update_operational_booking", {
+    expect(mocks.context.supabase.rpc).toHaveBeenCalledWith("mutate_operational_booking", {
       p_organization_id: "org-test",
       p_booking_id: booking.id,
       p_expected_record_version: 3,
@@ -135,6 +136,7 @@ describe("PATCH /api/bookings/:id", () => {
       p_contact: contact,
       p_tasks: [task],
       p_scheduled_messages: [scheduledMessage],
+      p_operation: "update",
       p_request_id: "request-booking-update-123",
       p_client_sent_at: "2026-07-25T20:00:00.000Z",
       p_tab_id: "tab-booking-update-123",

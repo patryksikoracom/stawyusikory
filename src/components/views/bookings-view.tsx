@@ -196,7 +196,10 @@ function Payments({ booking, commission, payout }: { booking: Booking; commissio
       setPaymentError("Dla kosztu lub prowizji podaj źródło: faktura, panel OTA, umowa albo jawny szacunek.");
       return;
     }
-    addPayment({ id: `PAY-${Date.now()}`, bookingId: booking.id, occurredAt: todayInPoland(), type, amount: value, currency: booking.currency ?? "PLN", status: "Zaksięgowana", method: booking.paymentMethod, note: `Dodano w panelu ${booking.platform}`, source: isManagementInput ? source.trim() : undefined, sourceRef: isManagementInput ? sourceRef.trim() || undefined : undefined, costCategory: type === "Koszt" ? costCategory : type === "Prowizja" ? "Prowizja OTA" : undefined, costSettingId: isManagementInput ? costSettingId || undefined : undefined, unitId: isManagementInput ? booking.unitId : undefined });
+    const paymentId = typeof crypto !== "undefined" && crypto.randomUUID
+      ? `PAY-${crypto.randomUUID()}`
+      : `PAY-${Date.now()}`;
+    addPayment({ id: paymentId, bookingId: booking.id, occurredAt: todayInPoland(), type, amount: value, currency: booking.currency ?? "PLN", status: "Zaksięgowana", method: booking.paymentMethod, note: `Dodano w panelu ${booking.platform}`, source: isManagementInput ? source.trim() : undefined, sourceRef: isManagementInput ? sourceRef.trim() || undefined : undefined, costCategory: type === "Koszt" ? costCategory : type === "Prowizja" ? "Prowizja OTA" : undefined, costSettingId: isManagementInput ? costSettingId || undefined : undefined, unitId: isManagementInput ? booking.unitId : undefined });
     setAmount("");
     setSource("");
     setSourceRef("");
