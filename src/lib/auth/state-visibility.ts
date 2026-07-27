@@ -32,6 +32,33 @@ function redact(value: unknown, options: { pii: boolean; finance: boolean }): un
   );
 }
 
+function managerOperationalPayload(record: OperationalRecord) {
+  const redacted = redact(record.payload, { pii: true, finance: false });
+  if (!redacted || typeof redacted !== "object" || Array.isArray(redacted)) return redacted;
+  const source = record.payload && typeof record.payload === "object" && !Array.isArray(record.payload)
+    ? record.payload as Record<string, unknown>
+    : {};
+  const allowedPricingKeys = record.entity_type === "units"
+    ? ["defaultPricePerNight"]
+    : record.entity_type === "rates"
+      ? ["pricePerNight"]
+      : record.entity_type === "bookings"
+        ? ["grossPrice", "pricePerNight", "pricingMode", "depositAmount", "depositDueDate", "paymentMethod", "currency", "paymentStatus"]
+        : [];
+  const result = { ...redacted as Record<string, unknown> };
+  for (const key of ["commission", "payout", "guestServiceFee", "guestPaidTotal", "openingPaidAmount"]) {
+    delete result[key];
+  }
+  return {
+    ...result,
+    ...Object.fromEntries(
+      allowedPricingKeys
+        .filter((key) => source[key] !== undefined)
+        .map((key) => [key, source[key]]),
+    ),
+  };
+}
+
 export function visibleOperationalRecord(record: OperationalRecord, role: UserRole): OperationalRecord | null {
   if (role === "owner" || role === "admin") return record;
   if (role === "cleaning") return null;
@@ -45,5 +72,6 @@ export function visibleOperationalRecord(record: OperationalRecord, role: UserRo
   }
   if (role === "viewer" && !viewerEntities.has(record.entity_type)) return null;
   if (role === "manager" && financeEntities.has(record.entity_type)) return null;
-  return { ...record, payload: redact(record.payload, { pii: role === "manager", finance: false }) };
+  if (role === "manager") return { ...record, payload: managerOperationalPayload(record) };
+  return { ...record, payload: redact(record.payload, { pii: false, finance: false }) };
 }

@@ -4,14 +4,14 @@ import {
   createBookingCommandSchema,
   type CreateBookingCommandResult,
 } from "@/lib/domain/booking-command";
-import { isOrganizationEditor, requireOrganization } from "@/lib/supabase/auth-context";
+import { isBookingOperator, requireOrganization } from "@/lib/supabase/auth-context";
 
 const maxPayloadBytes = 512_000;
 
 export async function POST(request: Request) {
   const context = await requireOrganization(request);
   if (context.error) return context.error;
-  if (!isOrganizationEditor(context.role)) {
+  if (!isBookingOperator(context.role)) {
     return NextResponse.json({ error: "Konto nie ma dostępu do tworzenia rezerwacji." }, { status: 403 });
   }
 

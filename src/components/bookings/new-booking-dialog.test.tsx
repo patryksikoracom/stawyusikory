@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initialData } from "@/lib/demo-data";
 import type { AppData } from "@/lib/types";
@@ -22,11 +22,14 @@ describe("NewBookingDialog — PR-10c", () => {
   beforeEach(() => {
     store.data = initialData;
     vi.clearAllMocks();
+    store.addBooking.mockResolvedValue({ ok: true });
+    store.updateBooking.mockResolvedValue({ ok: true });
+    store.deleteBooking.mockResolvedValue({ ok: true });
   });
 
   afterEach(cleanup);
 
-  function renderDialog() {
+  function renderDialog(onAdded = vi.fn()) {
     render(
       <NewBookingDialog
         defaults={{
@@ -34,11 +37,53 @@ describe("NewBookingDialog — PR-10c", () => {
           checkIn: "2027-01-10",
           checkOut: "2027-01-12",
         }}
-        onAdded={vi.fn()}
+        onAdded={onAdded}
         onClose={vi.fn()}
       />,
     );
   }
+
+  function goToFinances() {
+    fireEvent.click(screen.getByRole("button", { name: /Dalej/ }));
+    fireEvent.change(screen.getByLabelText("Imię"), { target: { value: "Anna" } });
+    fireEvent.click(screen.getByRole("button", { name: /Dalej/ }));
+  }
+
+  it("pokazuje wycenę podczas wyboru terminu i domki jako proste kafelki", () => {
+    renderDialog();
+
+    expect(screen.getByRole("button", { name: "Wybierz domek Rybak" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("Wycena")).toBeInTheDocument();
+    expect(screen.getAllByText(/2 nocy/).length).toBeGreaterThan(0);
+  });
+
+  it("czeka na potwierdzenie serwera przed zamknięciem formularza", async () => {
+    let confirmSave!: (value: { ok: true }) => void;
+    store.addBooking.mockReturnValue(new Promise((resolve) => { confirmSave = resolve; }));
+    const onAdded = vi.fn();
+    renderDialog(onAdded);
+    goToFinances();
+
+    fireEvent.click(screen.getByRole("button", { name: "Dodaj rezerwację" }));
+
+    expect(screen.getByRole("button", { name: /Zapisywanie/ })).toBeDisabled();
+    expect(onAdded).not.toHaveBeenCalled();
+    confirmSave({ ok: true });
+    await waitFor(() => expect(onAdded).toHaveBeenCalledOnce());
+  });
+
+  it("zostawia formularz otwarty i pokazuje błąd zapisu", async () => {
+    store.addBooking.mockResolvedValue({ ok: false, message: "Brak uprawnień do zapisu." });
+    const onAdded = vi.fn();
+    renderDialog(onAdded);
+    goToFinances();
+
+    fireEvent.click(screen.getByRole("button", { name: "Dodaj rezerwację" }));
+
+    expect(await screen.findByText("Brak uprawnień do zapisu.")).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Dodaj rezerwację" })).toBeInTheDocument();
+    expect(onAdded).not.toHaveBeenCalled();
+  });
 
   it("ukrywa domyślne godziny i pola dzieci do chwili jawnego wyjątku", () => {
     renderDialog();

@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/supabase/auth-context", () => ({
-  isOrganizationEditor: (role: unknown) => role === "owner" || role === "admin",
+  isBookingOperator: (role: unknown) => role === "owner" || role === "admin" || role === "manager",
   requireOrganization: vi.fn(async () => mocks.context),
 }));
 
@@ -147,6 +147,16 @@ describe("POST /api/bookings", () => {
         checklistItems: [{ id: checklistItem.id, version: 1 }],
       },
     });
+  });
+
+  it("pozwala managerowi utworzyć rezerwację", async () => {
+    mocks.context.role = "manager";
+    const response = await POST(request());
+    expect(response.status).toBe(200);
+    expect(mocks.context.supabase.rpc).toHaveBeenCalledWith(
+      "create_operational_booking",
+      expect.objectContaining({ p_booking_id: booking.id }),
+    );
   });
 
   it("akceptuje bezpieczne ponowienie tej samej komendy", async () => {

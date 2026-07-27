@@ -40,6 +40,42 @@ describe("widoczność rekordów według roli", () => {
     });
   });
 
+  it("manager widzi cenę i rozliczenie pobytu bez kosztów ani prowizji", () => {
+    const pricedBooking = {
+      ...booking,
+      payload: {
+        ...booking.payload,
+        grossPrice: 2400,
+        pricePerNight: 600,
+        depositAmount: 800,
+        currency: "PLN",
+        commission: 360,
+        payout: 2040,
+      },
+    };
+    expect(visibleOperationalRecord(pricedBooking, "manager")?.payload).toMatchObject({
+      grossPrice: 2400,
+      pricePerNight: 600,
+      depositAmount: 800,
+      currency: "PLN",
+    });
+    expect(visibleOperationalRecord(pricedBooking, "manager")?.payload).not.toHaveProperty("commission");
+    expect(visibleOperationalRecord(pricedBooking, "manager")?.payload).not.toHaveProperty("payout");
+  });
+
+  it("manager otrzymuje stawkę potrzebną do wyceny bez kosztu sprzątania", () => {
+    const unit = {
+      entity_type: "units",
+      entity_id: "U-1",
+      payload: { id: "U-1", name: "Czapla", defaultPricePerNight: 600, defaultCleaningCost: 220 },
+    };
+    expect(visibleOperationalRecord(unit, "manager")?.payload).toEqual({
+      id: "U-1",
+      name: "Czapla",
+      defaultPricePerNight: 600,
+    });
+  });
+
   it("accounting widzi finanse, ale nie dane marketingowe", () => {
     expect(visibleOperationalRecord(booking, "accounting")).toEqual(booking);
     expect(visibleOperationalRecord({ ...booking, entity_type: "media" }, "accounting")).toBeNull();

@@ -20,6 +20,7 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
   const { data, addBooking, updateBooking, deleteBooking } = useAppStore();
   const [step, setStep] = useState(1);
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
   const [confirmDeletion, setConfirmDeletion] = useState(false);
   const [showTimeExceptions, setShowTimeExceptions] = useState(
     Boolean(booking && (
@@ -108,8 +109,9 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
     setStep((current) => Math.min(3, current + 1));
   }
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (saving) return;
     if (step < 3) { goNext(); return; }
     if (conflicts.length) { setError(`Ten termin jest zajęty: ${conflicts[0]}.`); setStep(1); return; }
     if (depositValue > calculatedTotal && calculatedTotal > 0) { setError("Zadatek nie może być większy niż suma rezerwacji."); return; }
@@ -153,8 +155,16 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
       phone: form.phone.trim() || undefined,
       email: form.email.trim() || undefined,
     };
-    if (booking) updateBooking(savedBooking, contact);
-    else addBooking(savedBooking, contact);
+    setSaving(true);
+    setError("");
+    const result = booking
+      ? await updateBooking(savedBooking, contact)
+      : await addBooking(savedBooking, contact);
+    setSaving(false);
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
     onAdded();
   }
 
@@ -170,7 +180,7 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
     >
         <div className="border-b border-[#e3dccf] bg-[radial-gradient(circle_at_85%_-30%,#dce7bd_0,transparent_38%)] px-5 pb-5 pt-5 sm:px-7 sm:pt-6">
           <div className="flex items-start justify-between gap-4">
-            <div><p className="text-[10px] font-black uppercase tracking-[.2em] text-[#81904e]">{booking ? "Edycja pobytu" : "Nowy pobyt"}</p><h2 className="font-display text-3xl font-semibold tracking-[-.03em]" id="new-booking-title">{booking ? "Edytuj rezerwację" : "Dodaj rezerwację"}</h2><p className="mt-1 text-sm text-[#66736c]">Termin, gość i rozliczenie — system od razu sprawdzi dostępność.</p></div>
+            <div><p className="text-[10px] font-black uppercase tracking-[.2em] text-[#81904e]">{booking ? "Edycja pobytu" : "Nowy pobyt"}</p><h2 className="font-display text-3xl font-semibold tracking-[-.03em]" id="new-booking-title">{booking ? "Edytuj rezerwację" : "Dodaj rezerwację"}</h2></div>
             <button aria-label="Zamknij" className="grid size-10 shrink-0 place-items-center rounded-xl border border-[#ddd6c9] bg-white/80 transition hover:bg-white" onClick={onClose}><Icon className="size-5" name="close" /></button>
           </div>
           <ol className="mt-5 grid grid-cols-3 gap-2">
@@ -187,10 +197,18 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
           <div className="grid min-h-[440px] lg:grid-cols-[minmax(0,1fr)_300px]">
             <div className="p-5 sm:p-7">
               {step === 1 ? <div className="grid gap-5">
-                <DialogSection eyebrow="Krok 1" title="Kiedy i który domek?" body="Najpierw blokujemy właściwy termin. Konflikt zobaczysz przed wpisywaniem danych gościa." />
+                <DialogSection title="Domek i termin" />
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Domek"><select autoFocus className={inputClass} required value={form.unitId} onChange={(e) => setForm({ ...form, unitId: e.target.value })}>{data.units.map((unit) => <option key={unit.id} value={unit.id}>{unit.name} · do {unit.maxPeople} osób</option>)}</select></Field>
+                  <fieldset className="grid grid-cols-2 gap-2 sm:col-span-2">
+                    <legend className="mb-2 text-[10px] font-black uppercase tracking-[.13em] text-[#6c7871]">Domek</legend>
+                    {data.units.map((unit) => {
+                      const selected = unit.id === form.unitId;
+                      const bird = unit.name.toLocaleLowerCase("pl-PL").includes("czap");
+                      return <button autoFocus={selected} aria-label={`Wybierz domek ${bird ? "Czapla" : "Rybak"}`} aria-pressed={selected} className={`min-h-20 rounded-2xl border px-4 text-left transition ${selected ? "border-[#174d3b] bg-[#174d3b] text-white shadow-lg" : "border-[#d8d0c2] bg-white text-[#355248] hover:border-[#79927d]"}`} key={unit.id} onClick={() => setForm({ ...form, unitId: unit.id })} type="button"><span aria-hidden="true" className="mr-2 text-2xl">{bird ? "🐦" : "🐟"}</span><span className="text-base font-black">{bird ? "Czapla" : "Rybak"}</span><span className={`mt-1 block text-xs ${selected ? "text-white/75" : "text-[#6d7972]"}`}>do {unit.maxPeople} osób</span></button>;
+                    })}
+                  </fieldset>
                   <div className={`rounded-xl border px-4 py-3 ${conflicts.length ? "border-[#efb7a8] bg-[#fbe7e1] text-[#8f3b27]" : "border-[#bdd7c3] bg-[#e9f2e7] text-[#275e3f]"}`}><p className="text-[10px] font-black uppercase tracking-[.14em]">Dostępność</p><p className="mt-1 text-sm font-black">{conflicts.length ? "Termin zajęty" : nights > 0 ? sameDayTurnovers.length ? "Termin wolny · turnover tego samego dnia" : "Termin wolny" : "Wybierz poprawne daty"}</p><p className="mt-0.5 text-xs">{conflicts[0] ?? turnoverSummary[0] ?? (nights > 0 ? `${nights} ${nights === 1 ? "noc" : "nocy"} · sprawdzono rezerwacje i blokady` : "Wyjazd musi być po przyjeździe")}</p></div>
+                  <div className="rounded-xl border border-[#c8d8bd] bg-[#f1f5e9] px-4 py-3"><p className="text-[10px] font-black uppercase tracking-[.14em] text-[#66794f]">Wycena</p><p className="mt-1 font-display text-2xl font-semibold text-[#214f3d]">{calculatedTotal ? calculatedTotal.toLocaleString("pl-PL") : "—"} {calculatedTotal ? moneySuffix : ""}</p><p className="mt-0.5 text-xs font-bold text-[#647267]">{nights > 0 ? `${nights} ${nights === 1 ? "noc" : "nocy"}${suggestedNightPrice ? ` · śr. ${Number(suggestedNightPrice).toLocaleString("pl-PL")} zł/noc` : ""}` : "Wybierz daty"}</p></div>
                   <div className="sm:col-span-2">
                     <StayDateTimeline
                       blocks={data.blocks}
@@ -232,7 +250,7 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
               </div> : null}
 
               {step === 2 ? <div className="grid gap-5">
-                <DialogSection eyebrow="Krok 2" title="Gość, kontakt i źródło" body="Kanał zawarcia rezerwacji, dane kontaktowe i sposób odkrycia obiektu są osobnymi informacjami." />
+                <DialogSection title="Gość i kontakt" />
                 <p className="text-xs font-black uppercase tracking-[.14em] text-[#7d8b4d]">Gość i kontakt</p>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Imię"><input autoFocus className={inputClass} autoComplete="given-name" placeholder="Anna" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} /></Field>
@@ -252,7 +270,7 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
               </div> : null}
 
               {step === 3 ? <div className="grid gap-5">
-                <DialogSection eyebrow="Krok 3" title="Cena i płatność" body="Możesz podać cenę za noc albo od razu pełną kwotę pobytu. Pełna kwota ma pierwszeństwo." />
+                <DialogSection title="Cena i płatność" />
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Cena za dobę"><MoneyInput suffix={moneySuffix} value={form.pricingMode === "rate-card" ? suggestedNightPrice : form.pricePerNight} onChange={(value) => setForm({ ...form, pricePerNight: value, pricingMode: "manual" })} /></Field>
                   <Field label="Cena za pobyt"><MoneyInput suffix={moneySuffix} value={form.pricingMode === "rate-card" ? String(rateQuote.total || "") : form.totalPrice} onChange={(value) => setForm({ ...form, totalPrice: value, pricingMode: "manual" })} /></Field>
@@ -294,7 +312,7 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
             </div>
             <div className="flex gap-2">
               {step > 1 ? <Button type="button" variant="secondary" onClick={() => { setError(""); setStep((current) => current - 1); }}><Icon className="size-4 rotate-180" name="arrow" />Wstecz</Button> : null}
-              {step < 3 ? <Button type="button" onClick={goNext}>Dalej <Icon className="size-4" name="arrow" /></Button> : <Button type="submit"><Icon className="size-4" name="check" />{booking ? "Zapisz zmiany" : "Dodaj rezerwację"}</Button>}
+              {step < 3 ? <Button type="button" onClick={goNext}>Dalej <Icon className="size-4" name="arrow" /></Button> : <Button disabled={saving} type="submit"><Icon className="size-4" name={saving ? "clock" : "check"} />{saving ? "Zapisywanie…" : booking ? "Zapisz zmiany" : "Dodaj rezerwację"}</Button>}
             </div>
           </div>
         </form>
@@ -310,15 +328,16 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
           <p className="text-[10px] font-black uppercase tracking-[.16em] text-[#a84a2e]">Usuwanie rezerwacji</p>
           <h3 className="mt-1 font-display text-2xl font-semibold" id="delete-booking-title">Przenieść do kosza?</h3>
           <p className="mt-3 text-sm leading-6 text-[#5d6c65]" id="delete-booking-description"><strong>{booking.guestLabel}</strong> zniknie z kalendarza i bieżących list. Rezerwację będzie można przywrócić z kosza przez 30 dni, potem zostanie usunięta automatycznie.</p>
-          <div className="mt-6 flex justify-end gap-2"><Button data-dialog-initial-focus type="button" variant="secondary" onClick={() => setConfirmDeletion(false)}>Wróć</Button><Button type="button" variant="danger" onClick={() => { deleteBooking(booking.id); onAdded(); }}>Tak, usuń do kosza</Button></div>
+          {error ? <p aria-live="assertive" className="mt-4 rounded-xl bg-[#f9dfd7] p-3 text-sm font-bold text-[#963c27]">{error}</p> : null}
+          <div className="mt-6 flex justify-end gap-2"><Button data-dialog-initial-focus disabled={saving} type="button" variant="secondary" onClick={() => setConfirmDeletion(false)}>Wróć</Button><Button disabled={saving} type="button" variant="danger" onClick={async () => { setSaving(true); setError(""); const result = await deleteBooking(booking.id); setSaving(false); if (!result.ok) { setError(result.message); return; } onAdded(); }}>{saving ? "Usuwanie…" : "Tak, usuń do kosza"}</Button></div>
         </Dialog>
       ) : null}
     </Dialog>
   );
 }
 
-function DialogSection({ eyebrow, title, body }: { eyebrow: string; title: string; body: string }) {
-  return <div><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#7d8b4d]">{eyebrow}</p><h3 className="font-display text-2xl font-semibold">{title}</h3><p className="mt-1 max-w-2xl text-sm leading-6 text-[#65736c]">{body}</p></div>;
+function DialogSection({ title }: { title: string }) {
+  return <h3 className="font-display text-2xl font-semibold">{title}</h3>;
 }
 
 function StayDateTimeline({
