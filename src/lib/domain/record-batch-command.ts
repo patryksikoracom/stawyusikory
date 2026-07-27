@@ -73,6 +73,7 @@ const schemas: Record<BatchEntityType, z.ZodType<Record<string, unknown>>> = {
     season: z.enum(["Niski", "Średni", "Wysoki", "Święta/długi weekend", "Promocja", "Specjalny"]),
     pricePerNight: z.number().finite().nonnegative(),
     minNights: z.number().int().positive().max(365),
+    occupancyTargetPercent: z.number().finite().positive().max(100).optional(),
     active: z.boolean(),
     ...versionMetadata,
   }).superRefine((rate, context) => {

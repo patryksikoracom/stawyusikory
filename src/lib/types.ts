@@ -525,6 +525,7 @@ export type RateRule = {
   season: "Niski" | "Średni" | "Wysoki" | "Święta/długi weekend" | "Promocja" | "Specjalny";
   pricePerNight: number;
   minNights: number;
+  occupancyTargetPercent?: number;
   active: boolean;
 };
 
