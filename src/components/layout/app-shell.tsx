@@ -31,6 +31,7 @@ const secondaryNav: { href: string; label: string; icon: IconName }[] = [
 
 const pageMeta: Record<string, { eyebrow: string; title: string; body: string }> = {
   "/dashboard": { eyebrow: "Centrum operacyjne", title: "Dzień dobry", body: "Najważniejsze rzeczy na dziś — bez szukania po modułach." },
+  "/calendar/year": { eyebrow: "Sprzedaż i dostępność", title: "Przegląd roku", body: "Miesiące, domki, stan sprzedaży na dziś i deterministyczne luki." },
   "/calendar": { eyebrow: "Obłożenie i dostępność", title: "Kalendarz pobytów", body: "Wspólny widok obu domków z jawnym statusem źródła i synchronizacji." },
   "/bookings": { eyebrow: "Sprzedaż i pobyty", title: "Rezerwacje", body: "Każdy pobyt, płatność i następna akcja w jednym miejscu." },
   "/guests": { eyebrow: "Relacje i wzrost", title: "Goście i marketing", body: "Wiedza, która pomaga zdobywać lepsze rezerwacje bez zwiększania prowizji." },
@@ -105,7 +106,7 @@ function ShellInner({ children, identity }: { children: React.ReactNode; identit
   const [query, setQuery] = useState("");
   const dataReady = dataStatus === "ready";
   const { label: syncLabel, body: syncBody } = syncCopy(syncMode, lastSavedAt);
-  const meta = Object.entries(pageMeta).find(([href]) => isActive(pathname, href))?.[1] ?? pageMeta["/dashboard"];
+  const meta = Object.entries(pageMeta).sort(([a], [b]) => b.length - a.length).find(([href]) => isActive(pathname, href))?.[1] ?? pageMeta["/dashboard"];
   const pageTitle = pathname === "/dashboard" ? `${meta.title}, ${identity.displayName}` : meta.title;
   const date = useMemo(() => new Intl.DateTimeFormat("pl-PL", { weekday: "long", day: "numeric", month: "long" }).format(new Date()), []);
   useEffect(() => {
