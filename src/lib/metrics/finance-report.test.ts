@@ -125,9 +125,61 @@ describe("finance evidence report", () => {
     expect(report.metrics.map((metric) => metric.label)).toEqual([
       "Sprzedaż",
       "Należności gości",
-      "Cashflow netto",
+      "Wpłynęło na konto",
       "Wynik zarządczy",
     ]);
+  });
+
+  it("counts a dated OTA payout as bank cash and excludes future or Mobile Calendar estimates", () => {
+    const report = createFinanceReport({
+      data: reportData({
+        bookings: [
+          booking({ id: "B-PAID", platform: "Airbnb" }),
+          booking({ id: "B-FUTURE", platform: "Airbnb" }),
+        ],
+        payments: [],
+        imports: [
+          {
+            id: "OTA-PAID",
+            platform: "Airbnb",
+            matchedBookingId: "B-PAID",
+            guestName: "Anastasia",
+            payout: 2721.33,
+            payoutDate: "2026-07-20",
+            currency: "PLN",
+            sourceFile: "Airbnb payout report",
+            transferStatus: "Przeniesione",
+          },
+          {
+            id: "OTA-FUTURE",
+            platform: "Airbnb",
+            matchedBookingId: "B-FUTURE",
+            payout: 2215.87,
+            payoutDate: "2026-07-30",
+            currency: "PLN",
+            sourceFile: "Airbnb upcoming",
+            transferStatus: "Przeniesione",
+          },
+          {
+            id: "MOBILE-ESTIMATE",
+            platform: "Airbnb",
+            matchedBookingId: "B-PAID",
+            payout: 9999,
+            currency: "PLN",
+            sourceFile: "mobile-calendar-export.csv",
+            matchMethod: "mobile-calendar-only",
+            transferStatus: "Przeniesione",
+          },
+        ],
+      }),
+      period: financePeriodForPreset("month", "2026-07-25"),
+      calculatedAt: "2026-07-25T12:00:00.000Z",
+    });
+    const cash = report.metrics.find((metric) => metric.id === "cashflow_posted_transactions_v1")!;
+
+    expect(cash.values).toEqual([{ currency: "PLN", value: 2721.33 }]);
+    expect(cash.evidence.map((row) => row.recordId)).toEqual(["OTA-PAID"]);
+    expect(cash.label).toBe("Wpłynęło na konto");
   });
 
   it("keeps PLN and EUR in separate card values and evidence rows", () => {

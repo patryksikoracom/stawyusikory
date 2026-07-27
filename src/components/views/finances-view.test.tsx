@@ -48,7 +48,7 @@ describe("FinancesView — PR-6c evidence flow", () => {
     expect(cards.every((card) => card.getAttribute("aria-controls") === "finance-evidence-panel")).toBe(true);
     expect(within(region).getByText("Sprzedaż")).toBeInTheDocument();
     expect(within(region).getByText("Należności gości")).toBeInTheDocument();
-    expect(within(region).getByText("Cashflow netto")).toBeInTheDocument();
+    expect(within(region).getByText("Wpłynęło na konto")).toBeInTheDocument();
     expect(within(region).getByText("Wynik zarządczy")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /Sprzedaż ·/ })).toBeInTheDocument();
 
@@ -79,7 +79,7 @@ describe("FinancesView — PR-6c evidence flow", () => {
     window.history.replaceState(null, "", "/finances#cashflow_posted_transactions_v1");
     render(<FinancesView />);
     const region = screen.getByRole("region", { name: "Cztery perspektywy finansowe" });
-    const cashflowCard = within(region).getByText("Cashflow netto").closest("button")!;
+    const cashflowCard = within(region).getByText("Wpłynęło na konto").closest("button")!;
 
     await act(async () => { vi.runOnlyPendingTimers(); });
     expect(cashflowCard).toHaveAttribute("aria-pressed", "true");
