@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Stawy OS — Stawy u Sikory",
     short_name: "Stawy OS",
     description: "Rezerwacje, kalendarz, sprzątanie i finanse Stawów u Sikory.",
-    start_url: "/dashboard",
+    start_url: "/calendar",
     display: "standalone",
     background_color: "#f5f1e7",
     theme_color: "#174d3b",
