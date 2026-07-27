@@ -7,6 +7,7 @@ import { Icon } from "@/components/ui/icons";
 import type { Booking, Channel, DepartureDebrief, DiscoveryMethod, IssueReport } from "@/lib/types";
 import { unitName } from "@/lib/workflow/rules";
 import { formatPolishDate } from "@/lib/date";
+import { Dialog } from "@/components/ui/dialog";
 
 const discoverySources: Channel[] = ["Slowhop", "Google", "Facebook", "Polecenie", "AI/czat", "Booking", "Airbnb", "Aloha Camp", "Strona www", "Telefon", "E-mail", "Inne"];
 const methods: DiscoveryMethod[] = ["Przeglądanie ofert", "Wyszukiwarka", "Polecenie", "Social media", "Reklama", "Inne", "Nie wiadomo"];
@@ -39,11 +40,19 @@ export function DepartureDebriefSheet({ booking, queueLabel, onClose, onSaved }:
   const [issueSeverity, setIssueSeverity] = useState<NonNullable<IssueReport["severity"]>>(existingIssue?.severity ?? "Średnia");
   const [issueLocation, setIssueLocation] = useState(existingIssue?.location ?? unitName(data.units, booking.unitId));
   const [error, setError] = useState("");
+  const [skipReason, setSkipReason] = useState("Nie było rozmowy z gościem");
+  const [showSkipReason, setShowSkipReason] = useState(false);
   const nextBooking = useMemo(() => data.bookings.filter((item) => item.unitId === booking.unitId && item.checkIn >= booking.checkOut && item.workflowStatus !== "Anulowana" && item.id !== booking.id).sort((a, b) => a.checkIn.localeCompare(b.checkIn))[0], [data.bookings, booking]);
   const safetySuggestion = ["Bezpieczeństwo", "Dostęp/drzwi", "Woda", "Prąd"].includes(issueCategory) && ["Krytyczna", "Wysoka"].includes(issueSeverity);
 
   function later() { snoozeDepartureDebrief(booking.id); onClose(); }
-  function skip() { const reason = window.prompt("Dlaczego pomijasz podsumowanie?", "Nie było rozmowy z gościem"); if (!reason?.trim()) return; skipDepartureDebrief(booking.id, reason.trim()); onSaved?.(); onClose(); }
+  function skip() { setShowSkipReason(true); }
+  function confirmSkip() {
+    if (!skipReason.trim()) return;
+    skipDepartureDebrief(booking.id, skipReason.trim());
+    onSaved?.();
+    onClose();
+  }
   function save() {
     if (createIssue && !issueTitle.trim()) { setError("Dodaj krótki tytuł usterki albo wyłącz tworzenie zgłoszenia."); return; }
     const completedAt = new Date().toISOString();
@@ -92,8 +101,7 @@ export function DepartureDebriefSheet({ booking, queueLabel, onClose, onSaved }:
     onSaved?.(); onClose();
   }
 
-  return <div className="fixed inset-0 z-[70] flex items-end justify-center bg-[#0b2b22]/70 p-0 backdrop-blur-sm sm:items-center sm:p-5" role="dialog" aria-modal="true" aria-label={`Podsumowanie wyjazdu ${booking.guestLabel}`} onMouseDown={(event) => { if (event.target === event.currentTarget) later(); }}>
-    <section className="max-h-[94vh] w-full max-w-3xl overflow-y-auto rounded-t-[28px] bg-[#fffdf8] shadow-2xl sm:rounded-[28px]">
+  return <Dialog ariaLabel={`Podsumowanie wyjazdu ${booking.guestLabel}`} className="max-h-[94vh] w-full max-w-3xl overflow-y-auto rounded-t-[28px] bg-[#fffdf8] shadow-2xl sm:rounded-[28px]" onClose={later} overlayClassName="z-[70] flex items-end justify-center p-0 sm:items-center sm:p-5">
       <header className="sticky top-0 z-10 border-b border-[#ded7ca] bg-[#fffdf8]/95 px-5 py-4 backdrop-blur sm:px-7">
         <div className="flex items-start justify-between gap-4"><div><div className="flex flex-wrap items-center gap-2"><Badge tone="lake">Wyjazd dzisiaj</Badge>{queueLabel ? <Badge>{queueLabel}</Badge> : null}<span className="text-xs font-bold text-[#718078]">{unitName(data.units, booking.unitId)}</span></div><h2 className="mt-2 font-display text-3xl font-semibold tracking-[-.03em]">Co zabieramy z tego pobytu?</h2><p className="mt-1 text-sm text-[#65736d]">{booking.guestLabel} · wyjazd {booking.departureTime || data.settings.defaultCheckOut}</p></div><button aria-label="Później" className="grid size-10 shrink-0 place-items-center rounded-full bg-[#eee9df]" onClick={later}><Icon className="size-5" name="close"/></button></div>
         <div className="mt-4 grid grid-cols-3 gap-2">{[1,2,3].map((item) => <button key={item} onClick={() => setStep(item)} className={`h-1.5 rounded-full ${item <= step ? "bg-[#2f7460]" : "bg-[#ddd6c8]"}`} aria-label={`Krok ${item}`}/>)}</div>
@@ -108,8 +116,8 @@ export function DepartureDebriefSheet({ booking, queueLabel, onClose, onSaved }:
 
         <footer className="mt-7 flex flex-wrap items-center justify-between gap-3 border-t border-[#e3dccf] pt-5"><button className="text-xs font-bold text-[#7b6258] underline decoration-dotted underline-offset-4" onClick={skip}>Pomiń z powodem</button><div className="ml-auto flex gap-2">{step > 1 ? <Button variant="secondary" onClick={() => setStep(step - 1)}>Wstecz</Button> : <Button variant="secondary" onClick={later}>Za 2 godziny</Button>}{step < 3 ? <Button onClick={() => setStep(step + 1)}>Dalej <Icon className="size-4" name="arrow"/></Button> : <Button onClick={save}><Icon className="size-4" name="check"/>Zapisz podsumowanie</Button>}</div></footer>
       </div>
-    </section>
-  </div>;
+    {showSkipReason ? <Dialog ariaDescribedby="skip-debrief-description" ariaLabelledby="skip-debrief-title" className="w-full max-w-md rounded-[22px] bg-[#fffdf8] p-6 shadow-2xl" onClose={() => setShowSkipReason(false)} overlayClassName="z-[80] grid place-items-center"><h2 className="font-display text-2xl font-semibold" id="skip-debrief-title">Dlaczego pomijasz podsumowanie?</h2><p className="mt-2 text-sm leading-6 text-[#65736d]" id="skip-debrief-description">Powód pozostanie w historii pobytu i pozwoli odróżnić świadome pominięcie od brakującej pracy.</p><div className="mt-5"><Field label="Powód"><textarea data-dialog-initial-focus className={`${inputClass} min-h-24`} value={skipReason} onChange={(event) => setSkipReason(event.target.value)}/></Field></div><div className="mt-6 flex flex-wrap justify-end gap-2"><Button variant="secondary" onClick={() => setShowSkipReason(false)}>Wróć</Button><Button disabled={!skipReason.trim()} onClick={confirmSkip}>Pomiń z tym powodem</Button></div></Dialog> : null}
+  </Dialog>;
 }
 
 function SectionTitle({ number, title, body }: { number: string; title: string; body: string }) { return <div className="flex gap-4"><span className="font-display text-4xl font-semibold text-[#b8c58a]">{number}</span><div><h3 className="font-display text-2xl font-semibold">{title}</h3><p className="mt-1 text-sm leading-6 text-[#66736c]">{body}</p></div></div>; }

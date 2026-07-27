@@ -60,7 +60,7 @@ describe("AppShell przed zakończeniem ładowania", () => {
   it("pokazuje konflikt z porównaniem, kopią i świadomym odświeżeniem", () => {
     const reloadAfterConflict = vi.fn();
     const copyConflictChanges = vi.fn().mockResolvedValue(true);
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const nativeConfirm = vi.spyOn(window, "confirm");
     mocks.store.current = {
       data: initialData,
       dataStatus: "ready" as const,
@@ -87,7 +87,28 @@ describe("AppShell przed zakończeniem ładowania", () => {
     fireEvent.click(screen.getByRole("button", { name: "Porównaj zmiany" }));
     expect(within(dialog).getByText("Rezerwacje")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Wczytaj z chmury" }));
+    expect(screen.getByRole("alertdialog", { name: "Wczytać wersję z chmury?" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Tak, wczytaj chmurę" }));
     expect(reloadAfterConflict).toHaveBeenCalledOnce();
+    expect(nativeConfirm).not.toHaveBeenCalled();
+  });
+
+  it("oddaje fokus przyciskowi otwierającemu nową rezerwację", () => {
+    mocks.store.current = {
+      data: initialData,
+      dataStatus: "ready" as const,
+      syncMode: "cloud" as const,
+      retryDataLoad: vi.fn(),
+    };
+    render(<AppShell identity={identity}><div>Treść aplikacji</div></AppShell>);
+
+    const trigger = screen.getAllByRole("button", { name: "Nowa rezerwacja" }).at(-1)!;
+    fireEvent.click(trigger);
+    expect(screen.getByRole("dialog", { name: "Dodaj rezerwację" })).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Dodaj rezerwację" })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
   });
 
   it("pokazuje jawny wybór aktywnej organizacji dla wielu członkostw", () => {

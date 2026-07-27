@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useState, type FormEvent, type RefObject } from "react";
 import { useAppStore } from "@/components/layout/app-store";
 import { Icon } from "@/components/ui/icons";
 import { Button, Field, inputClass } from "@/components/ui/primitives";
+import { Dialog } from "@/components/ui/dialog";
 import type { Booking, Channel, ContactConsent, PaymentStatus } from "@/lib/types";
 import { getBookingConflicts, nightsBetween } from "@/lib/workflow/rules";
 import { guestDisplayName, validateGuestStep } from "@/lib/workflow/booking-form";
@@ -12,9 +13,8 @@ import { formatPolishDate } from "@/lib/date";
 
 type BookingDefaults = Partial<Pick<Booking, "unitId" | "checkIn" | "checkOut" | "arrivalTime" | "departureTime">>;
 
-export function NewBookingDialog({ onClose, onAdded, booking, defaults }: { onClose: () => void; onAdded: () => void; booking?: Booking; defaults?: BookingDefaults }) {
+export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFocusRef }: { onClose: () => void; onAdded: () => void; booking?: Booking; defaults?: BookingDefaults; returnFocusRef?: RefObject<HTMLElement | null> }) {
   const { data, addBooking, updateBooking, deleteBooking } = useAppStore();
-  const dialogRef = useRef<HTMLElement>(null);
   const [step, setStep] = useState(1);
   const [error, setError] = useState("");
   const [confirmDeletion, setConfirmDeletion] = useState(false);
@@ -39,19 +39,6 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults }: { onCl
       paymentMethod: booking?.paymentMethod ?? "Brak", currency: booking?.currency ?? "PLN", notes: booking?.specialRequests ?? "",
     };
   });
-
-  useEffect(() => {
-    function keydown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-      if (event.key !== "Tab" || !dialogRef.current) return;
-      const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])"));
-      const first = focusable[0]; const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
-    }
-    document.addEventListener("keydown", keydown);
-    return () => document.removeEventListener("keydown", keydown);
-  }, [onClose]);
 
   const nights = nightsBetween(form.checkIn, form.checkOut);
   const selectedUnit = data.units.find((unit) => unit.id === form.unitId);
@@ -155,8 +142,13 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults }: { onCl
   const stepLabels = ["Termin", "Gość", "Finanse"];
   const moneySuffix = form.currency;
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#102c24]/70 p-2 backdrop-blur-sm sm:p-5" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
-      <section ref={dialogRef} aria-labelledby="new-booking-title" aria-modal="true" className="mx-auto my-2 w-full max-w-5xl overflow-hidden rounded-[24px] bg-[#fffdf8] shadow-[0_30px_90px_rgba(8,29,22,.35)] sm:my-5" role="dialog">
+    <Dialog
+      ariaLabelledby="new-booking-title"
+      className="mx-auto my-2 w-full max-w-5xl overflow-hidden rounded-[24px] bg-[#fffdf8] shadow-[0_30px_90px_rgba(8,29,22,.35)] sm:my-5"
+      onClose={onClose}
+      overlayClassName="overflow-y-auto p-2 sm:p-5"
+      returnFocusRef={returnFocusRef}
+    >
         <div className="border-b border-[#e3dccf] bg-[radial-gradient(circle_at_85%_-30%,#dce7bd_0,transparent_38%)] px-5 pb-5 pt-5 sm:px-7 sm:pt-6">
           <div className="flex items-start justify-between gap-4">
             <div><p className="text-[10px] font-black uppercase tracking-[.2em] text-[#81904e]">{booking ? "Edycja pobytu" : "Nowy pobyt"}</p><h2 className="font-display text-3xl font-semibold tracking-[-.03em]" id="new-booking-title">{booking ? "Edytuj rezerwację" : "Dodaj rezerwację"}</h2><p className="mt-1 text-sm text-[#66736c]">Termin, gość i rozliczenie — system od razu sprawdzi dostępność.</p></div>
@@ -245,16 +237,22 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults }: { onCl
             </div>
           </div>
         </form>
-      </section>
-      {confirmDeletion && booking ? <div className="fixed inset-0 z-[60] grid place-items-center bg-[#102c24]/65 p-4 backdrop-blur-sm" role="presentation">
-        <section aria-describedby="delete-booking-description" aria-labelledby="delete-booking-title" aria-modal="true" className="w-full max-w-md rounded-[22px] border border-[#e3b9ad] bg-[#fffdf8] p-6 shadow-[0_28px_80px_rgba(8,29,22,.35)]" role="dialog">
+      {confirmDeletion && booking ? (
+        <Dialog
+          ariaDescribedby="delete-booking-description"
+          ariaLabelledby="delete-booking-title"
+          className="w-full max-w-md rounded-[22px] border border-[#e3b9ad] bg-[#fffdf8] p-6 shadow-[0_28px_80px_rgba(8,29,22,.35)]"
+          onClose={() => setConfirmDeletion(false)}
+          overlayClassName="z-[60] grid place-items-center"
+          role="alertdialog"
+        >
           <p className="text-[10px] font-black uppercase tracking-[.16em] text-[#a84a2e]">Usuwanie rezerwacji</p>
           <h3 className="mt-1 font-display text-2xl font-semibold" id="delete-booking-title">Przenieść do kosza?</h3>
           <p className="mt-3 text-sm leading-6 text-[#5d6c65]" id="delete-booking-description"><strong>{booking.guestLabel}</strong> zniknie z kalendarza i bieżących list. Rezerwację będzie można przywrócić z kosza przez 30 dni, potem zostanie usunięta automatycznie.</p>
-          <div className="mt-6 flex justify-end gap-2"><Button type="button" variant="secondary" onClick={() => setConfirmDeletion(false)}>Wróć</Button><Button type="button" variant="danger" onClick={() => { deleteBooking(booking.id); onAdded(); }}>Tak, usuń do kosza</Button></div>
-        </section>
-      </div> : null}
-    </div>
+          <div className="mt-6 flex justify-end gap-2"><Button data-dialog-initial-focus type="button" variant="secondary" onClick={() => setConfirmDeletion(false)}>Wróć</Button><Button type="button" variant="danger" onClick={() => { deleteBooking(booking.id); onAdded(); }}>Tak, usuń do kosza</Button></div>
+        </Dialog>
+      ) : null}
+    </Dialog>
   );
 }
 

@@ -1,7 +1,7 @@
 # Stawy OS — nadrzędny plan realizacji
 
 **Status:** plan obowiązujący
-**Data aktualizacji:** 26 lipca 2026
+**Data aktualizacji:** 27 lipca 2026
 **Źródła:** audyt aplikacji, plan wdrożenia poprawek, plan restrukturyzacji, ADR-001, słownik KPI, raport z przejścia przez aplikację z 19 lipca oraz ustalenia z realizacji PR-1–PR-5
 
 ## Jak czytać plan
@@ -53,6 +53,7 @@ Commit, push i deployment są osobnymi decyzjami. Samo ukończenie lokalnej pacz
 | PR-9a / Etap 4.1 | **wdrożony online 26.07.2026 — PR #22 scalony** | jawna aktywna organizacja bez `limit(1)`, siedem ról, macierz uprawnień, projekcja PII/finansów, RLS i poprawki Advisora; testy, lint, TypeScript, build, migracja i produkcyjny smoke przechodzą |
 | PR-9b / Etap 4.2 | **wdrożony online 26.07.2026 — PR #23 scalony** | jawnie tenantowy turnover, przyjęcie/odrzucenie, kolejki zespołu, wersjonowana checklista 10 kroków, dowód gotowości, eskalacje, odświeżenie po 7 dniach i minimalna bramka wydania kluczy; testy, lint, TypeScript, build, migracja i produkcyjny smoke przechodzą |
 | PR-9c / Etap 4.3 | **wdrożony online 26.07.2026 — draft PR #24** | wersjonowany rejestr zatwierdzonego SOP, zadanie tylko dla bieżącego/przyszłego pobytu z dziećmi, minimalny dowód wykonania i kontrolowana reakcja bez danych dziecka; 347 testów, lint, TypeScript, build 35 tras, migracja z transakcyjnym rollbackiem i produkcyjny smoke przechodzą. Funkcja jest online, ale aktywacja nadal czeka na zatwierdzony SOP |
+| PR-10a / Etap 5.1 | **gotowy lokalnie do ręcznej akceptacji 27.07.2026** | wspólny dostępny dialog, blokada tła i pułapka/powrót fokusu, obsługa Escape, mobilne pola i cele dotykowe, brak natywnych `alert/confirm/prompt` oraz paginacja po 40 rekordów; 353 testy, lint, TypeScript, build 35 tras i powtórzony smoke na wąskim ekranie przechodzą |
 
 ## Bramka wydania: MVP operatora dla taty
 
@@ -97,7 +98,7 @@ Test taty z 25.07.2026 zmienia priorytet interfejsu operatora: kalendarz, wolne 
 | 11 | Etap 4 — organizacje i role | **PR-9a — wdrożony online, PR #22 scalony** | active organization, role, RLS i izolacja PII/finansów | migracja oraz produkcyjny smoke przechodzą |
 | 12 | Etap 4 — operacje zespołu | **PR-9b — wdrożony online, PR #23 scalony** | zlecenia sprzątania, przyjęcie, checklisty per domek i eskalacja | migracja oraz produkcyjny smoke przechodzą |
 | 13 | Etap 4 — zgodność operacyjna | **PR-9c — wdrożony online, PR #24 scalony** | procedura małoletnich wynikająca z zatwierdzonego SOP i minimalizacja danych | 347 testów, migracja i produkcyjny smoke przechodzą; aktywacja czeka na zatwierdzony SOP |
-| 14 | Etap 5 — fundament UX | PR-10a | wspólne dialogi, klawiatura, mobile, paginacja i wydajność | WCAG smoke test i 1000 rekordów |
+| 14 | Etap 5 — fundament UX | **PR-10a — gotowy lokalnie do ręcznej akceptacji** | wspólne dialogi, klawiatura, mobile, paginacja i wydajność | 353 testy i przypadek 1000 rekordów przechodzą; smoke klawiatury i wąskiego ekranu przechodzi; pozostaje test 200% na rzeczywistym telefonie taty |
 | 15 | Etap 5 — Dzisiaj | PR-10b | chronologiczna agenda, stan domków i same-day turnover | w 5 sekund widać przyjazdy, wyjazdy i brak gotowości |
 | 16 | Etap 5 — rezerwacje | PR-10c | prosty formularz, jawne filtry/sortowanie, lista i szczegół | powrót zachowuje filtry; kanał zawarcia nie miesza się ze źródłem odkrycia |
 | 17 | Etap 5 — kalendarz | PR-10d | kontekst 7 dni wstecz, kanały na paskach, drag/touch/klawiatura | szybkie utworzenie pobytu bez utraty dostępności |
@@ -468,6 +469,22 @@ Pozostałe bramki przed aktywacją SOP:
 - po zatwierdzeniu należy wprowadzić rzeczywiste adresy dokumentów, potwierdzenie publikacji/wywieszenia i odwołanie do przygotowania personelu;
 - dopiero wtedy aktywować zatwierdzoną wersję SOP;
 - nie wpisywać do aplikacji danych dziecka ani opisu zdarzenia.
+
+## PR-10a — fundament UX gotowy lokalnie
+
+Wszystkie pełnoekranowe okna operacyjne korzystają ze wspólnego dialogu z rolą i nazwą dostępną, blokadą przewijania tła, początkowym fokusem, pułapką klawiatury, zamknięciem przez `Escape` i oddaniem fokusu wyzwalaczowi. Natywne `alert`, `confirm` i `prompt` zostały zastąpione kontrolowanymi dialogami, w tym potwierdzeniami destrukcyjnymi oraz szyfrowanym eksportem backupu.
+
+Lista i arkusz rezerwacji renderują po 40 pozycji na stronę. Test z 1000 rekordów potwierdza 25 stron i maksymalnie 40 wyrenderowanych pozycji, a eksport nadal obejmuje pełny przefiltrowany zbiór. Kontrolki paginacji pozostają dostępne nad dolną nawigacją mobilną.
+
+Walidacja po dwóch poprawkach wykrytych dopiero w przeglądarce:
+
+- usunięto wymuszoną minimalną szerokość `body`, która tworzyła poziomy overflow na bardzo wąskim ekranie;
+- jawnie zapamiętano mobilny wyzwalacz „Nowa rezerwacja”, aby `Escape` oddawał mu fokus także w rzeczywistym shellu aplikacji;
+- podniesiono lepką paginację nad dolne menu, które wcześniej przechwytywało kliknięcie „Dalej”.
+
+Końcowa regresja: **353/353 testy**, 72 pliki testowe, ESLint, TypeScript i produkcyjny build 35 tras przechodzą. Smoke w aktywnej sesji potwierdza przejście na stronę 2 z 5, brak poziomego overflow, poprawne blokowanie/odblokowanie tła, zamknięcie `Escape`, powrót fokusu i brak błędów lub ostrzeżeń aplikacji w konsoli.
+
+Jedyna ręczna bramka przed akceptacją właściciela to test na rzeczywistym telefonie taty z jego docelowym ustawieniem tekstu 200%. Lokalny smoke na efektywnym bardzo wąskim widoku nie zastępuje sprawdzenia sprzętu, systemowej skali fontu i sposobu użycia przez operatora.
 
 ## Pełne przypisanie ustaleń z walkthrough
 
