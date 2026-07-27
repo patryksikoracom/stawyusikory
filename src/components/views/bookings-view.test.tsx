@@ -21,16 +21,18 @@ const store = vi.hoisted(() => ({
   snoozeDepartureDebrief: vi.fn(),
   skipDepartureDebrief: vi.fn(),
 }));
+const router = vi.hoisted(() => ({
+  back: vi.fn(),
+  push: vi.fn(),
+  replace: vi.fn(),
+}));
 
 vi.mock("@/components/layout/app-store", () => ({
   useAppStore: () => store,
 }));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({
-    push: vi.fn(),
-    replace: vi.fn(),
-  }),
+  useRouter: () => router,
 }));
 
 function bookingFixture(index: number): Booking {
@@ -41,6 +43,8 @@ function bookingFixture(index: number): Booking {
     guestLabel: `Wydajność ${String(index).padStart(4, "0")}`,
     platformReservationNo: undefined,
     importRef: undefined,
+    checkIn: "2026-08-01",
+    checkOut: "2026-08-04",
     workflowStatus: "Potwierdzona",
   };
 }
@@ -48,6 +52,7 @@ function bookingFixture(index: number): Booking {
 describe("BookingsView — fundament UX", () => {
   beforeEach(() => {
     store.data = initialData;
+    sessionStorage.clear();
     vi.clearAllMocks();
   });
 
@@ -88,5 +93,23 @@ describe("BookingsView — fundament UX", () => {
 
     expect(store.cancelBooking).toHaveBeenCalledWith(initialData.bookings[0]!.id);
     expect(nativeConfirm).not.toHaveBeenCalled();
+  });
+
+  it("zachowuje filtry i udostępnia mobilny powrót do listy", () => {
+    const view = render(<BookingsView />);
+    fireEvent.change(screen.getByLabelText("Kanał rezerwacji"), {
+      target: { value: "Booking" },
+    });
+    expect(JSON.parse(sessionStorage.getItem("stawy-os:booking-list-v1") ?? "{}")).toMatchObject({
+      channel: "Booking",
+    });
+
+    view.unmount();
+    render(<BookingsView initialId={initialData.bookings[0]!.id} />);
+
+    fireEvent.click(screen.getByRole("button", {
+      name: "Wróć do listy z zachowaniem filtrów",
+    }));
+    expect(router.back).toHaveBeenCalledOnce();
   });
 });
