@@ -24,7 +24,11 @@ export type TodayUnitState = {
   state: UnitOperationalState;
   currentGuest?: string;
   nextChange: string;
-  blocker?: string;
+  blocker?: {
+    label: string;
+    href: string;
+    actionLabel: string;
+  };
   sameDayTurnover?: {
     windowLabel: string;
     risky: boolean;
@@ -215,7 +219,15 @@ export function buildTodayUnitStates(data: AppData, today: string): TodayUnitSta
       state,
       currentGuest: current?.guestLabel,
       nextChange,
-      blocker: cleaning?.blocker || issue?.title,
+      blocker: cleaning?.blocker ? {
+        label: cleaning.blocker,
+        href: `/tasks#task-${encodeURIComponent(cleaning.id)}`,
+        actionLabel: "Otwórz sprzątanie",
+      } : issue ? {
+        label: issue.title,
+        href: "/tasks",
+        actionLabel: "Otwórz usterkę",
+      } : undefined,
       sameDayTurnover: sameDay ? {
         windowLabel: windowLabel(departureTime, arrivalTime),
         risky: state !== "Gotowy" || Boolean(cleaning?.blocker || issue),

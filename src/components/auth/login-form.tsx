@@ -1,13 +1,11 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { navigateAfterLogin } from "@/lib/auth/browser-navigation";
 import { Button, Field, inputClass } from "@/components/ui/primitives";
 
 export function LoginForm() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
@@ -16,7 +14,7 @@ export function LoginForm() {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!client) { router.push("/dashboard"); return; }
+    if (!client) { navigateAfterLogin(); return; }
     setBusy(true);
     setMessage("");
     try {

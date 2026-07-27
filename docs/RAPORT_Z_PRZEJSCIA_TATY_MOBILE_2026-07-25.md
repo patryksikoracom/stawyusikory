@@ -15,6 +15,13 @@ Pierwszym ekranem taty nie powinien być ogólny Dashboard z powitaniem, statyst
 
 Kalendarz i dostępność są więc pierwszą czynnością oraz pierwszą informacją. Stan bieżących pobytów, zadania, sprzątanie i statystyki pozostają ważne, ale trafiają niżej lub do osobnego widoku.
 
+## Doprecyzowanie — 27 lipca 2026
+
+- Na telefonie kalendarz musi od razu pokazywać oś z paskami rezerwacji; agenda nie wystarcza do oceny dostępności i może być tylko widokiem wtórnym.
+- Powitanie i brief nie mogą wypierać kalendarza z pierwszego miejsca pracy operatora na telefonie.
+- Nie narzucamy jeszcze identycznego startu na komputerze — wymaga to osobnej walidacji z użytkownikiem.
+- Każda blokada w „Dzisiaj, krok po kroku” musi wskazywać jedną akcję prowadzącą do rozwiązania; sam tekst nie jest wystarczający.
+
 To zmienia kolejność wartości w torze operatora:
 
 1. mobilny kalendarz i dostępność;

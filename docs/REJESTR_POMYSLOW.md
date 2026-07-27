@@ -260,6 +260,10 @@ Tata potwierdził wartość tych informacji, lecz ustawił je niżej od kalendar
 
 POM-004 pozostaje P1, ale nie powinien zajmować miejsca nad kalendarzem na ekranie startowym operatora. Pierwszeństwo ma POM-008.
 
+### Doprecyzowanie z testu taty — 2026-07-27
+
+Blokada widoczna w „Dzisiaj, krok po kroku” nie może być wyłącznie komunikatem. Musi mieć jedną jawną akcję, np. „otwórz zadanie”, „potwierdź gotowość”, „rozwiąż blokadę” albo „zobacz rezerwację”. Nie powinno być martwego tekstu bez drogi do działania.
+
 ### Problem i oczekiwany efekt
 
 Sam komunikat „Zajęty do…” odpowiada tylko na część pytania. W bieżącej pracy potrzebna jest odpowiedź możliwa do odczytania w kilka sekund:
@@ -278,6 +282,7 @@ Ekran „Dzisiaj” ma pełnić rolę odprawy operacyjnej, bez konieczności otw
 - Imię i nazwisko lub etykieta gościa (`guestLabel`) są już zapisane i widoczne w listach przyjazdów, wyjazdów, kalendarzu oraz wyszukiwarce.
 - Karta „Stan obiektu” nie pokazuje obecnie nazwy gościa ani względnego czasu do wyjazdu.
 - System alertów obejmuje synchronizację, płatności, rekordy do sprawdzenia i zablokowane zadania, ale nie ostrzega o jutrzejszym przyjeździe.
+- Widok „Dzisiaj, krok po kroku” pokazuje blokadę jako nieklikalny tekst; zwykłe zadania na Dashboardzie mają przycisk „Oznacz jako zrobione”.
 
 Wniosek: większość potrzebnych danych i obliczeń już istnieje. To głównie poprawa hierarchii informacji i dodanie prostej reguły alertu, a nie nowy moduł.
 
@@ -312,6 +317,13 @@ Jeżeli jednego dnia jest wyjazd i kolejny przyjazd, karta ma pokazać stan „Z
 
 Na początku wystarczy alert widoczny po otwarciu aplikacji. Zewnętrzne powiadomienia push są osobnym zakresem, ponieważ wymagają konfiguracji urządzenia, uprawnień oraz decyzji dotyczącej pokazywania danych gościa na ekranie blokady.
 
+#### Etap C — blokady prowadzące do działania
+
+- każda blokada posiada typ i źródłowy rekord;
+- komunikat ma jedną, zrozumiałą akcję;
+- po wykonaniu akcji status odświeża się bez ręcznego odświeżania widoku;
+- gdy sprawy nie da się zamknąć w briefie, akcja prowadzi do właściwego zadania albo rezerwacji.
+
 ### Walidacja
 
 Przez tydzień otwierać ekran „Dzisiaj” podczas codziennej odprawy i sprawdzać, czy bez przechodzenia do kalendarza da się w mniej niż pięć sekund odpowiedzieć:
@@ -323,6 +335,8 @@ Przez tydzień otwierać ekran „Dzisiaj” podczas codziennej odprawy i sprawd
 
 Próba powinna obejmować domek wolny, pobyt wielodniowy, przyjazd jutro oraz wyjazd i przyjazd tego samego dnia.
 
+Dla każdej blokady w fixture potwierdzić, że operator dochodzi do działania w jednym tapnięciu.
+
 ### Kryteria akceptacji
 
 - Karta zawsze wskazuje właściwego bieżącego gościa i prowadzi do jego rezerwacji.
@@ -330,6 +344,7 @@ Próba powinna obejmować domek wolny, pobyt wielodniowy, przyjazd jutro oraz wy
 - Rezerwacje anulowane, usunięte i historyczne nie pojawiają się jako bieżący stan.
 - Zmiana gości tego samego dnia nie jest przedstawiana jako „Wolny i gotowy”.
 - Alert o jutrzejszym przyjeździe pojawia się dokładnie raz i prowadzi do właściwej rezerwacji.
+- Żadna blokada w briefie nie pozostaje nieaktywnym komunikatem bez drogi do działania.
 
 ### Ryzyka i decyzje
 
@@ -630,6 +645,16 @@ Efektem ma być prosty przepływ: wybierz szablon → sprawdź odbiorcę i treś
 
 Tata korzysta z aplikacji na telefonie przez około 99% czasu i ma powiększony tekst systemowy ze względu na wzrok. Po otwarciu obecnego Dashboardu widzi głównie powitanie oraz fragment informacji o pobytach. Podczas telefonu od klienta potrzebuje natychmiast zobaczyć kalendarz, zajęte terminy, wolne luki i rozpocząć wycenę.
 
+### Doprecyzowanie z testu taty — 2026-07-27
+
+Na telefonie wejście do `/calendar` domyślnie pokazuje dziś agendę, a nie paski rezerwacji. Tata nie traktuje agendy jako kalendarza dostępności: widok pasków ma być domyślny, a agenda może pozostać wtórnym przełącznikiem. Nie przesądzamy jeszcze, czy identyczny punkt wejścia ma obowiązywać na komputerze — priorytetem jest telefon operatora.
+
+Nawigacja kalendarza ma być jednym mechanizmem ciągłej osi: `Dzisiaj` jest skrótem do bieżącej daty, a dalej operator przewija lub przechodzi strzałkami bez sztucznego wyboru okien 28/42/56 dni i bez drugiego, konkurującego zestawu strzałek. Widok ma pozwalać iść dowolnie daleko w przód oraz wstecz.
+
+W filtrach rozdzielamy **kanał zawarcia rezerwacji** (np. Booking, Airbnb, Aloha Camp, telefon/direct) od **źródła odkrycia** (np. Facebook, polecenie, strona). Facebook i polecenie nie są kanałami rezerwacji, więc nie mogą trafiać do jednego filtra z Bookingiem. Zostaje jeden, bardziej zwarty wariant gęstości widoku; nie utrzymujemy przełącznika „kompaktowy/wygodny”, jeśli różnica nie daje operatorowi realnej wartości.
+
+„Dodaj blokadę” pozostaje dostępne w obecnym zakresie, ale nie jest teraz priorytetem ani wymaganiem MVP — nie rozszerzamy przez to PR-10d.
+
 ### Problem i oczekiwany efekt
 
 Obecna hierarchia odpowiada na pytania zarządcze przed pytaniem operacyjnym. Powiększony tekst dodatkowo spycha potrzebne dane poniżej pierwszego ekranu.
@@ -640,6 +665,7 @@ Ekran startowy roli operatora ma od razu pokazać wizualną dostępność Czapli
 
 - Osobny widok kalendarza z osią rezerwacji.
 - Mobilna agenda siedmiu dni.
+- Na telefonie widokiem domyślnym jest agenda; oś czasu z paskami istnieje, ale wymaga ręcznego przełączenia.
 - Kliknięcie wolnego dnia może rozpocząć nową rezerwację.
 - Formularz potrafi przyjąć wstępnie wybrany domek i datę.
 - Dashboard jest obecnie ekranem startowym i eksponuje powitanie, brief oraz KPI.
@@ -648,30 +674,37 @@ Ekran startowy roli operatora ma od razu pokazać wizualną dostępność Czapli
 ### Najmniejszy sensowny zakres
 
 - rola `manager/operator` po zalogowaniu trafia na kalendarz, nie ogólny Dashboard;
+- na telefonie oś czasu z paskami rezerwacji jest widokiem domyślnym, a agenda opcjonalnym widokiem wtórnym;
 - kalendarz jest widoczny bez przewijania przez powitanie i statystyki;
 - Czapla i Rybak są widoczne w jednym kontekście;
 - bieżące pobyty, przyszłe rezerwacje i wolne luki są czytelne tekstowo, nie tylko kolorami;
 - dzisiaj i najbliższe dni mają jasny punkt odniesienia;
+- `Dzisiaj` jedynie przywraca bieżącą datę na osi; przewijanie i strzałki sterują tą samą, ciągłą osią bez ograniczenia do gotowych okien dni;
+- jeden, zwarty wariant gęstości widoku zamiast pozornie różnych trybów „kompaktowy” i „wygodny”;
 - na komputerze kliknięcie początku i końca oraz opcjonalne przeciągnięcie wybierają zakres pobytu; na telefonie robią to dwa dotknięcia;
 - po pierwszym wyborze dzień początku i instrukcja następnego kroku są widoczne, a po drugim cały zakres pozostaje wyróżniony;
 - wybrany zakres pozostaje widoczny i otwiera POM-005 z zachowanymi datami;
 - duże pola dotykowe i brak krytycznych elementów mniejszych niż tekst możliwy do przeczytania przez tatę;
 - brief „Dzisiaj”, zadania i statystyki są poniżej kalendarza albo w osobnej zakładce;
 - stan oraz czas ostatniej synchronizacji są widoczne przed uznaniem terminu za bezpiecznie dostępny.
+- nie narzucać bez walidacji tego samego punktu wejścia na komputerze.
 
 ### Walidacja
 
 1. Użyć rzeczywistego telefonu taty i jego ustawienia wielkości tekstu.
-2. Otworzyć aplikację podczas symulowanej rozmowy.
+2. Otworzyć `/calendar` podczas symulowanej rozmowy i potwierdzić, że paski rezerwacji są widoczne bez przełączania trybu.
 3. Znaleźć trzy wolne zakresy dla obu domków.
 4. Na komputerze wybrać każdy zakres kliknięciem początku i końca, a co najmniej jeden także przeciągnięciem.
 5. Na telefonie wybrać każdy zakres dwoma dotknięciami i przejść do wyceny.
 6. Powtórzyć przy powiększeniu do 200%, w pionie i bez obracania telefonu.
 7. Sprawdzić przypadki: pobyt trwający, wyjazd dzisiaj, zmiana gości, długa rezerwacja, blokada i błąd synchronizacji.
+8. Od `Dzisiaj` przejść wiele tygodni w przód i wstecz, używając przewijania oraz strzałek, i potwierdzić, że nie powstają dwa niezależne stany zakresu.
 
 ### Kryteria akceptacji
 
 - Po otwarciu aplikacji tata widzi dostępność bez przewijania przez powitanie i KPI.
+- Na telefonie domyślnym trybem kalendarza jest oś czasu z paskami, nie agenda; operator nie musi znać przełącznika widoku, aby zobaczyć dostępność.
+- Kalendarz nie pokazuje wyboru 28/42/56 dni ani dwóch zestawów nawigacji; `Dzisiaj`, strzałki i przewijanie obsługują jedną ciągłą oś.
 - Potrafi wskazać, czy każdy domek jest wolny w danym terminie bez otwierania osobnych kart.
 - Wybór zakresu wymaga najwyżej dwóch dotknięć na telefonie albo dwóch kliknięć na komputerze; przeciągnięcie jest równoważną, opcjonalną drogą na komputerze.
 - Po wybraniu zakresu bez dodatkowego wpisywania dat można zobaczyć wycenę; sprawdzenie ceny nie tworzy rezerwacji ani blokady.

@@ -209,7 +209,7 @@ function ShellInner({ children, identity }: { children: React.ReactNode; identit
         <main className="px-4 pb-28 pt-7 sm:px-6 lg:px-8 lg:pb-12">
           <div className="mx-auto max-w-[1460px]">
             <AppDataGate onRetry={retryDataLoad} status={dataStatus}>
-              <div className="animate-rise mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div className={`animate-rise mb-6 flex-col gap-4 sm:flex sm:flex-row sm:items-end sm:justify-between ${pathname === "/dashboard" || pathname === "/calendar" ? "hidden" : "flex"}`}>
                 <div><p className="text-[11px] font-black uppercase tracking-[.2em] text-[#7f8f4f]">{meta.eyebrow}</p><h1 className="font-display text-[34px] font-semibold leading-tight tracking-[-.035em] sm:text-[42px]">{pageTitle}</h1><p className="mt-1 text-sm text-[#61716a]">{meta.body}</p></div>
                 <Button className="sm:hidden" onClick={openNewBooking}><Icon className="size-4" name="plus" />Nowa rezerwacja</Button>
               </div>

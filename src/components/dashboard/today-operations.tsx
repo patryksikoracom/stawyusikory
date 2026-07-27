@@ -62,7 +62,7 @@ export function TodayOperations({
             <div className="mt-4 grid gap-2 text-sm">
               <p className="flex items-center gap-2 font-bold text-[#455a51]"><Icon className="size-4 text-[#74824f]" name="calendar"/>{unit.nextChange}</p>
               {unit.sameDayTurnover ? <p className={`flex items-center gap-2 rounded-xl px-3 py-2 font-black ${unit.sameDayTurnover.risky ? "bg-[#f9e2d8] text-[#8e3d28]" : "bg-[#e5efe1] text-[#2c6141]"}`}><Icon className="size-4" name={unit.sameDayTurnover.risky ? "warning" : "clock"}/>Turnover tego samego dnia · {unit.sameDayTurnover.windowLabel}</p> : null}
-              {unit.blocker ? <p className="flex items-start gap-2 rounded-xl bg-[#f9e2d8] px-3 py-2 font-bold text-[#8e3d28]"><Icon className="mt-0.5 size-4 shrink-0" name="warning"/>Blokada: {unit.blocker}</p> : null}
+              {unit.blocker ? <Link className="flex items-start gap-2 rounded-xl bg-[#f9e2d8] px-3 py-2 font-bold text-[#8e3d28] transition hover:bg-[#f5d4c7] focus-visible:ring-2 focus-visible:ring-[#8e3d28]" href={unit.blocker.href}><Icon className="mt-0.5 size-4 shrink-0" name="warning"/><span className="min-w-0 flex-1">Blokada: {unit.blocker.label}<span className="mt-1 block text-xs font-black underline underline-offset-2">{unit.blocker.actionLabel} →</span></span></Link> : null}
             </div>
           </article>
         ))}

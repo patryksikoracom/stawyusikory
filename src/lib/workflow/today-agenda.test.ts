@@ -110,7 +110,11 @@ describe("today agenda", () => {
 
     expect(fisherman).toMatchObject({
       state: "Goście",
-      blocker: "Brak potwierdzenia prania",
+      blocker: {
+        label: "Brak potwierdzenia prania",
+        href: "/tasks#task-cleaning",
+        actionLabel: "Otwórz sprzątanie",
+      },
       nextChange: "Wyjazd dzisiaj · 11:00",
       sameDayTurnover: {
         windowLabel: "5 godz.",

@@ -283,6 +283,7 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 - [ ] Jedna chronologiczna agenda: wyjazd → początek turnoveru → przyjazd → wiadomość/zadanie.
 - [ ] Każdy wpis ma osobno rodzaj zdarzenia/status i kanał rezerwacji.
 - [ ] Dodać pasek stanu domków z następną zmianą i ewentualną blokadą.
+- [ ] Komunikat blokady nie jest statycznym tekstem: pokazuje źródło, właściciela oraz jedną akcję prowadzącą do rozwiązania lub oznaczenia wykonania.
 - [ ] Same-day turnover wyraźnie pokazuje dostępne okno i ryzyko.
 - [ ] Kliknięcie zdarzenia otwiera właściwą akcję, nie tylko ogólny rekord.
 - [ ] Dane niezbędne do decyzji są czytelne w 5 sekund na desktopie i telefonie.
@@ -291,7 +292,7 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 #### 5.3 PR-10c — formularz, lista i szczegół rezerwacji
 
 - [ ] Domyślny widok: nadchodzące i trwające; historia/archiwum osobno.
-- [ ] Jawne etykiety filtrów: okres, domek, status pobytu, kanał zawarcia, saldo/płatność, jakość danych, źródło/import.
+- [ ] Jawne etykiety filtrów: okres, domek, status pobytu, kanał zawarcia, saldo/płatność, jakość danych, źródło/import. Kanał zawarcia (Booking/Airbnb/Aloha Camp/telefon-direct) nie miesza się ze źródłem odkrycia (Facebook/polecenie/strona).
 - [ ] Sortowanie nazywa faktyczne pole: `najbliższy przyjazd`, `ostatnio dodane`, `największe saldo`, `ostatnio zmienione`.
 - [ ] Powrót ze szczegółu zachowuje filtry, sortowanie i pozycję listy.
 - [ ] Desktop może użyć master–detail z jednoznacznym zaznaczeniem; telefon ma osobny szczegół i przycisk powrotu.
@@ -309,11 +310,12 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 
 #### 5.4 PR-10d — kalendarz operacyjny
 
-- [ ] Rola `manager/operator` po zalogowaniu trafia do kalendarza, nie do ogólnego Dashboardu.
+- [ ] Start po zalogowaniu jest zależny od roli i urządzenia: dla operatora na telefonie kalendarz; zachowanie na desktopie podlega walidacji, nie jest globalnie narzucone.
 - [ ] Na telefonie kalendarz jest widoczny przed powitaniem, KPI, zadaniami i briefem operacyjnym.
-- [ ] Domyślny zakres 42 dni: 7 dni wstecz, dzisiaj, 34 dni naprzód.
-- [ ] `Dzisiaj` ustawia bieżący dzień około 1/4–1/3 szerokości, zachowując kontekst poprzedniego pobytu.
-- [ ] Nawigacja zakresu i przewijanie osi są sprzężone; użytkownik nie zarządza dwoma niezależnymi stanami.
+- [ ] Na telefonie domyślnym widokiem jest oś/paski rezerwacji; agenda pozostaje wtórnym przełącznikiem. Użytkownik nie wykonuje przełączenia, aby zobaczyć dostępność.
+- [ ] `Dzisiaj` przywraca bieżącą datę około 1/4–1/3 szerokości osi, zachowując kontekst poprzedniego pobytu; nie jest wyborem sztywnego zakresu dni.
+- [ ] Strzałki i przewijanie sterują jedną, ciągłą osią możliwą do przeglądania dowolnie daleko w przód i wstecz. Nie ma konkurujących kontrolek ani wyboru 28/42/56 dni.
+- [ ] Utrzymać jeden, zwarty wariant gęstości kalendarza; nie oferować przełącznika „kompaktowy/wygodny” bez istotnej różnicy funkcjonalnej.
 - [ ] Miesiące są czytelnymi nagłówkami osi.
 - [ ] Pasek rezerwacji pokazuje kanał tekstem/ikoną oraz dostępny opis; kolor jest dodatkiem.
 - [ ] Drag na desktopie, dwa tapnięcia na dotyku i pola od/do dla klawiatury tworzą ten sam szkic terminu.
