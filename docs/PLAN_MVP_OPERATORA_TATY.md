@@ -85,6 +85,8 @@ Osobną bramką P0 jest posiadanie i stosowanie zatwierdzonych Standardów Ochro
 7. POM-004 — stan domków i goście na ekranie „Dzisiaj”, poniżej kalendarza lub osobno;
 8. uzgodnienie danych, shadow mode i rollback.
 
+Na telefonie POM-008 oznacza domyślny widok pasków rezerwacji; agenda jest widokiem wtórnym. Decyzja o punkcie wejścia na komputerze wymaga osobnej walidacji.
+
 Wszystkie te elementy są P1, lecz kolejność wykonania wynika z zależności. Wysoka wartość e-maila nie pozwala ominąć poprawności kontaktu, uprawnień, idempotencji ani testów dostawcy.
 
 ### Poza MVP
@@ -117,12 +119,12 @@ Wszystkie te elementy są P1, lecz kolejność wykonania wynika z zależności. 
 | 3 | PR-9a | rola `manager/operator`, macierz `read/write/PII/finance/send/export` | bez przyznawania tacie pełnego `owner` |
 | 4 | PR-9c / SOP | zatwierdzona procedura małoletnich i minimalny dowód wykonania | bez zgadywania formularza, danych i rodzaju podpisu |
 | 5 | PR-10a | powiększony tekst, pola dotykowe i mobilny fundament POM-008 | bez przebudowy wszystkich widoków w jednym PR |
-| 6 | PR-10d | POM-008: ekran startowy operatora, dwa tapnięcia i kalendarz desktop/mobile | bez publikacji cen lub dostępności do OTA |
+| 6 | PR-10d | POM-008: ekran startowy operatora, dwa tapnięcia i mobilna oś czasu z paskami jako widok domyślny | bez publikacji cen lub dostępności do OTA |
 | 7 | PR-10c | POM-005 i POM-006: szybki wpis, cena, zwierzęta, usługi, rabat, zaliczka i saldo | bez pełnego CRM i pól marketingowych |
 | 8 | PR-11c | zatwierdzona sekwencja szablonów e-mail v1 i ich wersje | bez udawania faktycznej dostawy |
 | 9 | PR-12 / Etap 7 | dostawca e-mail, statusy, retry, gateway OTA, shadow mode i rollback | bez przełączenia przed spełnieniem bramki |
 | 10 | PR-9b | informacja dla sprzątania po zaliczce i odświeżenie po długiej przerwie | bez ujawniania cen i pełnego PII |
-| 11 | PR-10b | POM-004: stan domków, bieżący i następny gość | bez umieszczania briefu nad kalendarzem operatora |
+| 11 | PR-10b | POM-004: stan domków, bieżący i następny gość oraz blokady prowadzące do działania | bez umieszczania briefu nad kalendarzem operatora |
 
 Numery PR-ów opisują istniejące paczki, a tabela pokazuje priorytet wartości dla toru operatora. Po PR-8 trzeba potwierdzić techniczną kolejność zależności. PR-10a–PR-10d pozostają osobnymi paczkami i nie wolno scalać ich w jeden duży PR tylko po to, aby szybciej nazwać całość MVP.
 
@@ -231,11 +233,15 @@ Lista jest protokołem decyzji, a nie luźnym zbiorem pytań. Przy każdym punkc
 ### Faza 3 — codzienna obsługa rezerwacji
 
 - wdrożyć mobilny fundament dostępności i POM-008;
+- na telefonie ustawić widok pasków jako domyślny; agenda pozostaje dostępna jako wybór wtórny;
+- ujednolicić nawigację kalendarza w jedną ciągłą oś: `Dzisiaj` jako skrót, potem swobodne przewijanie lub strzałki w obu kierunkach;
+- uprościć filtry: kanał zawarcia rezerwacji oddzielić od źródła odkrycia; nie pokazywać Facebooka ani polecenia jako platformy rezerwacyjnej;
 - przepisać i zatwierdzić stawki POM-006;
 - poprawić wybór terminu i kalendarz w PR-10d;
 - wdrożyć minimalny przepływ POM-005 w PR-10c;
 - dodać zwierzęta, usługi, rabat i zaliczkę bez rozbudowywania pełnego CRM;
 - wdrożyć POM-004 niżej lub w osobnym widoku, bez przesuwania kalendarza;
+- każda blokada w briefie prowadzi do swojej akcji, bez statycznego komunikatu;
 - przejść 10 kontrolnych rozmów/wycen z tatą.
 
 ### Faza 4 — komunikacja
@@ -263,22 +269,23 @@ MVP można uznać za gotowe do codziennej pracy taty, gdy:
 
 1. tata loguje się na własne konto operatora i nie ma zbędnych uprawnień;
 2. na jego telefonie i z jego ustawieniem tekstu kalendarz jest pierwszym użytecznym ekranem;
-3. przy powiększeniu do 200% nie znikają daty, domek, cena ani główna akcja;
-4. zakres można wybrać wizualnie dwoma tapnięciami;
-5. 10/10 kontrolnych wycen zgadza się ze sprawdzonym cennikiem;
-6. cenę da się podać w mniej niż 30 sekund;
-7. rezerwację z kontaktem, źródłem, osobami, zwierzętami, ceną, zaliczką i płatnością da się zapisać w mniej niż dwie minuty;
-8. ręczny rabat pokazuje cenę z cennika, cenę końcową i powód;
-9. reguły Czapli/Rybaka, minimum pobytu i standardowe godziny działają zgodnie z zatwierdzoną polityką;
-10. ekran „Dzisiaj” pokazuje pełną nazwę bieżącego gościa, termin wyjazdu i następny przyjazd, ale nie zasłania kalendarza;
-11. zatwierdzoną sekwencję e-mail można edytować i wysłać z aplikacji;
-12. status wysyłki pochodzi od dostawcy, a retry nie tworzy duplikatu;
-13. saldo D-2 i bramka wydania klucza są jednoznaczne;
-14. procedura małoletnich ma zatwierdzony SOP, minimalny zapis i przeszkolone osoby;
-15. sprzątanie otrzymuje właściwą informację po zaliczce i propozycję odświeżenia po długiej przerwie;
-16. przez minimum 14 dni nie ma niewyjaśnionych różnic między Stawy OS a źródłami rezerwacji;
-17. istnieje sprawdzony eksport, procedura awaryjna i rollback;
-18. Patryk oraz tata osobno zatwierdzają przełączenie.
+3. po wejściu w kalendarz na telefonie bez przełącznika widoczne są paski rezerwacji;
+4. przy powiększeniu do 200% nie znikają daty, domek, cena ani główna akcja;
+5. zakres można wybrać wizualnie dwoma tapnięciami;
+6. 10/10 kontrolnych wycen zgadza się ze sprawdzonym cennikiem;
+7. cenę da się podać w mniej niż 30 sekund;
+8. rezerwację z kontaktem, źródłem, osobami, zwierzętami, ceną, zaliczką i płatnością da się zapisać w mniej niż dwie minuty;
+9. ręczny rabat pokazuje cenę z cennika, cenę końcową i powód;
+10. reguły Czapli/Rybaka, minimum pobytu i standardowe godziny działają zgodnie z zatwierdzoną polityką;
+11. ekran „Dzisiaj” pokazuje pełną nazwę bieżącego gościa, termin wyjazdu i następny przyjazd, ale nie zasłania kalendarza;
+12. zatwierdzoną sekwencję e-mail można edytować i wysłać z aplikacji;
+13. status wysyłki pochodzi od dostawcy, a retry nie tworzy duplikatu;
+14. saldo D-2 i bramka wydania klucza są jednoznaczne;
+15. procedura małoletnich ma zatwierdzony SOP, minimalny zapis i przeszkolone osoby;
+16. sprzątanie otrzymuje właściwą informację po zaliczce i propozycję odświeżenia po długiej przerwie;
+17. przez minimum 14 dni nie ma niewyjaśnionych różnic między Stawy OS a źródłami rezerwacji;
+18. istnieje sprawdzony eksport, procedura awaryjna i rollback;
+19. Patryk oraz tata osobno zatwierdzają przełączenie.
 
 Niespełnienie któregokolwiek z punktów 11–17 blokuje rezygnację z narzędzia, które nadal obsługuje odpowiednią funkcję.
 

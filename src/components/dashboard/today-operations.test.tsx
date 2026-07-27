@@ -40,7 +40,11 @@ const units: TodayUnitState[] = [{
   state: "Goście",
   currentGuest: "Anna Kowalska",
   nextChange: "Wyjazd dzisiaj · 11:00",
-  blocker: "Brak potwierdzenia prania",
+  blocker: {
+    label: "Brak potwierdzenia prania",
+    href: "/tasks#task-TASK-1",
+    actionLabel: "Otwórz sprzątanie",
+  },
   sameDayTurnover: { windowLabel: "5 godz.", risky: true },
 }];
 
@@ -53,6 +57,7 @@ describe("TodayOperations", () => {
     expect(screen.getByRole("heading", { name: "Dzisiaj, krok po kroku" })).toBeInTheDocument();
     expect(screen.getByText("Turnover tego samego dnia · 5 godz.")).toBeInTheDocument();
     expect(screen.getByText("Blokada: Brak potwierdzenia prania")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Otwórz sprzątanie/ })).toHaveAttribute("href", "/tasks#task-TASK-1");
     expect(screen.getByText("Booking")).toBeInTheDocument();
     expect(screen.getByText("Airbnb")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Otwórz przyjazd/ })).toHaveAttribute("href", "/bookings/booking-in");

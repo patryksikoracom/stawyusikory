@@ -58,6 +58,34 @@ describe("CalendarView — potwierdzane blokady", () => {
     mocks.store.current = createStore();
   });
 
+  it("na telefonie startuje od osi czasu i ma jedną, zwartą nawigację", () => {
+    render(<CalendarView />);
+
+    expect(screen.getByRole("button", { name: "Oś czasu" })).toHaveClass("bg-white");
+    expect(screen.getByRole("button", { name: "Przesuń kalendarz wstecz" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Przesuń kalendarz dalej" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /28 dni|42 dni|56 dni|Kompaktowy|Wygodny/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Przewiń kalendarz/ })).not.toBeInTheDocument();
+  });
+
+  it("filtruje wyłącznie po kanałach rezerwacji, bez źródeł odkrycia", () => {
+    mocks.store.current = {
+      ...createStore(),
+      data: {
+        ...createStore().data,
+        bookings: [
+          { ...initialData.bookings[0]!, platform: "Booking" as const },
+          { ...initialData.bookings[0]!, id: "FACEBOOK-SOURCE", platform: "Facebook" as const },
+        ],
+      },
+    };
+    render(<CalendarView />);
+
+    const filter = screen.getByRole("combobox", { name: "Filtr kanału rezerwacji" });
+    expect(filter).toHaveTextContent("Booking");
+    expect(filter).not.toHaveTextContent("Facebook");
+  });
+
   it("czeka na potwierdzenie utworzenia i przypomina o Mobile Calendar", async () => {
     let resolveSave: ((saved: boolean) => void) | undefined;
     mocks.addBlock.mockReturnValue(new Promise<boolean>((resolve) => {
