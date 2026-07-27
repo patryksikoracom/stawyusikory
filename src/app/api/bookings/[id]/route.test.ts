@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/supabase/auth-context", () => ({
-  isOrganizationEditor: (role: unknown) => role === "owner" || role === "admin",
+  isBookingOperator: (role: unknown) => role === "owner" || role === "admin" || role === "manager",
   requireOrganization: vi.fn(async () => mocks.context),
 }));
 
@@ -122,6 +122,16 @@ describe("PATCH /api/bookings/:id", () => {
         error: null,
       }) },
     };
+  });
+
+  it("pozwala managerowi operacyjnie zmienić rezerwację", async () => {
+    mocks.context.role = "manager";
+    const response = await PATCH(request(), { params: Promise.resolve({ id: booking.id }) });
+    expect(response.status).toBe(200);
+    expect(mocks.context.supabase.rpc).toHaveBeenCalledWith(
+      "mutate_operational_booking",
+      expect.objectContaining({ p_booking_id: booking.id }),
+    );
   });
 
   it("wykonuje jedną atomową komendę dla rezerwacji i jej skutków", async () => {

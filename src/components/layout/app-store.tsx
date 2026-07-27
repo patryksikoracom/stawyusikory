@@ -65,6 +65,7 @@ import { ensureGuestPeople, mergeGuestPeople } from "@/lib/crm/guest-identity";
 
 export type SyncMode = "checking" | "cloud" | "local" | "error" | "conflict";
 export type DataStatus = "loading" | "ready" | "error";
+export type BookingCommandResult = { ok: true } | { ok: false; message: string };
 
 type AppStore = {
   data: AppData;
@@ -75,11 +76,11 @@ type AppStore = {
   retryDataLoad: () => void;
   copyConflictChanges: () => Promise<boolean>;
   reloadAfterConflict: () => void;
-  addBooking: (booking: Booking, contact?: ContactConsent) => void;
-  updateBooking: (booking: Booking, contact?: ContactConsent) => void;
-  cancelBooking: (bookingId: string) => void;
-  deleteBooking: (bookingId: string) => void;
-  restoreBooking: (bookingId: string) => void;
+  addBooking: (booking: Booking, contact?: ContactConsent) => Promise<BookingCommandResult>;
+  updateBooking: (booking: Booking, contact?: ContactConsent) => Promise<BookingCommandResult>;
+  cancelBooking: (bookingId: string) => Promise<BookingCommandResult>;
+  deleteBooking: (bookingId: string) => Promise<BookingCommandResult>;
+  restoreBooking: (bookingId: string) => Promise<BookingCommandResult>;
   updateTask: (task: OpsTask) => void;
   toggleChecklistItem: (item: TaskChecklistItem) => void;
   addIssue: (issue: IssueReport) => void;
@@ -1080,8 +1081,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     });
   }, [compareConflictWithCloud, finishRecordCommand, mutate]);
 
-  const createBooking = useCallback((booking: Booking, contact?: ContactConsent) => {
-    if (!dataReady.current) return;
+  const createBooking = useCallback(async (booking: Booking, contact?: ContactConsent): Promise<BookingCommandResult> => {
+    if (!dataReady.current) return { ok: false, message: "Dane aplikacji nie są jeszcze gotowe. Spróbuj ponownie." };
     const clientSentAt = new Date().toISOString();
     const aggregate = bookingAggregate(latestData.current, booking, contact, clientSentAt);
 
@@ -1093,9 +1094,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           ...current.auditLog,
         ],
       }));
-      return;
+      return { ok: true };
     }
-    if (!cloudReady.current) return;
+    if (!cloudReady.current) return { ok: false, message: "Brak gotowego połączenia z chmurą. Odśwież dane i spróbuj ponownie." };
 
     const requestId = typeof crypto !== "undefined" && crypto.randomUUID
       ? crypto.randomUUID()
@@ -1107,9 +1108,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     for (const message of aggregate.scheduledMessages) scheduledMessageRecordVersions.current.set(message.id, 1);
     pendingRecordCommands.current += 1;
     setData((current) => mergeBookingAggregate(current, aggregate));
+    let outcome: BookingCommandResult = { ok: false, message: "Nie potwierdzono zapisu rezerwacji." };
 
     cloudSaveQueue.current = cloudSaveQueue.current.then(async () => {
       if (!cloudReady.current) {
+        outcome = { ok: false, message: "Połączenie z chmurą zostało przerwane przed zapisem." };
         finishRecordCommand();
         return;
       }
@@ -1125,6 +1128,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           }),
         });
         if (!response.ok) {
+          const errorPayload = await response.json().catch(() => ({})) as { error?: string };
           setData((current) => removeBookingAggregate(current, aggregate));
           bookingRecordVersions.current.delete(booking.id);
           consentRecordVersions.current.delete(booking.id);
@@ -1134,7 +1138,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           cloudReady.current = false;
           setSyncMode(response.status === 409 ? "conflict" : "error");
           if (response.status === 409) {
-            const payload = await response.json().catch(() => ({})) as {
+            const payload = errorPayload as {
               requestId?: string;
               detectedAt?: string;
             };
@@ -1146,6 +1150,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
               changes: summarizeSyncChanges(baseData.current, latestData.current),
             });
           }
+          outcome = { ok: false, message: errorPayload.error ?? "Nie udało się zapisać rezerwacji." };
           return;
         }
 
@@ -1186,25 +1191,29 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           version: payload.stateVersion,
           savedAt,
         } satisfies StateCommittedMessage);
+        outcome = { ok: true };
       } catch {
         // Nie wycofujemy zapisu przy niejednoznacznym błędzie sieci: transakcja
         // mogła dojść do bazy. Ponowne pobranie rozstrzygnie stan bez duplikacji.
         cloudReady.current = false;
         setSyncMode("error");
+        outcome = { ok: false, message: "Nie udało się potwierdzić zapisu. Odśwież dane przed ponowieniem." };
       } finally {
         finishRecordCommand();
       }
     });
+    await cloudSaveQueue.current;
+    return outcome;
   }, [finishRecordCommand, mutate]);
 
-  const commitBookingMutation = useCallback((
+  const commitBookingMutation = useCallback(async (
     booking: Booking,
     contact: ContactConsent | undefined,
     operation: BookingMutationOperation,
-  ) => {
-    if (!dataReady.current) return;
+  ): Promise<BookingCommandResult> => {
+    if (!dataReady.current) return { ok: false, message: "Dane aplikacji nie są jeszcze gotowe. Spróbuj ponownie." };
     const currentBooking = latestData.current.bookings.find((item) => item.id === booking.id);
-    if (!currentBooking) return;
+    if (!currentBooking) return { ok: false, message: "Nie znaleziono tej rezerwacji." };
 
     if (!cloudConfigured) {
       mutate((current) => {
@@ -1251,9 +1260,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           ],
         };
       });
-      return;
+      return { ok: true };
     }
-    if (!cloudReady.current) return;
+    if (!cloudReady.current) return { ok: false, message: "Brak gotowego połączenia z chmurą. Odśwież dane i spróbuj ponownie." };
 
     const expectedRecordVersion = bookingRecordVersions.current.get(booking.id)
       ?? currentBooking.version
@@ -1306,9 +1315,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     }
     pendingRecordCommands.current += 1;
     setData((current) => mergeBookingMutation(current, aggregate));
+    let outcome: BookingCommandResult = { ok: false, message: "Nie potwierdzono zmiany rezerwacji." };
 
     cloudSaveQueue.current = cloudSaveQueue.current.then(async () => {
       if (!cloudReady.current) {
+        outcome = { ok: false, message: "Połączenie z chmurą zostało przerwane przed zapisem." };
         finishRecordCommand();
         return;
       }
@@ -1341,9 +1352,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
             requestId: payload.requestId ?? requestId,
             changes: summarizeSyncChanges(baseData.current, latestData.current),
           });
+          outcome = { ok: false, message: "Rezerwacja zmieniła się na innym urządzeniu. Odśwież dane." };
           return;
         }
-        if (!response.ok) throw new Error("booking command failed");
+        if (!response.ok) {
+          const errorPayload = await response.json().catch(() => ({})) as { error?: string };
+          outcome = { ok: false, message: errorPayload.error ?? "Nie udało się zapisać zmiany rezerwacji." };
+          return;
+        }
         const payload = await response.json() as {
           aggregate: BookingMutationAggregate;
           recordVersion: number;
@@ -1398,15 +1414,19 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           version: payload.stateVersion,
           savedAt,
         } satisfies StateCommittedMessage);
+        outcome = { ok: true };
       } catch {
         // Stan optymistyczny zostaje widoczny. Odświeżenie rozstrzyga, czy
         // transakcja dotarła do bazy, bez ponownego pełnego zapisu.
         cloudReady.current = false;
         setSyncMode("error");
+        outcome = { ok: false, message: "Nie udało się potwierdzić zmiany. Odśwież dane przed ponowieniem." };
       } finally {
         finishRecordCommand();
       }
     });
+    await cloudSaveQueue.current;
+    return outcome;
   }, [finishRecordCommand, mutate]);
 
   const updateTask = useCallback((task: OpsTask) => {
@@ -2220,22 +2240,22 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     reloadAfterConflict,
     addBooking: createBooking,
     updateBooking: (booking, contact) => commitBookingMutation(booking, contact, "update"),
-    cancelBooking: (bookingId) => {
+    cancelBooking: async (bookingId) => {
       const booking = latestData.current.bookings.find((item) => item.id === bookingId);
-      if (!booking) return;
+      if (!booking) return { ok: false, message: "Nie znaleziono tej rezerwacji." };
       const contact = latestData.current.consents.find((item) => item.bookingId === bookingId);
-      commitBookingMutation(
+      return commitBookingMutation(
         { ...booking, workflowStatus: "Anulowana" },
         contact,
         "cancel",
       );
     },
-    deleteBooking: (bookingId) => {
+    deleteBooking: async (bookingId) => {
       const booking = latestData.current.bookings.find((item) => item.id === bookingId);
-      if (!booking || booking.deletedAt) return;
+      if (!booking || booking.deletedAt) return { ok: false, message: "Rezerwacja jest już w koszu albo nie istnieje." };
       const deletedAt = new Date().toISOString();
       const contact = latestData.current.consents.find((item) => item.bookingId === bookingId);
-      commitBookingMutation({
+      return commitBookingMutation({
         ...booking,
         workflowStatusBeforeDeletion: booking.workflowStatus,
         workflowStatus: "Anulowana",
@@ -2244,11 +2264,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         updatedAt: deletedAt,
       }, contact, "trash");
     },
-    restoreBooking: (bookingId) => {
+    restoreBooking: async (bookingId) => {
       const booking = latestData.current.bookings.find((item) => item.id === bookingId);
-      if (!booking?.deletedAt || isTrashExpired(booking)) return;
+      if (!booking?.deletedAt || isTrashExpired(booking)) return { ok: false, message: "Rezerwacji nie można już przywrócić." };
       const contact = latestData.current.consents.find((item) => item.bookingId === bookingId);
-      commitBookingMutation({
+      return commitBookingMutation({
         ...booking,
         workflowStatus: booking.workflowStatusBeforeDeletion ?? "Nowa",
         workflowStatusBeforeDeletion: undefined,

@@ -191,7 +191,7 @@ describe("CalendarView — potwierdzane blokady", () => {
     }));
 
     expect(screen.getByRole("dialog", { name: "Dodaj rezerwację" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Domek")).toHaveValue(unit.id);
+    expect(screen.getByRole("button", { name: "Wybierz domek Rybak" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByLabelText("Przyjazd")).toHaveValue(start);
     expect(screen.getByLabelText("Wyjazd")).toHaveValue(end);
   });
@@ -256,7 +256,7 @@ describe("CalendarView — potwierdzane blokady", () => {
     fireEvent.pointerUp(endButton);
 
     expect(screen.getByRole("dialog", { name: "Dodaj rezerwację" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Domek")).toHaveValue(unit.id);
+    expect(screen.getByRole("button", { name: "Wybierz domek Rybak" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByLabelText("Przyjazd")).toHaveValue(start);
     expect(screen.getByLabelText("Wyjazd")).toHaveValue(end);
   });
