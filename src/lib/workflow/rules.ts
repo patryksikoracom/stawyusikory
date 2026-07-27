@@ -149,17 +149,6 @@ export function createTasksForBooking(booking: Booking): OpsTask[] {
       unitId: booking.unitId,
       title: "Wykonać turnover domku po wyjeździe.",
     },
-    {
-      id: `${base}-consent`,
-      bookingId: booking.id,
-      type: "Content",
-      priority: "Średni",
-      status: "Do zrobienia",
-      owner: "Patryk",
-      assigneeRole: "marketing",
-      unitId: booking.unitId,
-      title: "Dopytać o zgody na zdjęcia/content, jeśli pojawiły się materiały.",
-    },
   ];
   const minorProtection = createMinorProtectionTask(booking, `${base}-minor-protection`);
   return minorProtection ? [...tasks, minorProtection] : tasks;

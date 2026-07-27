@@ -948,7 +948,10 @@ describe("AppStoreProvider w trybie chmurowym", () => {
       booking: { id: booking.id, version: 1 },
       contact: { bookingId: booking.id },
     });
-    expect(commandBody.aggregate.tasks).toHaveLength(6);
+    expect(commandBody.aggregate.tasks).toHaveLength(5);
+    expect(commandBody.aggregate.tasks).not.toContainEqual(expect.objectContaining({
+      type: "Content",
+    }));
     expect(commandBody.aggregate.tasks).toContainEqual(expect.objectContaining({
       type: "Przed przyjazdem",
       complianceKind: "minor-protection",
@@ -963,7 +966,7 @@ describe("AppStoreProvider w trybie chmurowym", () => {
     }) => item.templateId === "cleaning-standard-v1" && item.templateVersion === 1)).toBe(true);
     expect(commandBody.aggregate.scheduledMessages).toHaveLength(8);
     expect(store?.data.bookings[0]).toMatchObject({ id: booking.id, version: 1 });
-    expect(store?.data.tasks.filter((task) => task.bookingId === booking.id)).toHaveLength(6);
+    expect(store?.data.tasks.filter((task) => task.bookingId === booking.id)).toHaveLength(5);
     expect(store?.data.scheduledMessages.filter((message) => message.bookingId === booking.id)).toHaveLength(8);
     expect(store?.syncMode).toBe("cloud");
   });

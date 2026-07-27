@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boundaryTimesOverlap, calendarBarPlacement, cancelOpenStayTasks, getBookingConflicts, getBookingDataIssues, getNextAction, nightsBetween, overlaps, rescheduleOpenTasksForBooking } from "./rules";
+import { boundaryTimesOverlap, calendarBarPlacement, cancelOpenStayTasks, createTasksForBooking, getBookingConflicts, getBookingDataIssues, getNextAction, nightsBetween, overlaps, rescheduleOpenTasksForBooking } from "./rules";
 import type { Booking, CalendarBlock, OpsTask } from "../types";
 import { initialData } from "../demo-data";
 import { todayInPoland } from "../date";
@@ -102,5 +102,12 @@ describe("availability rules", () => {
     const departed = { ...base, checkIn: "2026-07-01", checkOut: "2026-07-02", grossPrice: 1200 };
     const data = { ...initialData, bookings: [departed], blocks: [], tasks: [], departureDebriefs: [], imports: [], media: [], guests: [], consents: [] };
     expect(getBookingDataIssues(data, departed)).toEqual([]);
+  });
+
+  it("nie tworzy automatycznego zadania Content dla każdego pobytu", () => {
+    const tasks = createTasksForBooking(base);
+
+    expect(tasks.some((task) => task.type === "Content")).toBe(false);
+    expect(tasks.some((task) => task.type === "Opinia")).toBe(true);
   });
 });
