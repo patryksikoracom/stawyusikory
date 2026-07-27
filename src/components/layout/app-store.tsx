@@ -98,7 +98,7 @@ type AppStore = {
   deleteCostSetting: (costId: string) => void;
   updateSettings: (settings: AppData["settings"]) => Promise<boolean>;
   replaceWithImportedBookings: (bookings: Booking[], contacts?: ContactConsent[]) => void;
-  exportSnapshot: () => Promise<void>;
+  exportSnapshot: (passphrase: string) => Promise<void>;
   exportPricingAnalysis: () => void;
   resetDemo: () => void;
 };
@@ -2315,14 +2315,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       next.scheduledMessages = reconcileScheduledMessages(next);
       return next;
     }),
-    exportSnapshot: async () => {
-      const passphrase = window.prompt("Ustaw hasło do zaszyfrowanej kopii (minimum 12 znaków). Bez niego nie da się odzyskać danych.");
-      if (!passphrase) return;
-      try {
-        await downloadEncryptedJson(data, passphrase, `stawy-os-backup-${todayInPoland()}.stawyos`);
-      } catch (error) {
-        window.alert(error instanceof Error ? error.message : "Nie udało się utworzyć zaszyfrowanej kopii.");
-      }
+    exportSnapshot: async (passphrase) => {
+      await downloadEncryptedJson(data, passphrase, `stawy-os-backup-${todayInPoland()}.stawyos`);
     },
     exportPricingAnalysis: () => downloadPricingAnalysisDataset(data, `stawy-os-ceny-ai-${todayInPoland()}.json`),
     resetDemo: () => {

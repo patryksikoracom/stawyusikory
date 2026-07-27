@@ -29,7 +29,7 @@
 html { background: var(--paper); }
 
 body {
-  min-width: 320px;
+  min-width: 0;
   background:
     radial-gradient(circle at 73% -10%, rgba(155, 172, 96, 0.16), transparent 28rem),
     linear-gradient(120deg, rgba(255,255,255,.35), transparent 40%),
@@ -52,6 +52,11 @@ button, a, input, select, textarea { touch-action: manipulation; }
 button, a { -webkit-tap-highlight-color: transparent; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; }
+
+:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--lake) 75%, white);
+  outline-offset: 3px;
+}
 
 ::selection { background: #cfe1cc; color: #102f25; }
 
@@ -79,4 +84,9 @@ button:disabled { cursor: not-allowed; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}
+
+@media (max-width: 640px) {
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  .text-\[8px\], .text-\[9px\], .text-\[10px\], .text-\[11px\] { font-size: .75rem; }
 }

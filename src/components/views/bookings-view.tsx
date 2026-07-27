@@ -14,10 +14,12 @@ import type { DepartureDebrief } from "@/lib/types";
 import { daysLeftInTrash, isBookingInTrash } from "@/lib/booking-trash";
 import { BookingsSheet } from "@/components/bookings/bookings-sheet";
 import { calculateBookingFinance, financeIssueLabel } from "@/lib/metrics/finance";
+import { Dialog } from "@/components/ui/dialog";
 
 const statuses: WorkflowStatus[] = ["Nowa", "Potwierdzona", "Przed przyjazdem", "W trakcie", "Po pobycie", "Zamknięta", "Anulowana"];
 const tabs = ["Podsumowanie", "Płatności", "Wiadomości", "Zadania", "Historia"] as const;
 type Tab = (typeof tabs)[number];
+const bookingsPageSize = 40;
 
 function money(value?: number, currency: Booking["currency"] = "PLN") { return value == null ? "—" : new Intl.NumberFormat("pl-PL", { style: "currency", currency: currency ?? "PLN", maximumFractionDigits: 0 }).format(value); }
 function shortDate(value?: string) { return formatPolishDate(value); }
@@ -33,6 +35,7 @@ export function BookingsView({ initialId, initialView = "list" }: { initialId?: 
   const [selectedId, setSelectedId] = useState(initialId ?? data.bookings[0]?.id ?? "");
   const [descending, setDescending] = useState(true);
   const [showTrash, setShowTrash] = useState(false);
+  const [page, setPage] = useState(1);
   const activeBookings = useMemo(() => data.bookings.filter((booking) => !isBookingInTrash(booking)), [data.bookings]);
   const trashedBookings = useMemo(() => data.bookings.filter(isBookingInTrash), [data.bookings]);
   const rows = useMemo(() => activeBookings.filter((booking) => {
@@ -40,6 +43,9 @@ export function BookingsView({ initialId, initialView = "list" }: { initialId?: 
     const matchesQuery = !q || [booking.guestLabel, booking.id, booking.platformReservationNo, unitName(data.units, booking.unitId)].filter(Boolean).some((value) => String(value).toLowerCase().includes(q));
     return matchesQuery && (year === "Wszystkie" || booking.checkIn.startsWith(year)) && (platform === "Wszystkie" || booking.platform === platform) && (payment === "Wszystkie" || booking.paymentStatus === payment);
   }).sort((a, b) => descending ? b.checkIn.localeCompare(a.checkIn) : a.checkIn.localeCompare(b.checkIn)), [activeBookings, data.units, search, year, platform, payment, descending]);
+  const pageCount = Math.max(1, Math.ceil(rows.length / bookingsPageSize));
+  const currentPage = Math.min(page, pageCount);
+  const pageRows = rows.slice((currentPage - 1) * bookingsPageSize, currentPage * bookingsPageSize);
   const selected = activeBookings.find((booking) => booking.id === selectedId) ?? rows[0];
   const future = activeBookings.filter((item) => item.checkOut >= todayInPoland() && item.workflowStatus !== "Anulowana").length;
   const unsettled = activeBookings.filter((item) => ["Do uzupełnienia", "Do dopłaty", "Częściowo"].includes(item.paymentStatus)).length;
@@ -48,6 +54,7 @@ export function BookingsView({ initialId, initialView = "list" }: { initialId?: 
 
   function changeView(mode: "list" | "sheet") {
     setViewMode(mode);
+    setPage(1);
     router.replace(mode === "sheet" ? "/bookings?view=sheet" : "/bookings", { scroll: false });
   }
 
@@ -67,20 +74,21 @@ export function BookingsView({ initialId, initialView = "list" }: { initialId?: 
 
     <Card className="animate-rise-3 overflow-hidden">
       <div className="grid gap-3 border-b border-[#e2dbce] p-4 lg:grid-cols-[1fr_130px_170px_190px_auto]">
-        <div className="relative"><Icon className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[#7b867f]" name="search"/><input className={`${inputClass} pl-10`} placeholder="Szukaj gościa, numeru lub domku..." value={search} onChange={(event) => setSearch(event.target.value)} /></div>
-        <select aria-label="Filtr roku" className={inputClass} value={year} onChange={(event) => setYear(event.target.value)}><option>Wszystkie</option>{years.map((item) => <option key={item}>{item}</option>)}</select>
-        <select className={inputClass} value={platform} onChange={(event) => setPlatform(event.target.value)}><option>Wszystkie</option>{Array.from(new Set(activeBookings.map((item) => item.platform))).map((item) => <option key={item}>{item}</option>)}</select>
-        <select className={inputClass} value={payment} onChange={(event) => setPayment(event.target.value)}><option>Wszystkie</option>{Array.from(new Set(activeBookings.map((item) => item.paymentStatus))).map((item) => <option key={item}>{item}</option>)}</select>
+        <div className="relative"><Icon className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[#7b867f]" name="search"/><input className={`${inputClass} pl-10`} placeholder="Szukaj gościa, numeru lub domku..." value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} /></div>
+        <select aria-label="Filtr roku" className={inputClass} value={year} onChange={(event) => { setYear(event.target.value); setPage(1); }}><option>Wszystkie</option>{years.map((item) => <option key={item}>{item}</option>)}</select>
+        <select aria-label="Filtr kanału rezerwacji" className={inputClass} value={platform} onChange={(event) => { setPlatform(event.target.value); setPage(1); }}><option>Wszystkie</option>{Array.from(new Set(activeBookings.map((item) => item.platform))).map((item) => <option key={item}>{item}</option>)}</select>
+        <select aria-label="Filtr płatności" className={inputClass} value={payment} onChange={(event) => { setPayment(event.target.value); setPage(1); }}><option>Wszystkie</option>{Array.from(new Set(activeBookings.map((item) => item.paymentStatus))).map((item) => <option key={item}>{item}</option>)}</select>
         <div className="flex gap-2"><div className="flex rounded-xl bg-[#ebe7de] p-1"><button className={`rounded-lg px-3 text-xs font-black ${viewMode === "list" ? "bg-white shadow-sm" : "text-[#6d7972]"}`} onClick={() => changeView("list")}>Lista</button><button className={`rounded-lg px-3 text-xs font-black ${viewMode === "sheet" ? "bg-white shadow-sm" : "text-[#6d7972]"}`} onClick={() => changeView("sheet")}>Arkusz</button></div><Button variant="secondary" onClick={() => setShowTrash(true)}>Kosz{trashedBookings.length ? ` (${trashedBookings.length})` : ""}</Button><Button variant="secondary" onClick={downloadCsv}><Icon className="size-4" name="download"/>Eksport</Button></div>
       </div>
 
-      {viewMode === "sheet" ? <BookingsSheet rows={rows}/> : <div className="grid min-h-[620px] xl:grid-cols-[390px_minmax(0,1fr)]">
+      {viewMode === "sheet" ? <><BookingsSheet rows={pageRows}/><BookingsPagination currentPage={currentPage} pageCount={pageCount} resultCount={rows.length} onPageChange={setPage}/></> : <div className="grid min-h-[620px] xl:grid-cols-[390px_minmax(0,1fr)]">
         <aside className="max-h-[760px] overflow-y-auto border-b border-[#e2dbce] bg-[#f7f4ed] xl:border-b-0 xl:border-r">
-          <div className="flex items-center justify-between px-4 py-3 text-xs font-black text-[#6a7770]"><span>{rows.length} wyników</span><button className="inline-flex items-center gap-1" onClick={() => setDescending((value) => !value)}><Icon className="size-3.5" name="filter"/>{descending ? "Najnowsze" : "Najbliższe"}</button></div>
+          <div className="flex items-center justify-between px-4 py-3 text-xs font-black text-[#6a7770]"><span>{rows.length} wyników · {rows.length ? `${(currentPage - 1) * bookingsPageSize + 1}–${Math.min(currentPage * bookingsPageSize, rows.length)}` : "0"}</span><button className="inline-flex min-h-11 items-center gap-1" onClick={() => { setDescending((value) => !value); setPage(1); }}><Icon className="size-3.5" name="filter"/>{descending ? "Najnowsze" : "Najbliższe"}</button></div>
           <div className="grid gap-1 px-2 pb-3">
-            {rows.map((booking) => <BookingRow active={selected?.id === booking.id} booking={booking} key={booking.id} onClick={() => { setSelectedId(booking.id); router.push(`/bookings/${booking.id}`, { scroll: false }); }} unit={unitName(data.units, booking.unitId)} nextAction={getNextAction(data, booking)} />)}
+            {pageRows.map((booking) => <BookingRow active={selected?.id === booking.id} booking={booking} key={booking.id} onClick={() => { setSelectedId(booking.id); router.push(`/bookings/${booking.id}`, { scroll: false }); }} unit={unitName(data.units, booking.unitId)} nextAction={getNextAction(data, booking)} />)}
             {!rows.length ? <p className="p-8 text-center text-sm font-bold text-[#738078]">Brak rezerwacji dla tych filtrów.</p> : null}
           </div>
+          <BookingsPagination currentPage={currentPage} pageCount={pageCount} resultCount={rows.length} onPageChange={setPage}/>
         </aside>
         <main className="min-w-0 bg-[#fffdf8]">{selected ? <BookingCommandCenter booking={selected} /> : <div className="grid h-full place-items-center p-10 text-center"><div><Icon className="mx-auto size-10 text-[#829052]" name="booking"/><p className="mt-3 font-display text-2xl font-semibold">Wybierz rezerwację</p></div></div>}</main>
       </div>}
@@ -91,12 +99,19 @@ export function BookingsView({ initialId, initialView = "list" }: { initialId?: 
 
 function BookingTrashDialog({ bookings, onClose }: { bookings: Booking[]; onClose: () => void }) {
   const { restoreBooking } = useAppStore();
-  return <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#102c24]/70 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
-    <section aria-labelledby="booking-trash-title" aria-modal="true" className="my-6 w-full max-w-2xl rounded-[22px] bg-[#fffdf8] shadow-2xl" role="dialog">
+  return <Dialog ariaLabelledby="booking-trash-title" className="my-6 w-full max-w-2xl rounded-[22px] bg-[#fffdf8] shadow-2xl" onClose={onClose} overlayClassName="grid place-items-center overflow-y-auto">
       <div className="flex items-start justify-between border-b border-[#e3dccf] p-6"><div><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#a84a2e]">Usunięte rezerwacje</p><h2 className="font-display text-2xl font-semibold" id="booking-trash-title">Kosz rezerwacji</h2><p className="mt-1 text-sm text-[#68756f]">Po 30 dniach pozycje są usuwane automatycznie.</p></div><button aria-label="Zamknij" type="button" onClick={onClose}><Icon className="size-5" name="close"/></button></div>
       <div className="grid gap-3 p-5">{bookings.length ? bookings.sort((a, b) => String(b.deletedAt).localeCompare(String(a.deletedAt))).map((booking) => <article className="flex flex-col gap-3 rounded-2xl border border-[#e4dac7] bg-white p-4 sm:flex-row sm:items-center" key={booking.id}><div className="min-w-0 flex-1"><p className="truncate text-sm font-black">{booking.guestLabel}</p><p className="mt-1 text-xs text-[#68756f]">{shortDate(booking.checkIn)} – {shortDate(booking.checkOut)} · {booking.id}</p><p className="mt-2 text-xs font-bold text-[#9b4029]">{daysLeftInTrash(booking)} dni do trwałego usunięcia</p></div><Button variant="secondary" onClick={() => restoreBooking(booking.id)}>Przywróć</Button></article>) : <p className="p-8 text-center text-sm font-bold text-[#738078]">Kosz jest pusty.</p>}</div>
-    </section>
-  </div>;
+  </Dialog>;
+}
+
+function BookingsPagination({ currentPage, pageCount, resultCount, onPageChange }: { currentPage: number; pageCount: number; resultCount: number; onPageChange: (page: number) => void }) {
+  if (resultCount <= bookingsPageSize) return null;
+  return <nav aria-label="Strony rezerwacji" className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-10 flex flex-wrap items-center justify-between gap-2 border-t border-[#ded7ca] bg-[#fffdf8]/95 px-3 py-3 backdrop-blur lg:bottom-0">
+    <Button aria-label="Poprzednia strona rezerwacji" disabled={currentPage === 1} variant="secondary" onClick={() => onPageChange(currentPage - 1)}><Icon className="size-4 rotate-180" name="chevron"/>Wstecz</Button>
+    <p aria-live="polite" className="text-xs font-black text-[#5f6f67]">Strona {currentPage} z {pageCount}</p>
+    <Button aria-label="Następna strona rezerwacji" disabled={currentPage === pageCount} variant="secondary" onClick={() => onPageChange(currentPage + 1)}>Dalej<Icon className="size-4" name="chevron"/></Button>
+  </nav>;
 }
 
 function Summary({ label, value, note, icon, warn = false }: { label: string; value: string | number; note: string; icon: IconName; warn?: boolean }) {
@@ -113,6 +128,7 @@ function BookingCommandCenter({ booking }: { booking: Booking }) {
   const [tab, setTab] = useState<Tab>("Podsumowanie");
   const [editing, setEditing] = useState(false);
   const [actions, setActions] = useState(false);
+  const [confirmCancellation, setConfirmCancellation] = useState(false);
   const [showDebrief, setShowDebrief] = useState(false);
   const [statusError, setStatusError] = useState("");
   const profile = data.guests.find((item) => item.bookingId === booking.id);
@@ -141,7 +157,7 @@ function BookingCommandCenter({ booking }: { booking: Booking }) {
 
   return <div className="min-w-0">
     <div className="border-b border-[#e3dccf] p-5 sm:p-6">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between"><div><div className="mb-2 flex flex-wrap items-center gap-2"><Badge tone={booking.platform === "Booking" ? "lake" : booking.platform === "Airbnb" ? "bad" : "good"}>{booking.platform}</Badge><Badge tone={importMatch ? "good" : "warn"}>{importMatch ? "Dane OTA" : "Ręczny wpis"}</Badge>{booking.needsReview ? <Badge tone="warn">Wymaga uzupełnienia</Badge> : null}{conflicts.length ? <Badge tone="bad">Konflikt terminu</Badge> : null}</div><h2 className="font-display text-[30px] font-semibold leading-tight tracking-[-.03em] sm:text-[36px]">{booking.guestLabel}</h2><p className="mt-1 text-sm font-semibold text-[#68756f]">{booking.platformReservationNo || booking.id} · utworzona {shortDate(booking.bookingDate)}</p></div><div className="relative flex items-center gap-2"><Button variant="secondary" onClick={() => setTab("Wiadomości")}><Icon className="size-4" name="message"/>Napisz</Button><Button onClick={() => setActions((value) => !value)}><Icon className="size-4" name="more"/>Akcje</Button>{actions ? <div className="absolute right-0 top-12 z-20 w-52 rounded-2xl border border-[#d7cfc0] bg-white p-2 shadow-xl"><button className="w-full rounded-xl px-3 py-2 text-left text-sm font-bold hover:bg-[#f1eee6]" onClick={() => { setEditing(true); setActions(false); }}>Edytuj rezerwację</button><button className="w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-[#9b4029] hover:bg-[#f9dfd7]" onClick={() => { if (window.confirm("Anulować tę rezerwację? Termin zostanie zwolniony.")) cancelBooking(booking.id); setActions(false); }}>Anuluj rezerwację</button></div> : null}</div></div>
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between"><div><div className="mb-2 flex flex-wrap items-center gap-2"><Badge tone={booking.platform === "Booking" ? "lake" : booking.platform === "Airbnb" ? "bad" : "good"}>{booking.platform}</Badge><Badge tone={importMatch ? "good" : "warn"}>{importMatch ? "Dane OTA" : "Ręczny wpis"}</Badge>{booking.needsReview ? <Badge tone="warn">Wymaga uzupełnienia</Badge> : null}{conflicts.length ? <Badge tone="bad">Konflikt terminu</Badge> : null}</div><h2 className="font-display text-[30px] font-semibold leading-tight tracking-[-.03em] sm:text-[36px]">{booking.guestLabel}</h2><p className="mt-1 text-sm font-semibold text-[#68756f]">{booking.platformReservationNo || booking.id} · utworzona {shortDate(booking.bookingDate)}</p></div><div className="relative flex flex-wrap items-center gap-2"><Button variant="secondary" onClick={() => setTab("Wiadomości")}><Icon className="size-4" name="message"/>Napisz</Button><Button onClick={() => setActions((value) => !value)}><Icon className="size-4" name="more"/>Akcje</Button>{actions ? <div className="absolute right-0 top-12 z-20 w-52 rounded-2xl border border-[#d7cfc0] bg-white p-2 shadow-xl"><button className="min-h-11 w-full rounded-xl px-3 py-2 text-left text-sm font-bold hover:bg-[#f1eee6]" onClick={() => { setEditing(true); setActions(false); }}>Edytuj rezerwację</button><button className="min-h-11 w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-[#9b4029] hover:bg-[#f9dfd7]" onClick={() => { setConfirmCancellation(true); setActions(false); }}>Anuluj rezerwację</button></div> : null}</div></div>
       <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5"><DataPoint icon="calendar" label="Pobyt" value={`${shortDate(booking.checkIn)} – ${shortDate(booking.checkOut)}`} sub={`${nightsBetween(booking.checkIn, booking.checkOut)} nocy`} /><DataPoint icon="home" label="Domek" value={unitName(data.units, booking.unitId)} sub={`${booking.adults + booking.children} gości`} /><DataPoint icon="wallet" label="Wartość pobytu" value={money(bookingFinance.bookingValue ?? undefined, bookingFinance.currency ?? undefined)} sub="uzgodniona cena"/><DataPoint icon="plug" label="Zaksięgowano od gościa" value={money(bookingFinance.guestPaidNet, bookingFinance.currency ?? undefined)} sub="wpłaty − zwroty"/><DataPoint icon="warning" label={balanceLabel} value={money(balanceValue ?? undefined, bookingFinance.currency ?? undefined)} sub={`dane ${bookingFinance.perspectives.receivables.completeness==="complete"?"pełne":bookingFinance.perspectives.receivables.completeness==="partial"?"częściowe":"niedostępne"}`}/></div>
     </div>
 
@@ -158,6 +174,7 @@ function BookingCommandCenter({ booking }: { booking: Booking }) {
     </div>
     {editing ? <NewBookingDialog booking={booking} onClose={() => setEditing(false)} onAdded={() => setEditing(false)} /> : null}
     {showDebrief ? <DepartureDebriefSheet booking={booking} onClose={() => setShowDebrief(false)}/> : null}
+    {confirmCancellation ? <Dialog ariaDescribedby="cancel-booking-description" ariaLabelledby="cancel-booking-title" className="w-full max-w-md rounded-[22px] border border-[#e3b9ad] bg-[#fffdf8] p-6 shadow-2xl" onClose={() => setConfirmCancellation(false)} overlayClassName="grid place-items-center" role="alertdialog"><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#a84a2e]">Zmiana dostępności</p><h2 className="mt-1 font-display text-2xl font-semibold" id="cancel-booking-title">Anulować rezerwację?</h2><p className="mt-3 text-sm leading-6 text-[#5d6c65]" id="cancel-booking-description"><strong>{booking.guestLabel}</strong> otrzyma status „Anulowana”, a termin zostanie zwolniony w Stawy OS. Zewnętrzne kanały trzeba sprawdzić osobno.</p><div className="mt-6 flex flex-wrap justify-end gap-2"><Button data-dialog-initial-focus variant="secondary" onClick={() => setConfirmCancellation(false)}>Zostaw rezerwację</Button><Button variant="danger" onClick={() => { cancelBooking(booking.id); setConfirmCancellation(false); }}>Tak, anuluj</Button></div></Dialog> : null}
   </div>;
 }
 

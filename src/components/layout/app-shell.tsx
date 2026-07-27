@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { AppStoreProvider, clearPersistedAppData, useAppStore, type SyncMode } from "./app-store";
 import { AppDataGate } from "./app-data-gate";
 import { NewBookingDialog } from "@/components/bookings/new-booking-dialog";
@@ -13,6 +13,7 @@ import { createClient } from "@/lib/supabase/client";
 import { formatPolishDate } from "@/lib/date";
 import { deriveShellAlerts } from "@/lib/workflow/shell-alerts";
 import { unitName } from "@/lib/workflow/rules";
+import { Dialog } from "@/components/ui/dialog";
 
 const primaryNav: { href: string; label: string; icon: IconName }[] = [
   { href: "/dashboard", label: "Dzisiaj", icon: "today" },
@@ -91,6 +92,7 @@ function ShellInner({ children, identity }: { children: React.ReactNode; identit
     syncMode,
   } = useAppStore();
   const pathname = usePathname();
+  const newBookingTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [showAlerts, setShowAlerts] = useState(false);
   const [toast, setToast] = useState("");
@@ -99,6 +101,7 @@ function ShellInner({ children, identity }: { children: React.ReactNode; identit
   const [showAccount, setShowAccount] = useState(false);
   const [organizationSwitching, setOrganizationSwitching] = useState(false);
   const [showConflictComparison, setShowConflictComparison] = useState(false);
+  const [confirmCloudReload, setConfirmCloudReload] = useState(false);
   const [query, setQuery] = useState("");
   const dataReady = dataStatus === "ready";
   const { label: syncLabel, body: syncBody } = syncCopy(syncMode, lastSavedAt);
@@ -114,6 +117,11 @@ function ShellInner({ children, identity }: { children: React.ReactNode; identit
     return data.bookings.filter((booking) => [booking.guestLabel, booking.id, booking.platformReservationNo, unitName(data.units, booking.unitId)].filter(Boolean).some((field) => String(field).toLowerCase().includes(value))).slice(0, 8);
   }, [data, query]);
   const alerts = useMemo(() => dataReady ? deriveShellAlerts(data) : [], [data, dataReady]);
+
+  function openNewBooking(event: MouseEvent<HTMLButtonElement>) {
+    newBookingTriggerRef.current = event.currentTarget;
+    setShowNew(true);
+  }
 
   async function signOut() {
     const client = createClient();
@@ -157,11 +165,6 @@ function ShellInner({ children, identity }: { children: React.ReactNode; identit
     window.setTimeout(() => setToast(""), 5200);
   }
 
-  function confirmConflictReload() {
-    const confirmed = window.confirm("Wczytać aktualną wersję z chmury? Niezapisane zmiany w tej karcie zostaną zastąpione. Najpierw możesz je skopiować.");
-    if (confirmed) reloadAfterConflict();
-  }
-
   return (
     <div className="min-h-screen text-[#18332c] lg:grid lg:grid-cols-[252px_minmax(0,1fr)]">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-[252px] flex-col border-r border-[#d5cebf] bg-[#f7f3ea]/95 px-3 py-4 backdrop-blur lg:flex">
@@ -196,7 +199,7 @@ function ShellInner({ children, identity }: { children: React.ReactNode; identit
                 <button aria-expanded={showAlerts} aria-haspopup="dialog" aria-label={alerts.length ? `Powiadomienia: ${alerts.length}` : "Powiadomienia: brak"} className="relative grid size-10 place-items-center rounded-xl border border-[#d5cebf] bg-white text-[#53655d] transition hover:border-[#317a78] disabled:cursor-not-allowed disabled:opacity-45" disabled={!dataReady} onClick={() => setShowAlerts((value) => !value)}><Icon className="size-[18px]" name="bell" />{dataReady && alerts.length ? <span className="absolute right-2 top-2 size-2 rounded-full border-2 border-white bg-[#e86e4e]" /> : null}</button>
                 {showAlerts ? <div aria-label="Alerty operacyjne" className="absolute right-[-3rem] top-12 w-[min(360px,calc(100vw-2rem))] rounded-2xl border border-[#d7cfc0] bg-[#fffdf8] p-3 shadow-2xl sm:right-0" role="dialog"><div className="flex items-center justify-between gap-3 px-2 py-1"><p className="text-xs font-black uppercase tracking-[.15em] text-[#74814d]">Wymaga uwagi</p>{alerts.length ? <span className="rounded-full bg-[#f6e8c9] px-2 py-0.5 text-[10px] font-black text-[#7a5b19]">{alerts.length}</span> : null}</div>{alerts.map((alert) => <AlertMini key={alert.id} {...alert} />)}{!alerts.length ? <div className="mx-1 mt-2 rounded-xl bg-[#e9f1e3] px-4 py-5 text-center"><span className="mx-auto grid size-9 place-items-center rounded-full bg-[#4d986b] text-white"><Icon className="size-4" name="check" /></span><p className="mt-2 text-sm font-black">Brak spraw wymagających uwagi</p><p className="mt-1 text-xs leading-5 text-[#607069]">Aktualne dane nie tworzą żadnego alertu.</p></div> : null}</div> : null}
               </div>
-              <span className="hidden sm:block"><Button disabled={!dataReady} onClick={() => setShowNew(true)}><Icon className="size-4" name="plus" />Nowa rezerwacja</Button></span>
+              <span className="hidden sm:block"><Button disabled={!dataReady} onClick={openNewBooking}><Icon className="size-4" name="plus" />Nowa rezerwacja</Button></span>
               <div className="relative"><button aria-expanded={showAccount} aria-label={`Konto: ${identity.displayName}`} className="grid size-10 place-items-center rounded-xl bg-[#18332c] text-xs font-black text-white" onClick={() => setShowAccount((value) => !value)}>{identity.initials}</button>{showAccount ? <div className="absolute right-0 top-12 w-[min(290px,calc(100vw-2rem))] rounded-2xl border border-[#d7cfc0] bg-[#fffdf8] p-2 shadow-2xl"><div className="border-b border-[#e8e1d5] px-3 pb-3 pt-2"><p className="truncate text-sm font-black">{identity.displayName}</p><p className="mt-0.5 truncate text-xs text-[#68766f]">{identity.email ?? "Brak adresu e-mail"}</p>{identity.availableOrganizations.length > 1 ? <label className="mt-3 grid gap-1 text-[10px] font-black uppercase tracking-[.12em] text-[#68766f]">Aktywna organizacja<select aria-label="Aktywna organizacja" className="min-h-10 rounded-xl border border-[#d5cebf] bg-white px-2 text-xs font-bold normal-case tracking-normal text-[#18332c]" disabled={organizationSwitching} onChange={(event) => void switchOrganization(event.target.value)} value={identity.organizationId ?? ""}><option disabled value="">Wybierz organizację</option>{identity.availableOrganizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}</select></label> : null}<div className="mt-2 flex flex-wrap gap-1.5"><span className="rounded-full bg-[#e5ead7] px-2 py-1 text-[10px] font-black text-[#315744]">{identity.roleLabel}</span>{identity.organizationName ? <span className="max-w-full truncate rounded-full bg-[#e5ecec] px-2 py-1 text-[10px] font-black text-[#315d61]">{identity.organizationName}</span> : null}</div></div><Link className="mt-1 block rounded-xl px-3 py-2 text-sm font-bold hover:bg-[#f1eee6]" href="/settings" onClick={() => setShowAccount(false)}>Ustawienia</Link><button className="w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-[#9b4029] hover:bg-[#f9dfd7]" onClick={signOut}>Wyloguj się</button></div> : null}</div>
             </div>
           </div>
@@ -207,7 +210,7 @@ function ShellInner({ children, identity }: { children: React.ReactNode; identit
             <AppDataGate onRetry={retryDataLoad} status={dataStatus}>
               <div className="animate-rise mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                 <div><p className="text-[11px] font-black uppercase tracking-[.2em] text-[#7f8f4f]">{meta.eyebrow}</p><h1 className="font-display text-[34px] font-semibold leading-tight tracking-[-.035em] sm:text-[42px]">{pageTitle}</h1><p className="mt-1 text-sm text-[#61716a]">{meta.body}</p></div>
-                <Button className="sm:hidden" onClick={() => setShowNew(true)}><Icon className="size-4" name="plus" />Nowa rezerwacja</Button>
+                <Button className="sm:hidden" onClick={openNewBooking}><Icon className="size-4" name="plus" />Nowa rezerwacja</Button>
               </div>
               {children}
             </AppDataGate>
@@ -220,17 +223,16 @@ function ShellInner({ children, identity }: { children: React.ReactNode; identit
         <button className={`flex min-w-0 flex-col items-center gap-1 rounded-xl px-1 py-1.5 text-[9px] font-black ${showMore ? "text-[#174d3b]" : "text-[#768079]"}`} onClick={() => setShowMore(true)}><span className={`grid size-8 place-items-center rounded-xl ${showMore ? "bg-[#e5ead7]" : ""}`}><Icon className="size-[18px]" name="more" /></span>Więcej</button>
       </nav>
 
-      {showNew && dataReady ? <NewBookingDialog onClose={() => setShowNew(false)} onAdded={added} /> : null}
-      {showSearch ? <div className="fixed inset-0 z-50 bg-[#102c24]/65 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowSearch(false); }}><section className="mx-auto mt-[8vh] max-w-2xl rounded-[22px] border border-[#d7cfc0] bg-[#fffdf8] p-4 shadow-2xl"><div className="flex gap-2"><div className="relative flex-1"><Icon className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[#728078]" name="search"/><input autoFocus className="min-h-12 w-full rounded-xl border border-[#cbc3b4] bg-white pl-10 pr-4 text-sm outline-none focus:border-[#317a78]" placeholder="Gość, numer rezerwacji lub domek…" value={query} onChange={(event) => setQuery(event.target.value)} /></div><Button aria-label="Zamknij wyszukiwanie" variant="secondary" onClick={() => setShowSearch(false)}><Icon className="size-4" name="close"/></Button></div><div className="mt-3 grid gap-1">{searchResults.map((booking) => <Link className="flex items-center justify-between rounded-xl p-3 hover:bg-[#f1eee6]" href={`/bookings/${booking.id}`} key={booking.id} onClick={() => setShowSearch(false)}><span><span className="block text-sm font-black">{booking.guestLabel}</span><span className="text-xs text-[#6b7771]">{unitName(data.units, booking.unitId)} · {formatPolishDate(booking.checkIn)} – {formatPolishDate(booking.checkOut)}</span></span><Icon className="size-4" name="arrow"/></Link>)}{query.length >= 2 && !searchResults.length ? <p className="p-6 text-center text-sm font-bold text-[#6b7771]">Brak wyników.</p> : null}</div></section></div> : null}
-      {showMore ? <div className="fixed inset-0 z-50 bg-[#102c24]/65 p-4 backdrop-blur-sm lg:hidden" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowMore(false); }}><section className="absolute inset-x-3 bottom-3 rounded-[24px] border border-[#d7cfc0] bg-[#fffdf8] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl"><div className="flex items-center justify-between px-1 pb-3"><h2 className="font-display text-2xl font-semibold">Wszystkie moduły</h2><button aria-label="Zamknij" className="grid size-9 place-items-center rounded-xl border" onClick={() => setShowMore(false)}><Icon className="size-4" name="close"/></button></div><div className="grid grid-cols-2 gap-2">{[primaryNav[3], primaryNav[4], secondaryNav[1], secondaryNav[2], { href: "/media", label: "Media i zgody", icon: "guest" as const }].map((item) => <Link className="flex items-center gap-3 rounded-2xl border border-[#ded7ca] bg-white p-3 text-sm font-black" href={item.href} key={item.href} onClick={() => setShowMore(false)}><span className="grid size-9 place-items-center rounded-xl bg-[#e5ead7]"><Icon className="size-4" name={item.icon}/></span>{item.label}</Link>)}</div></section></div> : null}
-      {syncConflict ? <div className="fixed inset-0 z-[80] flex items-end justify-center bg-[#102c24]/75 p-0 backdrop-blur-sm sm:items-center sm:p-5" role="alertdialog" aria-modal="true" aria-labelledby="sync-conflict-title" aria-describedby="sync-conflict-body">
-        <section className="max-h-[94vh] w-full max-w-2xl overflow-y-auto rounded-t-[28px] border border-[#e4c8bc] bg-[#fffdf8] p-5 shadow-2xl sm:rounded-[28px] sm:p-7">
+      {showNew && dataReady ? <NewBookingDialog onClose={() => setShowNew(false)} onAdded={added} returnFocusRef={newBookingTriggerRef} /> : null}
+      {showSearch ? <Dialog ariaLabel="Wyszukiwanie rezerwacji" className="mx-auto mt-[8vh] max-w-2xl rounded-[22px] border border-[#d7cfc0] bg-[#fffdf8] p-4 shadow-2xl" onClose={() => setShowSearch(false)}><div className="flex gap-2"><div className="relative flex-1"><Icon className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[#728078]" name="search"/><input data-dialog-initial-focus className="min-h-12 w-full rounded-xl border border-[#cbc3b4] bg-white pl-10 pr-4 text-base outline-none focus:border-[#317a78] sm:text-sm" placeholder="Gość, numer rezerwacji lub domek…" value={query} onChange={(event) => setQuery(event.target.value)} /></div><Button aria-label="Zamknij wyszukiwanie" variant="secondary" onClick={() => setShowSearch(false)}><Icon className="size-4" name="close"/></Button></div><div className="mt-3 grid gap-1">{searchResults.map((booking) => <Link className="flex min-h-11 items-center justify-between rounded-xl p-3 hover:bg-[#f1eee6]" href={`/bookings/${booking.id}`} key={booking.id} onClick={() => setShowSearch(false)}><span><span className="block text-sm font-black">{booking.guestLabel}</span><span className="text-xs text-[#6b7771]">{unitName(data.units, booking.unitId)} · {formatPolishDate(booking.checkIn)} – {formatPolishDate(booking.checkOut)}</span></span><Icon className="size-4" name="arrow"/></Link>)}{query.length >= 2 && !searchResults.length ? <p className="p-6 text-center text-sm font-bold text-[#6b7771]">Brak wyników.</p> : null}</div></Dialog> : null}
+      {showMore ? <Dialog ariaLabelledby="more-modules-title" className="absolute inset-x-3 bottom-3 rounded-[24px] border border-[#d7cfc0] bg-[#fffdf8] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl" onClose={() => setShowMore(false)} overlayClassName="lg:hidden"><div className="flex items-center justify-between px-1 pb-3"><h2 className="font-display text-2xl font-semibold" id="more-modules-title">Wszystkie moduły</h2><button aria-label="Zamknij" className="grid size-11 place-items-center rounded-xl border" onClick={() => setShowMore(false)}><Icon className="size-4" name="close"/></button></div><div className="grid grid-cols-2 gap-2">{[primaryNav[3], primaryNav[4], secondaryNav[1], secondaryNav[2], { href: "/media", label: "Media i zgody", icon: "guest" as const }].map((item) => <Link className="flex min-h-12 items-center gap-3 rounded-2xl border border-[#ded7ca] bg-white p-3 text-sm font-black" href={item.href} key={item.href} onClick={() => setShowMore(false)}><span className="grid size-9 place-items-center rounded-xl bg-[#e5ead7]"><Icon className="size-4" name={item.icon}/></span>{item.label}</Link>)}</div></Dialog> : null}
+      {syncConflict ? <Dialog ariaDescribedby="sync-conflict-body" ariaLabelledby="sync-conflict-title" className="max-h-[94vh] w-full max-w-2xl overflow-y-auto rounded-t-[28px] border border-[#e4c8bc] bg-[#fffdf8] p-5 shadow-2xl sm:rounded-[28px] sm:p-7" closeDisabled onClose={() => undefined} overlayClassName="z-[80] flex items-end justify-center p-0 sm:items-center sm:p-5" role="alertdialog">
           <div className="flex items-start gap-4"><span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[#f8ddd3] text-[#9b4029]"><Icon className="size-5" name="warning"/></span><div><p className="text-[11px] font-black uppercase tracking-[.17em] text-[#a05742]">Zapis zatrzymany bez utraty danych</p><h2 className="mt-1 font-display text-3xl font-semibold" id="sync-conflict-title">Inna karta zapisała nowszą wersję</h2><p className="mt-2 text-sm leading-6 text-[#65736d]" id="sync-conflict-body">Twoje lokalne zmiany zostały zachowane na tym ekranie i nie będą automatycznie nadpisane. Skopiuj je, porównaj zakres albo świadomie wczytaj wersję z chmury.</p></div></div>
           <div className="mt-5 grid gap-2 rounded-2xl border border-[#e4d8ca] bg-[#f7f2e9] p-4 text-xs text-[#607069] sm:grid-cols-2"><p><span className="block font-black text-[#314b41]">Wersja przy edycji</span>{syncConflict.expectedVersion}</p><p><span className="block font-black text-[#314b41]">Aktualna wersja chmury</span>{syncConflict.currentVersion ?? "sprawdzanie…"}</p><p className="sm:col-span-2"><span className="block font-black text-[#314b41]">Identyfikator żądania</span><span className="break-all font-mono">{syncConflict.requestId ?? "zmiana wykryta między kartami"}</span></p></div>
           {showConflictComparison ? <div className="mt-4 rounded-2xl border border-[#d7d1c5] bg-white p-4"><div className="grid grid-cols-[1fr_auto_auto] gap-x-4 gap-y-2 text-xs"><p className="font-black text-[#314b41]">Obszar</p><p className="font-black text-[#314b41]">Tutaj</p><p className="font-black text-[#314b41]">Chmura</p>{syncConflict.changes.map((change) => <div className="col-span-3 grid grid-cols-subgrid border-t border-[#eee8de] pt-2" key={String(change.key)}><p className="font-bold">{change.label}</p><p>{change.localChanges}</p><p>{change.remoteChanges ?? "…"}</p></div>)}</div>{!syncConflict.changes.length ? <p className="text-sm text-[#65736d]">Nie wykryto różnic w obsługiwanych obszarach. Możesz bezpiecznie wczytać aktualną wersję.</p> : null}<p className="mt-3 text-[11px] leading-5 text-[#758078]">Liczby oznaczają dodane, usunięte lub zmienione rekordy względem wersji, od której zaczęła się edycja.</p></div> : null}
-          <div className="mt-6 grid gap-2 sm:grid-cols-3"><Button variant="secondary" onClick={() => setShowConflictComparison((value) => !value)}>{showConflictComparison ? "Ukryj porównanie" : "Porównaj zmiany"}</Button><Button variant="secondary" onClick={() => void copyLocalConflictChanges()}>Skopiuj moje zmiany</Button><Button onClick={confirmConflictReload}>Wczytaj z chmury</Button></div>
-        </section>
-      </div> : null}
+          <div className="mt-6 grid gap-2 sm:grid-cols-3"><Button variant="secondary" onClick={() => setShowConflictComparison((value) => !value)}>{showConflictComparison ? "Ukryj porównanie" : "Porównaj zmiany"}</Button><Button variant="secondary" onClick={() => void copyLocalConflictChanges()}>Skopiuj moje zmiany</Button><Button onClick={() => setConfirmCloudReload(true)}>Wczytaj z chmury</Button></div>
+      </Dialog> : null}
+      {confirmCloudReload ? <Dialog ariaDescribedby="confirm-cloud-reload-body" ariaLabelledby="confirm-cloud-reload-title" className="w-full max-w-md rounded-[22px] border border-[#e3b9ad] bg-[#fffdf8] p-6 shadow-2xl" onClose={() => setConfirmCloudReload(false)} overlayClassName="z-[90] grid place-items-center" role="alertdialog"><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#a84a2e]">Ostatnie potwierdzenie</p><h2 className="mt-1 font-display text-2xl font-semibold" id="confirm-cloud-reload-title">Wczytać wersję z chmury?</h2><p className="mt-3 text-sm leading-6 text-[#5d6c65]" id="confirm-cloud-reload-body">Niezapisane zmiany w tej karcie zostaną zastąpione. Najpierw możesz wrócić i skopiować swoje zmiany.</p><div className="mt-6 flex flex-wrap justify-end gap-2"><Button data-dialog-initial-focus variant="secondary" onClick={() => setConfirmCloudReload(false)}>Wróć bez wczytywania</Button><Button variant="danger" onClick={() => { setConfirmCloudReload(false); reloadAfterConflict(); }}>Tak, wczytaj chmurę</Button></div></Dialog> : null}
       {toast ? <div className="fixed bottom-24 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-xl bg-[#18332c] px-4 py-3 text-sm font-bold text-white shadow-2xl lg:bottom-6"><span className="grid size-6 place-items-center rounded-full bg-[#4d986b]"><Icon className="size-4" name="check" /></span>{toast}</div> : null}
     </div>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 import { useAppStore } from "@/components/layout/app-store";
 import { Badge, Button, Card, Field, inputClass } from "@/components/ui/primitives";
 import { Icon } from "@/components/ui/icons";
@@ -11,6 +11,7 @@ import { addLocalDays, formatLocalDate, formatPolishDate, parseLocalDate, todayI
 import { DepartureDebriefSheet } from "@/components/departures/departure-debrief-sheet";
 import { NewBookingDialog } from "@/components/bookings/new-booking-dialog";
 import { operationalCalendarBlockSchema } from "@/lib/domain/calendar-block-command";
+import { Dialog } from "@/components/ui/dialog";
 
 const dayMs = 86_400_000;
 const channelStyles: Partial<Record<Channel, string>> = {
@@ -42,57 +43,8 @@ export function CalendarView() {
   const [blockToCancel, setBlockToCancel] = useState<CalendarBlock | null>(null);
   const [blockSaving, setBlockSaving] = useState(false);
   const [blockStatus, setBlockStatus] = useState<{ tone: "success" | "error"; message: string } | null>(null);
-  const blockSavingRef = useRef(blockSaving);
   const blockTriggerRef = useRef<HTMLElement | null>(null);
-  useEffect(() => {
-    blockSavingRef.current = blockSaving;
-  }, [blockSaving]);
   const blockDialogOpen = Boolean(blockForm || blockToCancel);
-  useEffect(() => {
-    if (!blockDialogOpen) return;
-    const previouslyFocused = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
-    const returnFocus = blockTriggerRef.current ?? previouslyFocused;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const dialog = document.querySelector<HTMLElement>(
-      "[aria-labelledby='calendar-block-title'], [aria-labelledby='cancel-block-title']",
-    );
-    (dialog?.querySelector<HTMLElement>(
-      "input[placeholder='np. pobyt właścicieli lub serwis pompy']",
-    )
-      ?? dialog?.querySelector<HTMLElement>("button:not([disabled])"))?.focus();
-
-    function keydown(event: KeyboardEvent) {
-      if (event.key === "Escape" && !blockSavingRef.current) {
-        setBlockForm(null);
-        setBlockToCancel(null);
-        return;
-      }
-      if (event.key !== "Tab" || !dialog) return;
-      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(
-        "button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])",
-      ));
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last?.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first?.focus();
-      }
-    }
-
-    document.addEventListener("keydown", keydown);
-    return () => {
-      document.removeEventListener("keydown", keydown);
-      document.body.style.overflow = previousOverflow;
-      returnFocus?.focus();
-      blockTriggerRef.current = null;
-    };
-  }, [blockDialogOpen]);
   const dates = useMemo(() => Array.from({ length: daysCount }, (_, index) => addDays(anchor, index)), [anchor, daysCount]);
   const monthSegments = useMemo(() => dates.reduce<{ date: Date; start: number; span: number }[]>((segments, date, index) => {
     const previous = segments[segments.length - 1];
@@ -209,7 +161,7 @@ export function CalendarView() {
               return <div className="grid border-b border-[#ded7ca] last:border-0" style={{ gridTemplateColumns: `${unitWidth}px auto`, minHeight: density === "compact" ? 82 : 112 }} key={unit.id}><div className="sticky left-0 z-20 flex flex-col justify-center border-r border-[#ded7ca] bg-[#fffdf8] p-3"><div className="flex items-center gap-2"><span className="grid size-7 place-items-center rounded-lg bg-[#e8eee1] text-[#41684f]"><Icon className="size-3.5" name="home"/></span><p className="font-display text-[15px] font-semibold leading-tight">{unit.name}</p></div><p className="mt-1 text-[9px] font-bold uppercase tracking-[.08em] text-[#818b85]">max {unit.maxPeople} osób</p></div><div className="relative grid overflow-hidden" style={{ gridTemplateColumns: `repeat(${daysCount}, ${dayWidth}px)` }}>
                 {dates.map((date, index) => { const dateIso = iso(date); const beginsMonth = date.getDate() === 1; const weekend = [0,6].includes(date.getDay()); const background = dateIso === today ? "bg-[#edf3e8]" : weekend ? "bg-[#eeeeeb]" : "bg-[#fffdf8]"; return <button aria-label={`Dodaj rezerwację ${unit.name}, ${formatPolishDate(date)}`} className={`group relative border-r border-[#e4e2dc] text-left hover:bg-[#e3eadf] ${beginsMonth ? "border-l-2 border-l-[#b9b6ad]" : ""} ${background}`} key={dateIso} style={{ gridColumn: index + 1, gridRow: 1 }} onClick={() => startBooking(unit.id, dateIso)}><span className="pointer-events-none absolute bottom-1 right-1 hidden size-4 place-items-center rounded-full bg-[#174d3b] text-white group-hover:grid"><Icon className="size-2.5" name="plus"/></span></button>; })}
                 {bookings.map((booking, index) => <BookingBar anchor={anchor} booking={booking} compact={density === "compact"} dayWidth={dayWidth} daysCount={daysCount} index={index} key={booking.id} conflicts={getBookingConflicts(data.bookings, data.blocks, booking)} />)}
-                {blocks.map((block, index) => { const start = Math.max(0, diffDays(toDate(block.dateFrom), anchor)); const finish = Math.min(daysCount, diffDays(toDate(block.dateTo), anchor)); return <button className="z-[3] mx-1 self-end overflow-hidden rounded-lg border border-dashed border-[#9a927b] bg-[#eee8dc]/95 px-2 py-1 text-left text-[10px] font-black text-[#6d6758]" key={block.id} style={{ gridColumn: `${start + 1} / span ${Math.max(1, finish-start)}`, gridRow: 1, marginBottom: `${8 + index * 24}px` }} title={`${block.reason} · kliknij, aby anulować`} onClick={() => { setBlockStatus(null); setBlockToCancel(block); }}>{block.blockType}</button>; })}
+                {blocks.map((block, index) => { const start = Math.max(0, diffDays(toDate(block.dateFrom), anchor)); const finish = Math.min(daysCount, diffDays(toDate(block.dateTo), anchor)); return <button className="z-[3] mx-1 self-end overflow-hidden rounded-lg border border-dashed border-[#9a927b] bg-[#eee8dc]/95 px-2 py-1 text-left text-[10px] font-black text-[#6d6758]" key={block.id} style={{ gridColumn: `${start + 1} / span ${Math.max(1, finish-start)}`, gridRow: 1, marginBottom: `${8 + index * 24}px` }} title={`${block.reason} · kliknij, aby anulować`} onClick={(event) => { blockTriggerRef.current = event.currentTarget; setBlockStatus(null); setBlockToCancel(block); }}>{block.blockType}</button>; })}
               </div></div>;
             })}
           </div>
@@ -220,8 +172,34 @@ export function CalendarView() {
         <Card className="p-5 sm:p-6"><div className="flex items-start gap-3"><span className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#e3eedf] text-[#2b6646]"><Icon className="size-5" name="check" /></span><div><p className="font-display text-xl font-semibold">Kontrola lokalnych konfliktów jest aktywna</p><p className="mt-1 text-sm leading-6 text-[#63716a]">Stawy OS nie zapisze potwierdzonej rezerwacji na zajęty termin. Zewnętrzne OTA mogą jednak pobrać iCal z opóźnieniem — zawsze sprawdzaj czas ostatniej synchronizacji.</p></div></div></Card>
         <Card className="p-5 sm:p-6"><p className="text-[11px] font-black uppercase tracking-[.17em] text-[#7b894e]">Wolne noce w tym widoku</p><p className="mt-2 font-display text-2xl font-semibold">{Math.max(0, daysCount * data.units.length - totalNights)} dób</p><p className="mt-1 text-sm text-[#68756f]">Wyliczone z aktywnych rezerwacji. Sugestie cenowe wymagają skonfigurowania stawek sezonowych.</p></Card>
       </section>
-      {blockForm ? <div className="fixed inset-0 z-50 grid place-items-center bg-[#102c24]/70 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (!blockSaving && event.target === event.currentTarget) setBlockForm(null); }}><form aria-labelledby="calendar-block-title" className="w-full max-w-lg rounded-[22px] bg-[#fffdf8] p-6 shadow-2xl" onSubmit={submitBlock} role="dialog" aria-modal="true"><div className="flex items-start justify-between"><div><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#7d8b4d]">Dostępność</p><h2 className="font-display text-2xl font-semibold" id="calendar-block-title">Dodaj blokadę terminu</h2></div><button aria-label="Zamknij" disabled={blockSaving} type="button" onClick={() => setBlockForm(null)}><Icon className="size-5" name="close"/></button></div><p className="mt-2 text-xs leading-5 text-[#68756f]">Zapis w Stawy OS chroni lokalną dostępność. Potwierdzenie w kanałach wymaga osobnej synchronizacji Mobile Calendar.</p><div className="mt-5 grid gap-4 sm:grid-cols-2"><Field label="Domek"><select className={inputClass} disabled={blockSaving} value={blockForm.unitId} onChange={(event) => setBlockForm({ ...blockForm, unitId: event.target.value })}>{data.units.map((unit) => <option key={unit.id} value={unit.id}>{unit.name}</option>)}</select></Field><Field label="Rodzaj"><select className={inputClass} disabled={blockSaving} value={blockForm.blockType} onChange={(event) => setBlockForm({ ...blockForm, blockType: event.target.value as CalendarBlock["blockType"] })}>{["Właściciel","Serwis","Remont","Bufor sprzątania","Influencer/barter","Inne"].map((item) => <option key={item}>{item}</option>)}</select></Field><Field label="Od"><input className={inputClass} disabled={blockSaving} type="date" required value={blockForm.dateFrom} onChange={(event) => setBlockForm({ ...blockForm, dateFrom: event.target.value })}/></Field><Field label="Do"><input className={inputClass} disabled={blockSaving} type="date" required value={blockForm.dateTo} onChange={(event) => setBlockForm({ ...blockForm, dateTo: event.target.value })}/></Field><div className="sm:col-span-2"><Field label="Powód"><input autoFocus className={inputClass} disabled={blockSaving} maxLength={1000} required placeholder="np. pobyt właścicieli lub serwis pompy" value={blockForm.reason} onChange={(event) => setBlockForm({ ...blockForm, reason: event.target.value })}/></Field></div></div>{blockForm.dateTo <= blockForm.dateFrom ? <p className="mt-3 text-sm font-bold text-[#963c27]">Data końcowa musi być późniejsza.</p> : null}<div className="mt-6 flex justify-end gap-2"><Button disabled={blockSaving} type="button" variant="ghost" onClick={() => setBlockForm(null)}>Anuluj</Button><Button disabled={blockSaving} type="submit">{blockSaving ? "Zapisywanie…" : "Zapisz blokadę"}</Button></div></form></div> : null}
-      {blockToCancel ? <div className="fixed inset-0 z-50 grid place-items-center bg-[#102c24]/70 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (!blockSaving && event.target === event.currentTarget) setBlockToCancel(null); }}><section aria-describedby="cancel-block-description" aria-labelledby="cancel-block-title" aria-modal="true" className="w-full max-w-md rounded-[22px] border border-[#e1d4c5] bg-[#fffdf8] p-6 shadow-2xl" role="alertdialog"><span className="grid size-11 place-items-center rounded-2xl bg-[#f4dfd6] text-[#9a432e]"><Icon className="size-5" name="close"/></span><h2 className="mt-4 font-display text-2xl font-semibold" id="cancel-block-title">Anulować blokadę?</h2><p className="mt-2 text-sm leading-6 text-[#68756f]" id="cancel-block-description">„{blockToCancel.reason}” przestanie blokować termin w Stawy OS. Zmianę trzeba również sprawdzić w Mobile Calendar.</p><div className="mt-6 flex justify-end gap-2"><Button disabled={blockSaving} type="button" variant="ghost" onClick={() => setBlockToCancel(null)}>Zostaw blokadę</Button><Button disabled={blockSaving} type="button" onClick={() => void cancelSelectedBlock()}>{blockSaving ? "Anulowanie…" : "Anuluj blokadę"}</Button></div></section></div> : null}
+      {blockForm ? (
+        <Dialog
+          ariaLabelledby="calendar-block-title"
+          className="w-full max-w-lg rounded-[22px] bg-[#fffdf8] shadow-2xl"
+          closeDisabled={blockSaving}
+          onClose={() => setBlockForm(null)}
+          overlayClassName="grid place-items-center"
+          returnFocusRef={blockTriggerRef}
+        >
+          <form className="p-6" onSubmit={submitBlock}>
+            <div className="flex items-start justify-between"><div><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#7d8b4d]">Dostępność</p><h2 className="font-display text-2xl font-semibold" id="calendar-block-title">Dodaj blokadę terminu</h2></div><button aria-label="Zamknij" disabled={blockSaving} type="button" onClick={() => setBlockForm(null)}><Icon className="size-5" name="close"/></button></div><p className="mt-2 text-xs leading-5 text-[#68756f]">Zapis w Stawy OS chroni lokalną dostępność. Potwierdzenie w kanałach wymaga osobnej synchronizacji Mobile Calendar.</p><div className="mt-5 grid gap-4 sm:grid-cols-2"><Field label="Domek"><select className={inputClass} disabled={blockSaving} value={blockForm.unitId} onChange={(event) => setBlockForm({ ...blockForm, unitId: event.target.value })}>{data.units.map((unit) => <option key={unit.id} value={unit.id}>{unit.name}</option>)}</select></Field><Field label="Rodzaj"><select className={inputClass} disabled={blockSaving} value={blockForm.blockType} onChange={(event) => setBlockForm({ ...blockForm, blockType: event.target.value as CalendarBlock["blockType"] })}>{["Właściciel","Serwis","Remont","Bufor sprzątania","Influencer/barter","Inne"].map((item) => <option key={item}>{item}</option>)}</select></Field><Field label="Od"><input className={inputClass} disabled={blockSaving} type="date" required value={blockForm.dateFrom} onChange={(event) => setBlockForm({ ...blockForm, dateFrom: event.target.value })}/></Field><Field label="Do"><input className={inputClass} disabled={blockSaving} type="date" required value={blockForm.dateTo} onChange={(event) => setBlockForm({ ...blockForm, dateTo: event.target.value })}/></Field><div className="sm:col-span-2"><Field label="Powód"><input data-dialog-initial-focus className={inputClass} disabled={blockSaving} maxLength={1000} required placeholder="np. pobyt właścicieli lub serwis pompy" value={blockForm.reason} onChange={(event) => setBlockForm({ ...blockForm, reason: event.target.value })}/></Field></div></div>{blockForm.dateTo <= blockForm.dateFrom ? <p className="mt-3 text-sm font-bold text-[#963c27]">Data końcowa musi być późniejsza.</p> : null}<div className="mt-6 flex justify-end gap-2"><Button disabled={blockSaving} type="button" variant="ghost" onClick={() => setBlockForm(null)}>Anuluj</Button><Button disabled={blockSaving} type="submit">{blockSaving ? "Zapisywanie…" : "Zapisz blokadę"}</Button></div>
+          </form>
+        </Dialog>
+      ) : null}
+      {blockToCancel ? (
+        <Dialog
+          ariaDescribedby="cancel-block-description"
+          ariaLabelledby="cancel-block-title"
+          className="w-full max-w-md rounded-[22px] border border-[#e1d4c5] bg-[#fffdf8] p-6 shadow-2xl"
+          closeDisabled={blockSaving}
+          onClose={() => setBlockToCancel(null)}
+          overlayClassName="grid place-items-center"
+          returnFocusRef={blockTriggerRef}
+          role="alertdialog"
+        >
+          <span className="grid size-11 place-items-center rounded-2xl bg-[#f4dfd6] text-[#9a432e]"><Icon className="size-5" name="close"/></span><h2 className="mt-4 font-display text-2xl font-semibold" id="cancel-block-title">Anulować blokadę?</h2><p className="mt-2 text-sm leading-6 text-[#68756f]" id="cancel-block-description">„{blockToCancel.reason}” przestanie blokować termin w Stawy OS. Zmianę trzeba również sprawdzić w Mobile Calendar.</p><div className="mt-6 flex justify-end gap-2"><Button data-dialog-initial-focus disabled={blockSaving} type="button" variant="ghost" onClick={() => setBlockToCancel(null)}>Zostaw blokadę</Button><Button disabled={blockSaving} type="button" onClick={() => void cancelSelectedBlock()}>{blockSaving ? "Anulowanie…" : "Anuluj blokadę"}</Button></div>
+        </Dialog>
+      ) : null}
       {departureId ? <DepartureDebriefSheet booking={data.bookings.find((item) => item.id === departureId)!} onClose={() => setDepartureId(undefined)}/> : null}
       {bookingDraft ? <NewBookingDialog defaults={{ ...bookingDraft, arrivalTime: data.settings.defaultCheckIn, departureTime: data.settings.defaultCheckOut }} onClose={() => setBookingDraft(undefined)} onAdded={() => setBookingDraft(undefined)}/> : null}
     </div>

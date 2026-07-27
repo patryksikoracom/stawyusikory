@@ -24,7 +24,7 @@ export function Button({ className = "", variant = "primary", ...props }: Button
     ghost: "bg-transparent text-[#496058] hover:bg-[#eee9df]",
     danger: "bg-[#fbe8e2] text-[#a23c25] hover:bg-[#f7d7cd]",
   };
-  return <button className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition duration-200 disabled:opacity-45 ${variants[variant]} ${className}`} {...props} />;
+  return <button className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition duration-200 disabled:opacity-45 ${variants[variant]} ${className}`} {...props} />;
 }
 
 export function Badge({ children, tone = "neutral", className = "" }: { children: ReactNode; tone?: "neutral" | "good" | "warn" | "bad" | "lake"; className?: string }) {
@@ -42,7 +42,7 @@ export function Field({ label, children, error, hint }: { label: string; childre
   return <label className="grid gap-1.5 text-sm font-bold text-[#334b42]"><span>{label}</span>{children}{hint ? <span className="text-xs font-medium text-[#758078]">{hint}</span> : null}{error ? <span className="text-xs font-bold text-[#a13d25]">{error}</span> : null}</label>;
 }
 
-export const inputClass = "min-h-11 w-full rounded-xl border border-[#cbc3b4] bg-white px-3.5 py-2.5 text-sm text-[#18332c] outline-none transition placeholder:text-[#9a9f98] focus:border-[#317a78] focus:ring-3 focus:ring-[#317a78]/10";
+export const inputClass = "min-h-12 w-full rounded-xl border border-[#cbc3b4] bg-white px-3.5 py-2.5 text-base text-[#18332c] outline-none transition placeholder:text-[#9a9f98] focus:border-[#317a78] focus:ring-3 focus:ring-[#317a78]/10 sm:min-h-11 sm:text-sm";
 
 export function EmptyState({ title, body, action }: { title: string; body: string; action?: ReactNode }) {
   return <div className="rounded-2xl border border-dashed border-[#c9c0af] bg-[#f8f5ee] p-8 text-center"><h3 className="font-display text-xl font-semibold">{title}</h3><p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-[#66736c]">{body}</p>{action ? <div className="mt-4">{action}</div> : null}</div>;
