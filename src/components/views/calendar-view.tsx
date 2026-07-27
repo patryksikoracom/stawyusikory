@@ -71,9 +71,6 @@ export function CalendarView() {
   const end = addDays(anchor, daysCount);
   const today = todayInPoland();
   const visibleBookings = data.bookings.filter((booking) => booking.workflowStatus !== "Anulowana" && toDate(booking.checkIn) < end && toDate(booking.checkOut) >= anchor && (channel === "Wszystkie" || booking.platform === channel));
-  const conflictCount = visibleBookings.filter((booking) => getBookingConflicts(data.bookings, data.blocks, booking).length).length;
-  const totalNights = visibleBookings.reduce((sum, booking) => sum + Math.max(0, Math.min(diffDays(toDate(booking.checkOut), anchor), daysCount) - Math.max(diffDays(toDate(booking.checkIn), anchor), 0)), 0);
-  const occupancy = Math.round((totalNights / Math.max(1, daysCount * data.units.length)) * 100);
   const dayWidth = 44;
   const unitWidth = 138;
   const availableChannels = bookingChannels.filter((item) => data.bookings.some((booking) => booking.platform === item));
@@ -190,12 +187,13 @@ export function CalendarView() {
 
   return (
     <div className="flex flex-col gap-5">
-      <section className="order-[-2] animate-rise-2 flex flex-col gap-4 rounded-[20px] border border-[#d8d0c2] bg-[#fffdf8] p-4 shadow-[0_14px_40px_rgba(38,53,45,.05)] sm:flex-row sm:items-center sm:justify-between">
+      <section className="order-[-2] animate-rise-2 flex flex-col gap-3 rounded-[20px] border border-[#d8d0c2] bg-[#fffdf8] p-3 shadow-[0_14px_40px_rgba(38,53,45,.05)] xl:flex-row xl:items-center xl:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           <Button aria-label="Przesuń kalendarz wstecz" variant="secondary" onClick={() => moveCalendar(-calendarStep)}><Icon className="size-4 rotate-180" name="chevron" /></Button>
           <Button variant="secondary" onClick={showToday}>Dzisiaj</Button>
           <Button aria-label="Przesuń kalendarz dalej" variant="secondary" onClick={() => moveCalendar(calendarStep)}><Icon className="size-4" name="chevron" /></Button>
-          <div className="ml-1"><p className="font-display text-xl font-semibold capitalize">{new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" }).format(anchor)}</p><p className="text-xs font-semibold text-[#6d7972]">{formatPolishDate(anchor, { year: false })} – {formatPolishDate(addDays(anchor, daysCount - 1), { year: false })}</p></div>
+          <span className="mx-1 hidden h-7 w-px bg-[#ddd6c9] sm:block" />
+          <div className="hidden flex-wrap items-center gap-2 sm:flex"><Legend color="bg-[#27727d]" label="Booking"/><Legend color="bg-[#df735a]" label="Airbnb"/><Legend color="bg-[#55835d]" label="Direct"/><Legend color="bg-[#d9ad4f]" label="Telefon"/><Legend color="border border-dashed border-[#8d866f] bg-[#f0eadc]" label="Blokada"/></div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#cec6b7] bg-white px-3 text-sm font-black text-[#355248]" href="/calendar/year"><Icon className="size-4" name="calendar"/>Przegląd roku</Link>
@@ -218,16 +216,10 @@ export function CalendarView() {
 
       {selectionStatus ? <div aria-live="polite" className={`rounded-xl border px-4 py-3 text-sm font-bold ${selectionStatus.startsWith("Nie można") ? "border-[#e3b5a7] bg-[#f9e7e1] text-[#8a3b29]" : "border-[#b9d2bd] bg-[#e8f2e7] text-[#285d3e]"}`}>{selectionStatus}</div> : null}
 
-      <div className="animate-rise-3 hidden gap-3 sm:grid sm:grid-cols-3">
-        <MiniStat label="Obłożenie widoku" value={`${occupancy}%`} note={`${totalNights} zajętych dób`} />
-        <MiniStat label="Pobyty w okresie" value={visibleBookings.length} note={`${data.units.length} domki`} />
-        <MiniStat label="Konflikty" value={conflictCount} note={conflictCount ? "wymagają reakcji" : "kalendarz bezpieczny"} good={!conflictCount} />
-      </div>
-
       {mobileMode === "agenda" ? <section className="grid gap-3 sm:hidden">{mobileDates.map((date) => { const dateIso = iso(date); const arrivals = data.bookings.filter((item) => item.workflowStatus !== "Anulowana" && item.checkIn === dateIso); const departuresForDay = data.bookings.filter((item) => item.workflowStatus !== "Anulowana" && item.checkOut === dateIso); const stays = data.bookings.filter((item) => item.workflowStatus !== "Anulowana" && item.checkIn < dateIso && item.checkOut > dateIso); const cleaning = data.tasks.filter((item) => item.type === "Sprzątanie" && item.dueDate === dateIso && !["Zrobione","Nie dotyczy"].includes(item.status)); const scheduled = data.scheduledMessages.filter((item) => item.dueAt.startsWith(dateIso) && !["Anulowana","Wysłana","Dostarczona"].includes(item.status)); const empty = !arrivals.length && !departuresForDay.length && !stays.length && !cleaning.length && !scheduled.length; return <article key={dateIso} className={`overflow-hidden rounded-[18px] border bg-[#fffdf8] ${dateIso === today ? "border-[#80965a] shadow-[0_10px_28px_rgba(68,91,51,.1)]" : "border-[#d9d1c1]"}`}><header className={`flex items-center justify-between gap-3 px-4 py-3 ${dateIso === today ? "bg-[#e9efdd]" : "bg-[#f4f1ea]"}`}><div><p className="text-[10px] font-black uppercase tracking-[.14em] text-[#7a867e]">{dateIso === today ? "Dzisiaj" : new Intl.DateTimeFormat("pl-PL", { weekday: "long" }).format(date)}</p><p className="font-display text-xl font-semibold">{new Intl.DateTimeFormat("pl-PL", { day: "numeric", month: "long" }).format(date)}</p></div><div className="flex items-center gap-2"><Badge tone={empty ? "neutral" : "lake"}>{arrivals.length + departuresForDay.length + cleaning.length + scheduled.length} akcji</Badge><button aria-label={`${rangeStart ? "Wybierz wyjazd" : "Wybierz przyjazd"} ${dateIso}`} className="grid size-9 place-items-center rounded-xl bg-[#174d3b] text-white shadow-sm" onClick={() => selectDay(data.units[0]?.id ?? "", dateIso)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); selectDay(data.units[0]?.id ?? "", dateIso); } }}><Icon className="size-4" name="plus"/></button></div></header><div className="grid gap-2 p-3">{departuresForDay.map((booking) => <AgendaRow key={`out-${booking.id}`} icon="arrow" tone="sun" title={`Wyjazd · ${booking.guestLabel}`} body={`${unitName(data.units, booking.unitId)} · ${booking.departureTime || data.settings.defaultCheckOut}`} action="Podsumuj" onClick={() => { prepareDepartureDebriefs([booking.id]); setDepartureId(booking.id); }}/>) }{arrivals.map((booking) => <AgendaLink key={`in-${booking.id}`} booking={booking} title={`Przyjazd · ${booking.guestLabel}`} body={`${unitName(data.units, booking.unitId)} · ${booking.arrivalTime || data.settings.defaultCheckIn}`}/>)}{cleaning.map((task) => <AgendaRow key={task.id} icon="cleaning" tone="moss" title="Turnover" body={`${unitName(data.units, task.unitId)} · ${task.owner}`} />)}{scheduled.map((message) => <AgendaRow key={message.id} icon="message" tone="lake" title={data.messageTemplates.find((item) => item.id === message.templateId)?.name || "Wiadomość"} body={`${message.dueAt.slice(11,16)} · ${message.status}`} />)}{stays.map((booking) => <AgendaLink key={`stay-${booking.id}`} booking={booking} title={`Pobyt trwa · ${booking.guestLabel}`} body={unitName(data.units, booking.unitId)}/>)}{empty ? <p className="py-4 text-center text-xs font-bold text-[#7b857f]">Spokojny dzień — brak zaplanowanych akcji.</p> : null}</div></article>; })}</section> : null}
 
       <Card className={`order-[-1] animate-rise-3 overflow-hidden ${mobileMode === "agenda" ? "hidden sm:block" : "block"}`}>
-        <div className="flex flex-wrap items-center gap-3 border-b border-[#ded7ca] p-3 text-xs font-bold text-[#68756e]"><Legend color="bg-[#27727d]" label="Booking"/><Legend color="bg-[#df735a]" label="Airbnb"/><Legend color="bg-[#55835d]" label="Direct"/><Legend color="bg-[#d9ad4f]" label="Telefon"/><Legend color="border border-dashed border-[#8d866f] bg-[#f0eadc]" label="Blokada"/></div>
+        <div className="flex flex-wrap items-center gap-3 border-b border-[#ded7ca] p-2 text-xs font-bold text-[#68756e] sm:hidden"><Legend color="bg-[#27727d]" label="Booking"/><Legend color="bg-[#df735a]" label="Airbnb"/><Legend color="bg-[#55835d]" label="Direct"/><Legend color="border border-dashed border-[#8d866f] bg-[#f0eadc]" label="Blokada"/></div>
         <div className="scrollbar-thin overflow-x-auto scroll-smooth" ref={timelineRef}>
           <div className="min-w-max">
             <div className="grid border-b border-[#ded7ca] bg-[#f7f4ed]" style={{ gridTemplateColumns: `${unitWidth}px auto` }}>
@@ -253,10 +245,6 @@ export function CalendarView() {
         </div>
       </Card>
 
-      <section className="grid gap-4 lg:grid-cols-[1.2fr_.8fr]">
-        <Card className="p-5 sm:p-6"><div className="flex items-start gap-3"><span className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#e3eedf] text-[#2b6646]"><Icon className="size-5" name="check" /></span><div><p className="font-display text-xl font-semibold">Kontrola lokalnych konfliktów jest aktywna</p><p className="mt-1 text-sm leading-6 text-[#63716a]">Stawy OS nie zapisze potwierdzonej rezerwacji na zajęty termin. Zewnętrzne OTA mogą jednak pobrać iCal z opóźnieniem — zawsze sprawdzaj czas ostatniej synchronizacji.</p></div></div></Card>
-        <Card className="p-5 sm:p-6"><p className="text-[11px] font-black uppercase tracking-[.17em] text-[#7b894e]">Wolne noce w tym widoku</p><p className="mt-2 font-display text-2xl font-semibold">{Math.max(0, daysCount * data.units.length - totalNights)} dób</p><p className="mt-1 text-sm text-[#68756f]">Wyliczone z aktywnych rezerwacji. Sugestie cenowe wymagają skonfigurowania stawek sezonowych.</p></Card>
-      </section>
       {blockForm ? (
         <Dialog
           ariaLabelledby="calendar-block-title"
@@ -294,10 +282,6 @@ export function CalendarView() {
 function BookingBar({ anchor, booking, compact, dayWidth, daysCount, index, conflicts }: { anchor: Date; booking: Booking; compact: boolean; dayWidth: number; daysCount: number; index: number; conflicts: string[] }) {
   const placement = calendarBarPlacement(booking.checkIn, booking.checkOut, iso(anchor), daysCount, dayWidth);
   return <Link aria-label={`${booking.guestLabel}, kanał ${booking.platform}, ${formatPolishDate(booking.checkIn)}–${formatPolishDate(booking.checkOut)}`} className={`z-10 flex min-w-0 items-center gap-1.5 overflow-hidden border px-2 font-bold shadow-[0_5px_14px_rgba(39,62,53,.15)] transition hover:-translate-y-0.5 hover:shadow-lg ${compact ? "h-8 rounded-lg text-[10px]" : "h-12 rounded-xl text-xs"} ${conflicts.length ? "border-[#b43b27] bg-[#c94e37] text-white" : channelStyles[booking.platform] ?? "border-[#65756d] bg-[#6f8178] text-white"}`} href={`/bookings/${booking.id}`} style={{ gridColumn: `${placement.start + 1} / span ${placement.span}`, gridRow: 1, marginLeft: `${placement.marginLeft}px`, marginRight: `${placement.marginRight}px`, marginTop: `${compact ? 9 + (index % 2) * 34 : 12 + (index % 2) * 54}px` }} title={`${booking.guestLabel}: przyjazd ${formatPolishDate(booking.checkIn)} ${booking.arrivalTime || "16:00"}, wyjazd ${formatPolishDate(booking.checkOut)} ${booking.departureTime || "11:00"}`}><span className="shrink-0 rounded-full bg-black/15 px-1.5 py-0.5 text-[8px] uppercase">{booking.platform}</span><span className="truncate">{booking.guestLabel}</span><span className="ml-auto shrink-0 rounded-full bg-black/10 px-1.5 py-0.5 text-[8px]">{nightsBetween(booking.checkIn, booking.checkOut)}n</span></Link>;
-}
-
-function MiniStat({ label, value, note, good = false }: { label: string; value: string | number; note: string; good?: boolean }) {
-  return <div className="rounded-2xl border border-[#d8d0c2] bg-[#fffdf8] px-5 py-4"><div className="flex items-end justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[.14em] text-[#7b857f]">{label}</p><p className="mt-1 font-display text-3xl font-semibold">{value}</p></div>{good ? <span className="grid size-8 place-items-center rounded-full bg-[#dfeede] text-[#286144]"><Icon className="size-4" name="check"/></span> : null}</div><p className="mt-1 text-xs font-semibold text-[#6b7771]">{note}</p></div>;
 }
 
 function Legend({ color, label }: { color: string; label: string }) { return <span className="inline-flex items-center gap-1.5"><span className={`size-2.5 rounded-full ${color}`}/>{label}</span>; }

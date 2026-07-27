@@ -9,6 +9,10 @@ export function isOrganizationEditor(role: unknown): role is "owner" | "admin" {
   return role === "owner" || role === "admin";
 }
 
+export function isBookingOperator(role: unknown): role is "owner" | "admin" | "manager" {
+  return role === "owner" || role === "admin" || role === "manager";
+}
+
 export async function requireOrganization(request?: Request) {
   const supabase = await createClient();
   if (!supabase) {
