@@ -579,6 +579,14 @@ export type PlatformImport = {
   currency?: string;
   commission?: number;
   payout?: number;
+  /** Data faktycznej wypłaty środków przez platformę OTA. */
+  payoutDate?: string;
+  /** Identyfikator zestawienia lub wypłaty po stronie platformy. */
+  payoutReference?: string;
+  /** Plik źródłowy, z którego pochodzi rozliczenie. */
+  sourceFile?: string;
+  /** Sposób powiązania rozliczenia OTA z rezerwacją operacyjną. */
+  matchMethod?: "platform-unit-dates" | "unit-dates-source-correction" | "guest-unit-overlap" | "ota-only" | "mobile-calendar-only";
   paymentStatus?: PaymentStatus;
   cancellationPolicy?: string;
   arrivalTime?: string;
