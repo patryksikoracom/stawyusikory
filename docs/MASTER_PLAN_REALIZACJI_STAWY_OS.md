@@ -53,7 +53,8 @@ Commit, push i deployment są osobnymi decyzjami. Samo ukończenie lokalnej pacz
 | PR-9a / Etap 4.1 | **wdrożony online 26.07.2026 — PR #22 scalony** | jawna aktywna organizacja bez `limit(1)`, siedem ról, macierz uprawnień, projekcja PII/finansów, RLS i poprawki Advisora; testy, lint, TypeScript, build, migracja i produkcyjny smoke przechodzą |
 | PR-9b / Etap 4.2 | **wdrożony online 26.07.2026 — PR #23 scalony** | jawnie tenantowy turnover, przyjęcie/odrzucenie, kolejki zespołu, wersjonowana checklista 10 kroków, dowód gotowości, eskalacje, odświeżenie po 7 dniach i minimalna bramka wydania kluczy; testy, lint, TypeScript, build, migracja i produkcyjny smoke przechodzą |
 | PR-9c / Etap 4.3 | **wdrożony online 26.07.2026 — draft PR #24** | wersjonowany rejestr zatwierdzonego SOP, zadanie tylko dla bieżącego/przyszłego pobytu z dziećmi, minimalny dowód wykonania i kontrolowana reakcja bez danych dziecka; 347 testów, lint, TypeScript, build 35 tras, migracja z transakcyjnym rollbackiem i produkcyjny smoke przechodzą. Funkcja jest online, ale aktywacja nadal czeka na zatwierdzony SOP |
-| PR-10a / Etap 5.1 | **gotowy lokalnie do ręcznej akceptacji 27.07.2026** | wspólny dostępny dialog, blokada tła i pułapka/powrót fokusu, obsługa Escape, mobilne pola i cele dotykowe, brak natywnych `alert/confirm/prompt` oraz paginacja po 40 rekordów; 353 testy, lint, TypeScript, build 35 tras i powtórzony smoke na wąskim ekranie przechodzą |
+| PR-10a / Etap 5.1 | **wdrożony online 27.07.2026 — draft PR #26** | wspólny dostępny dialog, blokada tła i pułapka/powrót fokusu, obsługa Escape, mobilne pola i cele dotykowe, brak natywnych `alert/confirm/prompt` oraz paginacja po 40 rekordów; 353 testy, lint, TypeScript, build 35 tras i powtórzony smoke na wąskim ekranie przechodzą |
+| PR-10b / Etap 5.2 | **gotowy do publikacji online 27.07.2026** | chronologiczna agenda dnia, osobne rodzaje zdarzeń i kanały, stan domków, następna zmiana, blokady oraz ryzyko same-day turnoveru; 359 testów i smoke desktop/390/320 px przechodzą |
 
 ## Bramka wydania: MVP operatora dla taty
 
@@ -98,8 +99,8 @@ Test taty z 25.07.2026 zmienia priorytet interfejsu operatora: kalendarz, wolne 
 | 11 | Etap 4 — organizacje i role | **PR-9a — wdrożony online, PR #22 scalony** | active organization, role, RLS i izolacja PII/finansów | migracja oraz produkcyjny smoke przechodzą |
 | 12 | Etap 4 — operacje zespołu | **PR-9b — wdrożony online, PR #23 scalony** | zlecenia sprzątania, przyjęcie, checklisty per domek i eskalacja | migracja oraz produkcyjny smoke przechodzą |
 | 13 | Etap 4 — zgodność operacyjna | **PR-9c — wdrożony online, PR #24 scalony** | procedura małoletnich wynikająca z zatwierdzonego SOP i minimalizacja danych | 347 testów, migracja i produkcyjny smoke przechodzą; aktywacja czeka na zatwierdzony SOP |
-| 14 | Etap 5 — fundament UX | **PR-10a — gotowy lokalnie do ręcznej akceptacji** | wspólne dialogi, klawiatura, mobile, paginacja i wydajność | 353 testy i przypadek 1000 rekordów przechodzą; smoke klawiatury i wąskiego ekranu przechodzi; pozostaje test 200% na rzeczywistym telefonie taty |
-| 15 | Etap 5 — Dzisiaj | PR-10b | chronologiczna agenda, stan domków i same-day turnover | w 5 sekund widać przyjazdy, wyjazdy i brak gotowości |
+| 14 | Etap 5 — fundament UX | **PR-10a — wdrożony online, draft PR #26** | wspólne dialogi, klawiatura, mobile, paginacja i wydajność | 353 testy i przypadek 1000 rekordów przechodzą; smoke klawiatury i wąskiego ekranu przechodzi; pozostaje test 200% na rzeczywistym telefonie taty |
+| 15 | Etap 5 — Dzisiaj | **PR-10b — gotowy do publikacji online** | chronologiczna agenda, stan domków i same-day turnover | 359 testów oraz smoke desktop/390/320 px przechodzą; akcja wiadomości otwiera właściwą kartę rezerwacji |
 | 16 | Etap 5 — rezerwacje | PR-10c | prosty formularz, jawne filtry/sortowanie, lista i szczegół | powrót zachowuje filtry; kanał zawarcia nie miesza się ze źródłem odkrycia |
 | 17 | Etap 5 — kalendarz | PR-10d | kontekst 7 dni wstecz, kanały na paskach, drag/touch/klawiatura | szybkie utworzenie pobytu bez utraty dostępności |
 | 18 | Etap 5 — przegląd roku | PR-10e | roczny widok sprzedaży/obłożenia i deterministyczne wykrywanie luk | luki mają daty, domek, próg i dowody; brak automatycznej kampanii |
@@ -485,6 +486,19 @@ Walidacja po dwóch poprawkach wykrytych dopiero w przeglądarce:
 Końcowa regresja: **353/353 testy**, 72 pliki testowe, ESLint, TypeScript i produkcyjny build 35 tras przechodzą. Smoke w aktywnej sesji potwierdza przejście na stronę 2 z 5, brak poziomego overflow, poprawne blokowanie/odblokowanie tła, zamknięcie `Escape`, powrót fokusu i brak błędów lub ostrzeżeń aplikacji w konsoli.
 
 Jedyna ręczna bramka przed akceptacją właściciela to test na rzeczywistym telefonie taty z jego docelowym ustawieniem tekstu 200%. Lokalny smoke na efektywnym bardzo wąskim widoku nie zastępuje sprawdzenia sprzętu, systemowej skali fontu i sposobu użycia przez operatora.
+
+## PR-10b — chronologiczna agenda Dzisiaj
+
+Dashboard zaczyna się od jednego planu operacyjnego: wyjazdy, rozpoczęcia turnoveru, przyjazdy, wiadomości i pozostałe zadania są ułożone chronologicznie. Rodzaj zdarzenia, kanał rezerwacji i status są osobnymi informacjami, a kliknięcie prowadzi do właściwej czynności — w tym bezpośrednio do karty wiadomości konkretnej rezerwacji.
+
+Każdy domek ma widoczny stan operacyjny, bieżącego gościa, następną zmianę i blokadę. Same-day turnover pokazuje jawne okno czasowe oraz ryzyko wynikające z niegotowego stanu lub blokady. Agenda odróżnia podobnie nazwane zadania przez domek, gościa i właściciela zadania.
+
+Walidacja po poprawkach wykrytych w przeglądarce:
+
+- bieżący gość nie pokazuje już własnego przyjazdu jako kolejnej zmiany;
+- akcje wierszy składają się na ekranie 320 px bez poziomego przewijania;
+- kliknięcie wiadomości otwiera `/bookings/:id?tab=messages` i właściwą kartę „Wiadomości”;
+- **359/359 testów**, ESLint, TypeScript i produkcyjny build 35 tras przechodzą bez błędów aplikacji w konsoli.
 
 ## Pełne przypisanie ustaleń z walkthrough
 

@@ -25,6 +25,8 @@ import {
   financePeriodForPreset,
   type FinanceReportMetric,
 } from "@/lib/metrics/finance-report";
+import { TodayOperations } from "@/components/dashboard/today-operations";
+import { buildTodayAgenda, buildTodayUnitStates } from "@/lib/workflow/today-agenda";
 
 function isoToday() { return todayInPoland(); }
 function formatDay(date?: string) { return formatPolishDate(date, { year: false }); }
@@ -68,9 +70,13 @@ export function DashboardView() {
   const urgentCount=priorityTasks.filter((task)=>task.priority==="Wysoki").length;
   const todayDepartures = data.bookings.filter((booking) => booking.workflowStatus !== "Anulowana" && booking.checkOut === today);
   const selectedDeparture = todayDepartures.find((item) => item.id === departureId);
+  const todayAgenda = useMemo(() => buildTodayAgenda(data, today), [data, today]);
+  const todayUnitStates = useMemo(() => buildTodayUnitStates(data, today), [data, today]);
 
   return (
     <div className="grid gap-5">
+      <TodayOperations events={todayAgenda} units={todayUnitStates} onOpenDeparture={setDepartureId}/>
+
       <section className="animate-rise-2 relative overflow-hidden rounded-[24px] bg-[#123d30] text-white shadow-[0_24px_60px_rgba(18,61,48,.18)]">
         <div className="absolute -right-16 -top-24 size-72 rounded-full border-[42px] border-white/[.035]" />
         <div className="absolute bottom-0 right-0 h-28 w-2/5 bg-[radial-gradient(ellipse_at_bottom_right,rgba(155,172,96,.32),transparent_70%)]" />
@@ -89,11 +95,6 @@ export function DashboardView() {
           </div>
         </div>
       </section>
-
-      {todayDepartures.length ? <section className="animate-rise-3 overflow-hidden rounded-[22px] border border-[#d8c9ad] bg-[#f6edda] shadow-[0_16px_45px_rgba(84,66,30,.08)]">
-        <div className="flex flex-col gap-3 border-b border-[#dfd0b6] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6"><div><p className="text-[11px] font-black uppercase tracking-[.18em] text-[#887334]">Moment prawdy</p><h2 className="font-display text-2xl font-semibold">Wyjazdy dzisiaj</h2><p className="mt-1 text-sm text-[#6f6756]">Zamknij pobyt, zapisz słowa gościa i nie zgub żadnej usterki.</p></div><Badge tone={todayDepartures.some((booking) => !["Ukończony", "Pominięty"].includes(data.departureDebriefs.find((item) => item.bookingId === booking.id)?.status ?? "")) ? "warn" : "good"}>{todayDepartures.filter((booking) => !["Ukończony", "Pominięty"].includes(data.departureDebriefs.find((item) => item.bookingId === booking.id)?.status ?? "")).length} do rozmowy</Badge></div>
-        <div className="grid gap-3 p-4 lg:grid-cols-2">{todayDepartures.map((booking, index) => { const debrief = data.departureDebriefs.find((item) => item.bookingId === booking.id); const cleaning = data.tasks.find((item) => item.bookingId === booking.id && item.type === "Sprzątanie"); const next = data.bookings.filter((item) => item.unitId === booking.unitId && item.checkIn >= booking.checkOut && item.id !== booking.id && item.workflowStatus !== "Anulowana").sort((a,b) => a.checkIn.localeCompare(b.checkIn))[0]; const faults = data.issues.filter((item) => item.bookingId === booking.id && item.status !== "Rozwiązane").length; return <button key={booking.id} className="group rounded-2xl border border-[#ddcfb7] bg-[#fffdf8] p-4 text-left transition hover:-translate-y-0.5 hover:border-[#9cad70] hover:shadow-lg" onClick={() => setDepartureId(booking.id)}><div className="flex items-start justify-between gap-3"><div><p className="font-display text-xl font-semibold">{booking.guestLabel}</p><p className="mt-0.5 text-xs font-bold text-[#6d756d]">{unitName(data.units, booking.unitId)} · do {booking.departureTime || data.settings.defaultCheckOut}</p></div><Badge tone={debrief?.status === "Ukończony" ? "good" : debrief?.status === "Pominięty" ? "neutral" : "warn"}>{debrief?.status || "Oczekuje"}</Badge></div><div className="mt-4 grid grid-cols-2 gap-2 text-xs"><DepartureFact label="Sprzątanie" value={cleaning?.status || "brak zadania"}/><DepartureFact label="Płatność" value={booking.paymentStatus}/><DepartureFact label="Następny przyjazd" value={next ? formatDay(next.checkIn) : "brak"}/><DepartureFact label="Usterki" value={faults ? `${faults} otwarte` : "brak"}/></div><span className="mt-4 inline-flex items-center gap-1 text-xs font-black text-[#2d6954]">{debrief?.status === "Ukończony" ? "Otwórz podsumowanie" : `Rozpocznij · ${index + 1}/${todayDepartures.length}`}<Icon className="size-3.5 transition group-hover:translate-x-0.5" name="arrow"/></span></button>; })}</div>
-      </section> : null}
 
       <section className="animate-rise-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <PulseCard
@@ -128,7 +129,7 @@ export function DashboardView() {
 
       <div className="grid gap-5 xl:grid-cols-[1.15fr_.85fr]">
         <Card className="animate-rise-2 overflow-hidden">
-          <div className="flex items-center justify-between border-b border-[#e5ded1] p-5 sm:p-6"><div><p className="text-[11px] font-black uppercase tracking-[.18em] text-[#7d8d4c]">Rytm najbliższych dni</p><h2 className="font-display text-2xl font-semibold">Pobyty i zmiany</h2></div><Link className="inline-flex items-center gap-1 text-sm font-black text-[#24655a]" href="/calendar">Pełny kalendarz <Icon className="size-4" name="arrow" /></Link></div>
+          <div className="flex flex-col items-start gap-3 border-b border-[#e5ded1] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6"><div><p className="text-[11px] font-black uppercase tracking-[.18em] text-[#7d8d4c]">Rytm najbliższych dni</p><h2 className="font-display text-2xl font-semibold">Pobyty i zmiany</h2></div><Link className="inline-flex items-center gap-1 text-sm font-black text-[#24655a]" href="/calendar">Pełny kalendarz <Icon className="size-4" name="arrow" /></Link></div>
           <div className="grid gap-0 lg:grid-cols-2">
             <ScheduleColumn label="Przyjazdy" icon="arrow" bookings={arrivals} dateKey="checkIn" data={data} />
             <ScheduleColumn label="Wyjazdy" icon="arrow" bookings={departures} dateKey="checkOut" data={data} reverse />
@@ -145,18 +146,7 @@ export function DashboardView() {
         </Card>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[.8fr_1.2fr]">
-        <Card className="overflow-hidden">
-          <div className="border-b border-[#e5ded1] p-5 sm:p-6"><p className="text-[11px] font-black uppercase tracking-[.18em] text-[#7d8d4c]">Stan obiektu</p><h2 className="font-display text-2xl font-semibold">Domki</h2></div>
-          <div className="grid gap-3 p-4">
-            {data.units.map((unit) => {
-              const stay = active.find((item) => item.unitId === unit.id);
-              const next = arrivals.find((item) => item.unitId === unit.id);
-              return <div className="rounded-2xl border border-[#e1dace] bg-white p-4" key={unit.id}><div className="flex items-start justify-between gap-3"><div className="flex items-center gap-3"><span className={`grid size-10 place-items-center rounded-xl ${stay ? "bg-[#dcebe4] text-[#24644d]" : "bg-[#eeeae1] text-[#67726c]"}`}><Icon className="size-5" name="home" /></span><div><p className="font-black">{unit.name}</p><p className="text-xs text-[#6b7771]">{stay ? `Zajęty do ${formatDay(stay.checkOut)}` : "Wolny i gotowy"}</p></div></div><Badge tone={stay ? "lake" : "good"}>{stay ? "Goście" : "Czysty"}</Badge></div>{next ? <div className="mt-3 flex items-center gap-2 border-t border-[#eee8dd] pt-3 text-xs font-semibold text-[#5f6e67]"><Icon className="size-3.5" name="calendar" />Następny: {formatDay(next.checkIn)} · {next.adults + next.children} os.</div> : null}</div>;
-            })}
-          </div>
-        </Card>
-
+      <div>
         <Card className="overflow-hidden">
           <div className="flex items-start justify-between border-b border-[#e5ded1] p-5 sm:p-6"><div><p className="text-[11px] font-black uppercase tracking-[.18em] text-[#7d8d4c]">Bezpieczeństwo sprzedaży</p><h2 className="font-display text-2xl font-semibold">Kanały i synchronizacja</h2></div><span className="inline-flex items-center gap-2 text-xs font-black text-[#6f5b20]"><span className="size-2 rounded-full bg-[#d6a643]" />{data.sourceConnections.some((item)=>item.status==="Aktywne")?"Częściowo aktywne":"Do konfiguracji"}</span></div>
           <div className="grid gap-4 p-4 sm:grid-cols-2">
@@ -182,8 +172,6 @@ export function DashboardView() {
     </div>
   );
 }
-
-function DepartureFact({ label, value }: { label: string; value: string }) { return <div className="rounded-xl bg-[#f3efe6] px-3 py-2"><span className="block text-[9px] font-black uppercase tracking-[.12em] text-[#879087]">{label}</span><span className="mt-0.5 block truncate font-bold text-[#394d44]">{value}</span></div>; }
 
 function HeroStat({ icon, label, value, note }: { icon: IconName; label: string; value: string | number; note: string }) {
   return <div className="bg-[#143f33]/90 p-4 sm:p-5"><div className="flex items-center gap-2 text-white/55"><Icon className="size-4" name={icon} /><span className="text-[10px] font-black uppercase tracking-[.13em]">{label}</span></div><p className="mt-3 font-display text-3xl font-semibold">{value}</p><p className="mt-0.5 text-xs text-white/50">{note}</p></div>;

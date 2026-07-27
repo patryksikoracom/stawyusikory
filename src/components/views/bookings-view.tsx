@@ -24,7 +24,7 @@ const bookingsPageSize = 40;
 function money(value?: number, currency: Booking["currency"] = "PLN") { return value == null ? "—" : new Intl.NumberFormat("pl-PL", { style: "currency", currency: currency ?? "PLN", maximumFractionDigits: 0 }).format(value); }
 function shortDate(value?: string) { return formatPolishDate(value); }
 
-export function BookingsView({ initialId, initialView = "list" }: { initialId?: string; initialView?: "list" | "sheet" }) {
+export function BookingsView({ initialId, initialView = "list", initialTab = "Podsumowanie" }: { initialId?: string; initialView?: "list" | "sheet"; initialTab?: Tab }) {
   const { data } = useAppStore();
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -90,7 +90,7 @@ export function BookingsView({ initialId, initialView = "list" }: { initialId?: 
           </div>
           <BookingsPagination currentPage={currentPage} pageCount={pageCount} resultCount={rows.length} onPageChange={setPage}/>
         </aside>
-        <main className="min-w-0 bg-[#fffdf8]">{selected ? <BookingCommandCenter booking={selected} /> : <div className="grid h-full place-items-center p-10 text-center"><div><Icon className="mx-auto size-10 text-[#829052]" name="booking"/><p className="mt-3 font-display text-2xl font-semibold">Wybierz rezerwację</p></div></div>}</main>
+        <main className="min-w-0 bg-[#fffdf8]">{selected ? <BookingCommandCenter booking={selected} initialTab={initialTab} /> : <div className="grid h-full place-items-center p-10 text-center"><div><Icon className="mx-auto size-10 text-[#829052]" name="booking"/><p className="mt-3 font-display text-2xl font-semibold">Wybierz rezerwację</p></div></div>}</main>
       </div>}
     </Card>
     {showTrash ? <BookingTrashDialog bookings={trashedBookings} onClose={() => setShowTrash(false)} /> : null}
@@ -123,9 +123,9 @@ function BookingRow({ booking, unit, nextAction, active, onClick }: { booking: B
   return <button className={`w-full rounded-2xl border p-3.5 text-left transition ${active ? "border-[#b9c8a4] bg-white shadow-[0_8px_22px_rgba(38,53,45,.07)]" : "border-transparent hover:border-[#ddd5c7] hover:bg-white/70"}`} onClick={onClick}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-black">{booking.guestLabel}</p><p className="mt-0.5 truncate text-xs text-[#6e7973]">{unit} · {booking.importRef ? booking.platform : booking.id}</p></div><Badge tone={paymentTone}>{booking.paymentStatus}</Badge></div><div className="mt-3 flex items-center justify-between gap-3"><span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#50645b]"><Icon className="size-3.5" name="calendar"/>{shortDate(booking.checkIn)} – {shortDate(booking.checkOut)}</span><span className="font-display text-sm font-semibold">{money(booking.grossPrice, booking.currency)}</span></div><p className="mt-2 truncate border-t border-[#eee8dd] pt-2 text-[11px] font-semibold text-[#7a847e]">Następnie: {nextAction}</p></button>;
 }
 
-function BookingCommandCenter({ booking }: { booking: Booking }) {
+function BookingCommandCenter({ booking, initialTab }: { booking: Booking; initialTab: Tab }) {
   const { data, cancelBooking, updateBooking, updateTask } = useAppStore();
-  const [tab, setTab] = useState<Tab>("Podsumowanie");
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [editing, setEditing] = useState(false);
   const [actions, setActions] = useState(false);
   const [confirmCancellation, setConfirmCancellation] = useState(false);
