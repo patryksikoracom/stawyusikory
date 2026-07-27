@@ -56,7 +56,7 @@ Commit, push i deployment są osobnymi decyzjami. Samo ukończenie lokalnej pacz
 | PR-10a / Etap 5.1 | **wdrożony online 27.07.2026 — draft PR #26** | wspólny dostępny dialog, blokada tła i pułapka/powrót fokusu, obsługa Escape, mobilne pola i cele dotykowe, brak natywnych `alert/confirm/prompt` oraz paginacja po 40 rekordów; 353 testy, lint, TypeScript, build 35 tras i powtórzony smoke na wąskim ekranie przechodzą |
 | PR-10b / Etap 5.2 | **wdrożony online 27.07.2026 — draft PR #27** | chronologiczna agenda dnia, osobne rodzaje zdarzeń i kanały, stan domków, następna zmiana, blokady oraz ryzyko same-day turnoveru; 359 testów i smoke desktop/390/320 px przechodzą |
 | PR-10c / Etap 5.3 | **wdrożony online 27.07.2026 — draft PR #28** | operacyjna lista i osobna historia, jawne filtry i sortowanie, mobilny szczegół z zachowaniem stanu oraz uproszczony formularz z warunkowymi polami; 367 testów i smoke desktop/390/320 px przechodzą |
-| PR-10d / Etap 5.4 | **gotowy do publikacji online 27.07.2026** | kalendarz operatora startuje z 7 dniami kontekstu, pokazuje kanał i stan synchronizacji oraz tworzy wycenę przez drag, dwa dotknięcia lub Enter po kontroli konfliktu; 375 testów i smoke desktop/390/320 px przechodzą |
+| PR-10d / Etap 5.4 | **wdrożony online 27.07.2026 — draft PR #29** | kalendarz operatora startuje z 7 dniami kontekstu, pokazuje kanał i stan synchronizacji oraz tworzy wycenę przez drag, dwa dotknięcia lub Enter po kontroli konfliktu; 375 testów i smoke desktop/390/320 px przechodzą |
 
 ## Bramka wydania: MVP operatora dla taty
 
@@ -104,7 +104,7 @@ Test taty z 25.07.2026 zmienia priorytet interfejsu operatora: kalendarz, wolne 
 | 14 | Etap 5 — fundament UX | **PR-10a — wdrożony online, draft PR #26** | wspólne dialogi, klawiatura, mobile, paginacja i wydajność | 353 testy i przypadek 1000 rekordów przechodzą; smoke klawiatury i wąskiego ekranu przechodzi; pozostaje test 200% na rzeczywistym telefonie taty |
 | 15 | Etap 5 — Dzisiaj | **PR-10b — wdrożony online, draft PR #27** | chronologiczna agenda, stan domków i same-day turnover | 359 testów oraz smoke desktop/390/320 px przechodzą; akcja wiadomości otwiera właściwą kartę rezerwacji |
 | 16 | Etap 5 — rezerwacje | **PR-10c — wdrożony online, draft PR #28** | prosty formularz, jawne filtry/sortowanie, lista i szczegół | 367 testów przechodzi; powrót zachowuje filtry i scroll, a kanał zawarcia nie miesza się ze źródłem odkrycia |
-| 17 | Etap 5 — kalendarz | **PR-10d — gotowy do publikacji online** | kontekst 7 dni wstecz, kanały na paskach, drag/touch/klawiatura | 375 testów przechodzi; szybkie utworzenie pobytu zachowuje domek i daty, a konflikt zatrzymuje formularz |
+| 17 | Etap 5 — kalendarz | **PR-10d — wdrożony online, draft PR #29** | kontekst 7 dni wstecz, kanały na paskach, drag/touch/klawiatura | 375 testów przechodzi; szybkie utworzenie pobytu zachowuje domek i daty, a konflikt zatrzymuje formularz |
 | 18 | Etap 5 — przegląd roku | PR-10e | roczny widok sprzedaży/obłożenia i deterministyczne wykrywanie luk | luki mają daty, domek, próg i dowody; brak automatycznej kampanii |
 | 19 | Etap 6 — CRM | PR-11a | osoba niezależna od pobytu, deduplikacja i atrybucja | powracający gość ma jedną tożsamość i wiele pobytów |
 | 20 | Etap 6 — relacja i zgody | PR-11b | debrief, status opinii i consent ledger per cel/kanał | wycofanie właściwej zgody natychmiast blokuje daną wysyłkę/użycie |
