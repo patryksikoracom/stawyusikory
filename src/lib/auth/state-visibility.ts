@@ -10,13 +10,22 @@ type OperationalRecord = {
 
 const financeEntities = new Set(["payments", "invoices", "costSettings"]);
 const marketingEntities = new Set([
+  "people",
+  "guests",
   "media",
   "messages",
   "messageTemplates",
   "scheduledMessages",
   "marketingTouchpoints",
   "consents",
+  "consentLedger",
+  "reviewRequests",
+  "communicationConfigs",
+  "adSpend",
+  "growthExperiments",
+  "meterReadings",
 ]);
+financeEntities.add("investmentModels");
 const viewerEntities = new Set(["units", "bookings", "tasks", "checklistItems", "issues", "blocks", "settings"]);
 
 const piiKeys = /^(guest(Name|Label)?|name|firstName|lastName|email|phone|address|recipient|taxId|companyName)$/i;

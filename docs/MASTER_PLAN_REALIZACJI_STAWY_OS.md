@@ -58,7 +58,8 @@ Commit, push i deployment są osobnymi decyzjami. Samo ukończenie lokalnej pacz
 | PR-10c / Etap 5.3 | **wdrożony online 27.07.2026 — draft PR #28** | operacyjna lista i osobna historia, jawne filtry i sortowanie, mobilny szczegół z zachowaniem stanu oraz uproszczony formularz z warunkowymi polami; 367 testów i smoke desktop/390/320 px przechodzą |
 | PR-10d / Etap 5.4 | **wdrożony online 27.07.2026 — draft PR #29** | kalendarz operatora startuje z 7 dniami kontekstu, pokazuje kanał i stan synchronizacji oraz tworzy wycenę przez drag, dwa dotknięcia lub Enter po kontroli konfliktu; 375 testów i smoke desktop/390/320 px przechodzą |
 | PR-10e / Etap 5.5 | **wdrożony online 27.07.2026 — draft PR #30** | roczny stan sprzedaży obu domków, cztery metryki bez mieszania walut, porównanie na ten sam dzień oraz deterministyczne luki z sezonem, minimum pobytu i ręczną decyzją; 388 testów i smoke desktop/390/320 px przechodzą |
-| Etap 5 / PR-10a–PR-10e | **cały stos wdrożony online 27.07.2026** | wszystkie pięć paczek ma osobny draft PR i podgląd online; pełna regresja 388 testów, lint, TypeScript, build 36 tras i smoke klawiatura/desktop/390/320 px przechodzą. Pozostaje bramka pilota: rzeczywisty telefon taty z tekstem 200% |
+| PR-10f / hotfix operatora | **P0 — blokuje pilot; przyczyna potwierdzona 27.07.2026** | manager nie otrzymuje danych cennika i nie ma prawa `POST /api/bookings`; dialog zamyka się przed odpowiedzią serwera, a jedna globalna kolejka i brak stanu operacji ukrywają opóźnienie dodania/usunięcia. Zakres: uprawnienia per komenda, finanse pojedynczej rezerwacji, potwierdzony zapis, kolejki per agregat, uproszczony formularz i zagęszczony kalendarz |
+| Etap 5 / PR-10a–PR-10f | **wstrzymana akceptacja pilota** | preview PR-10a–PR-10e nie wykrył regresji roli `manager`. Publikacja kolejnych funkcji operatora czeka na PR-10f, test rzeczywistego konta taty i trwały zapis kontrolnej rezerwacji |
 
 ## Bramka wydania: MVP operatora dla taty
 
@@ -76,6 +77,8 @@ Potrzeby taty nie rozszerzają zakresu PR-6–PR-8. Są zapisane jako osobna bra
 Do czasu spełnienia tej bramki Mobile Calendar/OTA pozostaje nadrzędnym źródłem rezerwacji i dostępności. Jeżeli subskrypcja kończy się wcześniej, należy ją przedłużyć na najkrótszy praktyczny okres zamiast przełączać system bez uzgodnienia danych.
 
 Test taty z 25.07.2026 zmienia priorytet interfejsu operatora: kalendarz, wolne terminy i wycena są przed powitaniem, briefem „Dzisiaj”, zadaniami i statystykami. Pełny zakres, proces obecny/docelowy, kolejność zależności, reguły biznesowe, pominięte decyzje i miary pilota są źródłem prawdy w `PLAN_MVP_OPERATORA_TATY.md` oraz `RAPORT_Z_PRZEJSCIA_TATY_MOBILE_2026-07-25.md`.
+
+Test rzeczywistego konta taty z 27.07.2026 ujawnił incydent P0: rola `manager` nie widzi cennika, nie może zapisać rezerwacji, a optymistyczny interfejs zamyka formularz przed odpowiedzią `403`. Naprawa i plan publikacji są źródłem prawdy w `INCYDENT_REZERWACJE_OPERATORA_2026-07-27.md`. PR-10f ma pierwszeństwo przed PR-11/PR-12 i przed dalszym pilotem; nie wolno obchodzić problemu przez nadanie tacie roli `owner/admin`.
 
 ## Mapa Etapów i PR-ów
 
@@ -108,11 +111,12 @@ Test taty z 25.07.2026 zmienia priorytet interfejsu operatora: kalendarz, wolne 
 | 16 | Etap 5 — rezerwacje | **PR-10c — wdrożony online, draft PR #28** | prosty formularz, jawne filtry/sortowanie, lista i szczegół | 367 testów przechodzi; powrót zachowuje filtry i scroll, a kanał zawarcia nie miesza się ze źródłem odkrycia |
 | 17 | Etap 5 — kalendarz | **PR-10d — wdrożony online, draft PR #29** | kontekst 7 dni wstecz, kanały na paskach, drag/touch/klawiatura | 375 testów przechodzi; szybkie utworzenie pobytu zachowuje domek i daty, a konflikt zatrzymuje formularz |
 | 18 | Etap 5 — przegląd roku | **PR-10e — wdrożony online, draft PR #30** | roczny widok sprzedaży/obłożenia i deterministyczne wykrywanie luk | 388 testów przechodzi; luki mają daty, domek, próg i dowody, a system nie wykonuje automatycznej kampanii |
-| 19 | Etap 6 — CRM | PR-11a | osoba niezależna od pobytu, deduplikacja i atrybucja | powracający gość ma jedną tożsamość i wiele pobytów |
-| 20 | Etap 6 — relacja i zgody | PR-11b | debrief, status opinii i consent ledger per cel/kanał | wycofanie właściwej zgody natychmiast blokuje daną wysyłkę/użycie |
-| 21 | Etap 6 — komunikacja | PR-11c | szkice PL/DE/EN, dojazd, reguły kanałowe i historia statusów | poprawny język i kanał; wysyłka nadal zablokowana do bramki |
-| 22 | Etap 6 — wzrost | PR-11d | import reklam CSV, eksperymenty ofertowe, payback i mierzalne rekomendacje | insight pokazuje próbę, koszt, źródła i nie wykonuje akcji samodzielnie |
-| 23 | Etap 7 — integracje i go-live | seria PR-12/spike/go-live | gateway OTA, dostawcy SMS/e-mail, shadow mode i rollback | minimum 7 dni bez niewyjaśnionych różnic i potwierdzone dostarczenie wiadomości |
+| 18a | Etap 5 — hotfix operatora | **PR-10f — P0, następny do publikacji** | komendowe uprawnienia managera, cennik i saldo rezerwacji, zapis potwierdzony przez serwer, jawny czas/stany operacji, kolejki per agregat, uproszczone trzy kroki oraz kalendarz z przyklejonym miesiącem/rokiem i szerszą osią | konto taty wycenia, zapisuje i usuwa kontrolną rezerwację; reakcja UI jest natychmiastowa, typowa operacja kończy się do 2 s, po odświeżeniu stan jest trwały, a niedozwolone finanse/ustawienia nadal zwracają 403 |
+| 19 | Etap 6 — CRM | **PR-11a — gotowy lokalnie 27.07.2026** | osoba niezależna od pobytu, deduplikacja i atrybucja | testy potwierdzają kontrolowane scalanie i brak kopiowania zgód |
+| 20 | Etap 6 — relacja i zgody | **PR-11b — gotowy lokalnie 27.07.2026** | debrief, status opinii i consent ledger per cel/kanał | wycofanie dokładnej zgody natychmiast blokuje publikację/użycie |
+| 21 | Etap 6 — komunikacja | **PR-11c — gotowy lokalnie 27.07.2026** | szkice PL/DE/EN, dojazd, reguły kanałowe i historia statusów | poprawny język i kanał; wysyłka nadal zablokowana do bramki |
+| 22 | Etap 6 — wzrost | **PR-11d — gotowy lokalnie 27.07.2026** | import reklam CSV, eksperymenty ofertowe, payback i mierzalne rekomendacje | insight pokazuje próbę, koszt, źródła i nie wykonuje akcji samodzielnie |
+| 23 | Etap 7 — integracje i go-live | **PR-12 — fundament gotowy lokalnie 27.07.2026; go-live zablokowany** | kontrakty gatewaya/dostaw, shadow reports, retry, idempotencja i rollback gates | brakuje zewnętrznego spike'u, minimum 7 czystych dni i realnego delivery; źródło prawdy bez zmian |
 
 Każda paczka z sufiksem jest osobnym PR-em i ma własną bramkę. Nie łączymy kilku pozycji tylko dlatego, że należą do tego samego Etapu.
 
@@ -543,6 +547,14 @@ Roczny widok pokazuje 12 miesięcy osobno dla każdego domku i pozwala przełąc
 Porównanie poprzedniego roku odcina oba zbiory na ten sam dzień sprzedaży. Reguła luk nie używa AI: kolejne wolne noce mają klasy `1 noc`, `2–3`, `4–6` i `7+`, a zmiana sezonu lub minimum pobytu rozdziela dowody na osobne karty. Każda karta pokazuje dokładne daty, domek, sezon, minimum pobytu, czas do startu oraz opcjonalny cel obłożenia.
 
 Cel obłożenia jest opcjonalną, zapisywaną hipotezą per domek i datowana reguła sezonowa. Nie istnieje automatyczna akcja reklamy, publikacji, rabatu ani zmiany ceny.
+
+## PR-10f — P0: trwała wycena i zapis operatora
+
+PR-10f jest hotfixem wymaganym przed dalszym pilotem. Nie rozszerza managera do pełnego ownera: dopuszcza wyłącznie jawne komendy operacyjne i pokazuje cennik oraz rozliczenie konkretnej rezerwacji bez kosztów, wyniku, inwestycji, eksportu i konfiguracji finansowej.
+
+Dialog rezerwacji czeka na odpowiedź serwera, zachowuje dane przy błędzie i pokazuje stan zapisu. Wycena jest widoczna już po wyborze domku i dat. Formularz zostaje uproszczony do trzech krótkich kroków, a kalendarz odzyskuje przestrzeń przez wspólny pasek sterowania, brak kart obłożenia nad osią, przyklejony miesiąc/rok i doładowywanie dat w obu kierunkach.
+
+Pełna diagnoza, kolejność wdrożenia, ryzyka oraz kryteria akceptacji: `INCYDENT_REZERWACJE_OPERATORA_2026-07-27.md`.
 
 Walidacja po pętli poprawek: **388/388 testów**, 79 plików testowych, ESLint, TypeScript i produkcyjny build 36 tras przechodzą. Smoke desktop/390/320 px potwierdza cztery metryki, zmianę roku i filtry luk klawiaturą, osobne waluty, właściwy dzień porównania, brak poziomego overflow oraz brak błędów aplikacji w konsoli.
 

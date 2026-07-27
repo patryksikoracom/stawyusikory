@@ -114,6 +114,7 @@ export const sampleBookings: Booking[] = [
 export const initialData: AppData = {
   units,
   bookings: sampleBookings,
+  people: [],
   guests: [
     {
       bookingId: "G001",
@@ -190,6 +191,8 @@ export const initialData: AppData = {
       consentSource: "Airbnb - brak zgody marketingowej",
     },
   ],
+  consentLedger: [],
+  reviewRequests: [],
   tasks: [
     {
       id: "TASK001",
@@ -413,7 +416,17 @@ export const initialData: AppData = {
   messageTemplates: [],
   automationRules: [],
   scheduledMessages: [],
+  communicationConfigs: [{
+    id: "communication",
+    senderName: "Stawy u Sikory",
+    copyUserIds: [],
+    travelGuides: [],
+  }],
   marketingTouchpoints: [],
+  adSpend: [],
+  growthExperiments: [],
+  investmentModels: [],
+  meterReadings: [],
   auditLog: [],
   settings: {
     organizationName: "Stawy u Sikory",

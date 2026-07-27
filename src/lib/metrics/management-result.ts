@@ -304,27 +304,45 @@ export function calculateManagementResult(input: ManagementInput): ManagementRes
     if (!OTA_PLATFORMS.has(booking.platform) || actualCommissionBookings.has(booking.id)) continue;
     const imported = input.imports.find((item) => (
       item.matchedBookingId === booking.id
-      && validAmount(item.commission)
+      && (validAmount(item.commission) || validAmount(item.paymentProcessingFee))
     ));
     const currency = booking.currency;
     if (!imported || !currency) continue;
     actualCommissionBookings.add(booking.id);
-    actualAllocations.push({
-      line: {
+    const components = [
+      {
         id: `IMPORT-COMMISSION-${imported.id}`,
-        label: `Prowizja ${booking.platform}`,
-        kind: "actual",
-        category: "Prowizja OTA",
-        currency,
-        amount: imported.commission!,
-        source: `Import ${booking.platform}`,
-        sourceRef: imported.reservationNo ?? imported.id,
-        unitId: booking.unitId,
-        platform: booking.platform,
-        costSettingId: null,
+        label: imported.hostServiceFee != null
+          ? `Opłata gospodarza ${booking.platform}`
+          : `Prowizja ${booking.platform}`,
+        amount: imported.commission,
       },
-      allocations: [{ unitId: booking.unitId, amount: imported.commission! }],
-    });
+      {
+        id: `IMPORT-PAYMENT-FEE-${imported.id}`,
+        label: `Opłata za obsługę płatności ${booking.platform}`,
+        amount: imported.paymentProcessingFee,
+      },
+    ].filter((component): component is { id: string; label: string; amount: number } => (
+      validAmount(component.amount) && component.amount > 0
+    ));
+    for (const component of components) {
+      actualAllocations.push({
+        line: {
+          id: component.id,
+          label: component.label,
+          kind: "actual",
+          category: "Prowizja OTA",
+          currency,
+          amount: component.amount,
+          source: imported.sourceFile || `Import ${booking.platform}`,
+          sourceRef: imported.payoutReference ?? imported.reservationNo ?? imported.id,
+          unitId: booking.unitId,
+          platform: booking.platform,
+          costSettingId: null,
+        },
+        allocations: [{ unitId: booking.unitId, amount: component.amount }],
+      });
+    }
   }
 
   const modeledAllocations: LineAllocation[] = [];

@@ -5,7 +5,7 @@ import { requireOrganization } from "@/lib/supabase/auth-context";
 import { createServiceClient } from "@/lib/supabase/server";
 
 const entityTypes = [
-  "units", "bookings", "guests", "consents", "tasks", "media", "blocks",
+  "units", "bookings", "people", "guests", "consents", "consentLedger", "reviewRequests", "communicationConfigs", "adSpend", "growthExperiments", "investmentModels", "meterReadings", "tasks", "media", "blocks",
   "rates", "costSettings", "imports", "sourceConnections", "payments", "invoices",
   "checklistItems", "issues", "messages", "departureDebriefs", "messageTemplates",
   "automationRules", "scheduledMessages", "marketingTouchpoints", "auditLog", "settings",
@@ -66,7 +66,15 @@ export async function GET(request: Request) {
       }
       else if (
         type === "bookings"
+        || type === "people"
         || type === "consents"
+        || type === "consentLedger"
+        || type === "reviewRequests"
+        || type === "communicationConfigs"
+        || type === "adSpend"
+        || type === "growthExperiments"
+        || type === "investmentModels"
+        || type === "meterReadings"
         || type === "tasks"
         || type === "checklistItems"
         || type === "payments"

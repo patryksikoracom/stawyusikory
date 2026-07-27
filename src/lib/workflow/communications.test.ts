@@ -15,7 +15,15 @@ function fixture(overrides: Partial<AppData> = {}): AppData {
 
 describe("draft-first communication", () => {
   it("renders reservation variables and payment balance", () => {
-    const rendered = renderTemplate(defaultMessageTemplates[0], booking, fixture());
+    const rendered = renderTemplate(defaultMessageTemplates[0], booking, fixture({
+      communicationConfigs: [{
+        id: "communication",
+        bankAccountNumber: "PL00 0000 0000 0000 0000 0000 0000",
+        senderName: "Stawy u Sikory",
+        copyUserIds: [],
+        travelGuides: [],
+      }],
+    }));
     expect(rendered.body).toContain("Anna");
     expect(rendered.body).toContain("Domek Rybaka");
     expect(rendered.unresolved).toEqual([]);
@@ -24,7 +32,9 @@ describe("draft-first communication", () => {
   it("materializes one idempotent draft per matching rule and booking", () => {
     const first = reconcileScheduledMessages(fixture());
     const second = reconcileScheduledMessages({ ...fixture(), scheduledMessages: first });
-    expect(first).toHaveLength(defaultAutomationRules.length);
+    expect(first).toHaveLength(defaultAutomationRules.filter((rule) => (
+      !rule.paymentStatuses?.length || rule.paymentStatuses.includes(booking.paymentStatus)
+    )).length);
     expect(new Set(second.map((item) => item.idempotencyKey)).size).toBe(second.length);
     expect(second.map((item) => item.id)).toEqual(first.map((item) => item.id));
   });
@@ -57,6 +67,32 @@ describe("draft-first communication", () => {
   it("blocks channels with missing contact details", () => {
     const messages = reconcileScheduledMessages(fixture({ consents: [] }));
     expect(messages.find((item) => item.channel === "SMS")?.blockedReason).toContain("Brak kontaktu");
+  });
+
+  it("selects the explicit guest language and keeps delivery draft-only", () => {
+    const data = fixture({
+      guests: [{ bookingId: booking.id, personId: "PERSON-1" }],
+      people: [{
+        id: "PERSON-1",
+        displayName: "Anna Kowalska",
+        preferredLanguage: "de",
+        createdAt: "2026-07-01T00:00:00.000Z",
+        createdBy: "owner",
+      }],
+    });
+    const messages = reconcileScheduledMessages(data);
+    const confirmation = messages.find((item) => item.ruleId === "RULE-CONFIRM");
+    expect(confirmation).toMatchObject({
+      templateId: "TPL-CONFIRM-DE",
+      deliveryPolicy: "draft_only",
+    });
+    expect(confirmation?.renderedBody).toContain("Guten Tag");
+  });
+
+  it("blocks approval when language was not explicitly selected", () => {
+    expect(reconcileScheduledMessages(fixture())[0]?.blockedReason).toContain(
+      "Brak jawnie wybranego języka",
+    );
   });
 
   it("does not create communication backlog for historical imports", () => {

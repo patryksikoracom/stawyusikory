@@ -19,6 +19,9 @@ function storeWithData(overrides: Partial<typeof initialData>) {
     data: { ...initialData, ...overrides },
     updateGuest: vi.fn(),
     updateConsent: vi.fn(),
+    upsertPerson: vi.fn(),
+    mergePeople: vi.fn(),
+    upsertConsentRecord: vi.fn(),
   };
 }
 

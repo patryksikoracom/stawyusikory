@@ -392,6 +392,8 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 
 **Akceptacja etapu 6:** każda liczba na ekranie „Goście i marketing” ma możliwy do otwarcia zbiór rekordów źródłowych; przy próbie 0 nie pojawia się wniosek biznesowy; powracający gość ma jedną tożsamość; wycofana zgoda blokuje właściwy cel; szkic ma poprawny język i kanał; eksperyment pokazuje koszt oraz wynik bez automatycznego działania.
 
+**Status implementacji Etapu 6 (27.07.2026): gotowy lokalnie do osobnych PR-11a–PR-11d.** Powstały: kontrolowana tożsamość osoby, jawna atrybucja, consent ledger per cel, status opinii, wersjonowane szkice PL/DE/EN, konfiguracja dojazdu/konta/nadawcy, import reklam CSV, eksperymenty, payback, odczyty liczników i dashboard dowodów. Wycofanie dokładnej zgody natychmiast blokuje publikację mediów, a rekomendacje poniżej progu próby pozostają wyłączone. Bramka dwutygodniowego pilota nadal obowiązuje i nie jest zastąpiona testami kodu.
+
 ### Etap 7 — integracje i kontrolowany go-live (5–10 dni pracy + czas dostawców)
 
 #### 7.1 Gateway OTA
@@ -432,6 +434,8 @@ Szacunki zakładają jedną osobę rozwijającą produkt z pomocą narzędzi AI.
 - [ ] Każda integracja ma kontrakt pól, źródło prawdy, idempotencję, monitoring, retencję i rollback.
 
 **Akceptacja etapu 7:** zero niewyjaśnionych różnic OTA przez minimum 7 dni; udokumentowane RTO/RPO; sprawdzony rollback; wiadomości mają potwierdzony pełny cykl i nie tworzą duplikatów; właściciel zatwierdza każde przełączenie produkcyjne osobno.
+
+**Status fundamentu PR-12 (27.07.2026): gotowy lokalnie, go-live pozostaje zablokowany.** Kod i migracja zapisują kontrakt pól, RTO/RPO, dzienne raporty shadow mode, różnice, dowód rollbacku, akceptację właściciela oraz idempotentne webhooki. Rdzeń dostawy waliduje E.164/e-mail, wersję, źródło, język, cel, zgodę, idempotencję i retry z backoffem/alertem. Panel Integracji pokazuje rzeczywiste blokery reklam i liczników. Nie wykonano spike'u na kontach dostawców, 7–14 dni shadow mode, realnych potwierdzeń dostarczenia ani przełączenia produkcyjnego — dlatego Mobile Calendar/OTA nadal jest źródłem nadrzędnym, a wysyłka pozostaje wyłączona.
 
 ## Proponowane paczki wdrożeniowe
 

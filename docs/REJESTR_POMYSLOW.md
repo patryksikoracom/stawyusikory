@@ -2,7 +2,7 @@
 
 To jest jedno źródło prawdy dla luźnych pomysłów produktowych. Pomysł nie musi być gotową specyfikacją. Najpierw go zapisujemy, potem porównujemy z istniejącym systemem, zawężamy do małego testu i dopiero wtedy kierujemy do realizacji.
 
-Ostatnia aktualizacja: 2026-07-26.
+Ostatnia aktualizacja: 2026-07-27.
 
 ## Jak dodawać pomysły
 
@@ -47,19 +47,47 @@ Priorytet nie wynika z atrakcyjności funkcji. Liczą się: waga problemu, częs
 
 | Kolejność | ID | Pomysł | Status | Priorytet | Najbliższy krok |
 |---:|---|---|---|---|---|
-| 1 | POM-009 | Odizolowany test migracji RLS dla dwóch organizacji i siedmiu ról | Gotowy do realizacji | P1 — teraz | Sprawdzić dostępność i koszt gałęzi Supabase, a następnie utworzyć tymczasowe środowisko testowe. |
-| 2 | POM-010 | Interfejs dopasowany do roli użytkownika | Do walidacji | P1 — teraz | Przejść po aplikacji jako manager, marketing, accounting i viewer; spisać dozwolone ekrany oraz akcje. |
-| 3 | POM-011 | E2E separacji tenantów i lokalnego cache | Gotowy do realizacji | P1 — teraz | Po POM-009 zautomatyzować scenariusz dwóch kont i dwóch organizacji, w tym przełączenie organizacji w jednej przeglądarce. |
-| 4 | POM-008 | Mobilny kalendarz dostępności jako ekran startowy operatora | Gotowy do realizacji | P1 — teraz | Przetestować prototyp na telefonie taty z jego powiększonym tekstem i przejść wybór zakresu dwoma tapnięciami. |
-| 5 | POM-006 | Cennik zgodny z Mobile Calendar: sezony, święta i długie weekendy | Do walidacji | P1 — teraz | Wyeksportować lub sfotografować obowiązujące stawki i porównać 10 terminów z kalkulatorem Stawy OS. |
-| 6 | POM-005 | Szybka wycena i zapis rezerwacji podczas rozmowy z gościem | Wstrzymany | P1 — teraz | Przejść z tatą 10 rzeczywistych zapytań telefonicznych i zmierzyć zgodność ceny, czas wyceny oraz brakujące pola. |
-| 7 | POM-007 | E-mail z aplikacji: szablon, zatwierdzenie, wysyłka i status | Do walidacji | P1 — teraz | Zebrać używane szablony i ustalić, które wiadomości Mobile Calendar wysyła, z jakiego adresu oraz z jakim potwierdzeniem. |
-| 8 | POM-004 | Czytelny stan obiektu: kto jest i co wydarzy się następne | Do walidacji | P1 — teraz | Po kalendarzu sprawdzić karty domków na rzeczywistym tygodniu, w tym zmianę gości tego samego dnia. |
-| 9 | POM-001 | Ogólny rejestr faktycznych kosztów | Do pilotażu | P1 — teraz | Wprowadzić ręcznie koszty jednego zamkniętego miesiąca i porównać sumę z rachunkami. |
-| 10 | POM-012 | Audyt zmian ról i przełączeń organizacji | Do walidacji | P2 — następne | Ustalić minimalny zestaw zdarzeń audytu, retencję oraz osobę przeglądającą log. |
-| 11 | POM-013 | Uprawnienia zapisu dla managera | Do walidacji | P2 — następne | Zatwierdzić listę operacji, które manager może wykonać bez dostępu do pełnych finansów. |
-| 12 | POM-002 | Odczyty liczników i koszt energii | Do pilotażu | P2 — następne | Zapisać 2–3 kolejne odczyty jednego licznika ze zdjęciami i ręcznie potwierdzonymi wartościami. |
-| 13 | POM-003 | Rejestr zdarzeń operacyjnych, np. wcześniejszy wyjazd | Do walidacji | P3 — później | Zebrać pięć rzeczywistych przykładów i sprawdzić, których nie obsługuje już podsumowanie pobytu, zadanie lub usterka. |
+| 1 | POM-014 | Skrzynka uzgodnień Mobile Calendar ↔ OTA | Gotowy do realizacji | P1 — teraz | Pokazać 5 różnic terminów i 1 korektę Airbnb jako osobne decyzje z dowodem oraz akcją zatwierdzenia. |
+| 2 | POM-018 | Cena końcowa gościa i koszt konkurencyjności OTA | Do pilotażu | P1 — teraz | Zebrać pełne szczegóły 20 rezerwacji Airbnb i Booking oraz porównać opłatę gościa, cenę gospodarza, prowizję i wypłatę. |
+| 3 | POM-015 | Pełna karta dowodu rozliczenia OTA | Gotowy do realizacji | P1 — teraz | Dodać do szczegółu rezerwacji cenę z Mobile Calendar, brutto OTA, składniki opłat, referencję i datę wypłaty oraz metodę dopasowania. |
+| 4 | POM-009 | Odizolowany test migracji RLS dla dwóch organizacji i siedmiu ról | Gotowy do realizacji | P1 — teraz | Sprawdzić dostępność i koszt gałęzi Supabase, a następnie utworzyć tymczasowe środowisko testowe. |
+| 5 | POM-010 | Interfejs dopasowany do roli użytkownika | Do walidacji | P1 — teraz | Przejść po aplikacji jako manager, marketing, accounting i viewer; spisać dozwolone ekrany oraz akcje. |
+| 6 | POM-011 | E2E separacji tenantów i lokalnego cache | Gotowy do realizacji | P1 — teraz | Po POM-009 zautomatyzować scenariusz dwóch kont i dwóch organizacji, w tym przełączenie organizacji w jednej przeglądarce. |
+| 7 | POM-008 | Mobilny kalendarz dostępności jako ekran startowy operatora | Gotowy do realizacji | P1 — teraz | Przetestować prototyp na telefonie taty z jego powiększonym tekstem i przejść wybór zakresu dwoma tapnięciami. |
+| 8 | POM-006 | Cennik zgodny z Mobile Calendar: sezony, święta i długie weekendy | Do walidacji | P1 — teraz | Wyeksportować lub sfotografować obowiązujące stawki i porównać 10 terminów z kalkulatorem Stawy OS. |
+| 9 | POM-005 | Szybka wycena i zapis rezerwacji podczas rozmowy z gościem | Wstrzymany | P1 — teraz | Przejść z tatą 10 rzeczywistych zapytań telefonicznych i zmierzyć zgodność ceny, czas wyceny oraz brakujące pola. |
+| 10 | POM-007 | E-mail z aplikacji: szablon, zatwierdzenie, wysyłka i status | Do walidacji | P1 — teraz | Zebrać używane szablony i ustalić, które wiadomości Mobile Calendar wysyła, z jakiego adresu oraz z jakim potwierdzeniem. |
+| 11 | POM-004 | Czytelny stan obiektu: kto jest i co wydarzy się następne | Do walidacji | P1 — teraz | Po kalendarzu sprawdzić karty domków na rzeczywistym tygodniu, w tym zmianę gości tego samego dnia. |
+| 12 | POM-001 | Ogólny rejestr faktycznych kosztów | Do pilotażu | P1 — teraz | Wprowadzić ręcznie koszty jednego zamkniętego miesiąca i porównać sumę z rachunkami. |
+| 13 | POM-016 | Powtarzalna migracja z backupem, dry-runem i rollbackiem | Gotowy do realizacji | P2 — następne | Zamienić jednorazowy skrypt z 27.07 na komendę administracyjną z manifestem, kontrolą konfliktów i automatycznym odtworzeniem kopii. |
+| 14 | POM-017 | Import rozliczeń Aloha Camp | Do walidacji | P2 — następne | Pobrać pierwszy eksport rozliczeń Aloha i porównać kolumny z istniejącym modelem prowizji oraz wypłaty. |
+| 15 | POM-012 | Audyt zmian ról i przełączeń organizacji | Do walidacji | P2 — następne | Ustalić minimalny zestaw zdarzeń audytu, retencję oraz osobę przeglądającą log. |
+| 16 | POM-013 | Uprawnienia zapisu dla managera | Gotowy do realizacji | P0 — blokuje pilot | Zrealizować PR-10f według diagnozy incydentu z 27.07: zapis rezerwacji, cennik i finanse pojedynczego pobytu bez pełnego dostępu właściciela. |
+| 17 | POM-002 | Odczyty liczników i koszt energii | Do pilotażu | P2 — następne | Zapisać 2–3 kolejne odczyty jednego licznika ze zdjęciami i ręcznie potwierdzonymi wartościami. |
+| 18 | POM-003 | Rejestr zdarzeń operacyjnych, np. wcześniejszy wyjazd | Do walidacji | P3 — później | Zebrać pięć rzeczywistych przykładów i sprawdzić, których nie obsługuje już podsumowanie pobytu, zadanie lub usterka. |
+
+---
+
+## POM-018 — Cena końcowa gościa i koszt konkurencyjności OTA
+
+**Data dodania:** 2026-07-27<br>
+**Status:** Do pilotażu<br>
+**Priorytet:** P1 — teraz<br>
+**Źródło:** rozliczenie Airbnb rezerwacji Anastasia Goeppmer
+
+### Potrzeba i zakres
+
+Airbnb i Booking mogą doliczać gościowi opłatę, której nie widać w wypłacie gospodarza. Nie jest to bezpośredni koszt księgowy Stawów, ale podnosi cenę końcową i może obniżać konwersję względem rezerwacji bezpośredniej.
+
+Stawy OS powinien przechowywać osobno: cenę zapłaconą przez gościa, opłatę serwisową gościa, wartość rezerwacji dla gospodarza przed prowizją, korekty/rabaty, opłatę gospodarza, opłatę płatniczą i wypłatę. Widok porównawczy ma pokazywać efektywny narzut OTA oraz potencjalną przestrzeń cenową dla kanału direct.
+
+### Dowód startowy
+
+Rezerwacja Anastasia: gość zapłacił 3353,01 PLN, w tym 547,51 PLN opłaty serwisowej; wartość dla gospodarza przed prowizją wyniosła 2805,50 PLN, opłata gospodarza 84,17 PLN, a wypłata 2721,33 PLN.
+
+### Kryterium pilota
+
+Zebrać co najmniej 20 pełnych rozliczeń z obu platform. Jeżeli opłata gościa jest dostępna i porównywalna dla większości próbki, dodać raport według platformy, domku i terminu oraz różnicę względem ceny direct.
 
 ---
 
@@ -837,9 +865,9 @@ POM-009 i narzędzie E2E z bezpiecznymi kontami testowymi.
 ## POM-012 — Audyt zmian ról i przełączeń organizacji
 
 **Data dodania:** 2026-07-26<br>
-**Status:** Do walidacji<br>
-**Priorytet:** P2 — następne<br>
-**Źródło:** weryfikacja PR-9a
+**Status:** Gotowy do realizacji<br>
+**Priorytet:** P0 — blokuje pilot<br>
+**Źródło:** weryfikacja PR-9a oraz test rzeczywistego konta taty 2026-07-27
 
 ### Problem i oczekiwany efekt
 
@@ -866,19 +894,128 @@ Na testowej organizacji wykonać każdą zmianę i potwierdzić kompletny wpis. 
 
 ### Problem i oczekiwany efekt
 
-PR-9a zachowuje zapis ogólnego stanu dla owner/admin, dlatego manager ma obecnie bezpieczny dostęp operacyjny do odczytu bez pełnych finansów. Przed nadaniem zapisu trzeba zdecydować, które konkretne czynności są potrzebne operatorowi i nie otwierają drogi do zmiany cen, eksportu lub danych księgowych.
+PR-9a zachowuje zapis ogólnego stanu dla owner/admin, dlatego manager ma obecnie dostęp operacyjny wyłącznie do odczytu bez danych cenowych. Test taty potwierdził, że taki zakres blokuje podstawową pracę: `POST /api/bookings` zwraca `403`, wycena wynosi `0`, formularz zamyka się przed odpowiedzią serwera, a optymistycznie dodana rezerwacja znika z kalendarza.
+
+Zakres został zwalidowany przez rzeczywisty scenariusz rozmowy telefonicznej. Operator potrzebuje komendowego zapisu rezerwacji i blokad oraz ceny, zaliczki, wpłat i salda konkretnego pobytu. Nie potrzebuje kosztów firmy, wyniku, inwestycji, eksportu, zmiany cennika ani zarządzania rolami.
 
 ### Najmniejszy sensowny zakres
 
-- zebrać 10 realnych działań managera;
-- dla każdego wskazać komendę, rekord, skutki uboczne i wymagane dane;
-- nadać tylko jawne uprawnienia per komenda, np. status zadania lub blokada kalendarza;
-- wykluczyć ceny, płatności, eksport i zarządzanie członkostwem, dopóki nie zostaną osobno zatwierdzone.
+- dopuścić managera do jawnych komend utworzenia/operacyjnej edycji/anulowania rezerwacji oraz tworzenia/anulowania blokady;
+- pokazać cennik i finanse pojedynczego pobytu potrzebne do sprzedaży telefonicznej;
+- nadal wykluczyć zmianę stawek, koszty, wynik, inwestycje, eksport, ustawienia i zarządzanie członkostwem;
+- czekać z zamknięciem formularza na potwierdzenie serwera i zachowywać dane przy błędzie;
+- pokryć pełną ścieżkę testem roli `manager` w API, projekcji stanu i UI.
 
 ### Walidacja
 
-Manager wykonuje zatwierdzone działania, a próby zmiany finansów, ról, eksportu i wysyłki kończą się 403 zarówno w UI, jak i API.
+Manager widzi poprawną kwotę po wyborze dat, zapisuje rezerwację widoczną po odświeżeniu w kalendarzu i szczególe oraz otrzymuje czytelny błąd bez utraty formularza przy odrzuceniu. Próby zmiany cennika, kosztów, wyniku, ról, ustawień, eksportu i wysyłki nadal kończą się 403 zarówno w UI, jak i API.
 
 ### Zależności
 
-POM-009 oraz PR‑9b dla zleceń i turnoveru.
+PR-10f i `INCYDENT_REZERWACJE_OPERATORA_2026-07-27.md`; POM-009 pozostaje bramką pełnego testu RLS.
+
+---
+
+## POM-014 — Skrzynka uzgodnień Mobile Calendar ↔ OTA
+
+**Data dodania:** 2026-07-27<br>
+**Status:** Gotowy do realizacji<br>
+**Priorytet:** P1 — teraz<br>
+**Źródło:** produkcyjne uzgodnienie Mobile Calendar + Airbnb + Booking
+
+### Problem i oczekiwany efekt
+
+Import z 27.07 wykazał 5 rezerwacji Airbnb, w których gość i domek są jednoznaczne, ale termin rozliczenia OTA jest przesunięty albo szerszy od terminu w Mobile Calendar. Wykazał też jedną opłatę anulacyjną, której nie należy automatycznie przypisywać do wyniku bez decyzji.
+
+Aplikacja powinna pokazywać takie przypadki jako zamkniętą kolejkę decyzji, zamiast tworzyć duplikat albo ukrywać różnicę w notatce.
+
+### Najmniejszy sensowny zakres
+
+- osobny filtr „Uzgodnienia” na ekranie importu lub finansów;
+- obok siebie: gość, domek, termin Mobile Calendar, termin OTA, obie ceny i źródło;
+- decyzje: „zachowaj termin Mobile”, „przyjmij termin OTA”, „to osobne pobyty” oraz „pomiń korektę”;
+- zapis aktora, czasu, decyzji i wartości przed/po;
+- brak automatycznej zmiany dostępności dla dopasowania o pewności niższej niż pełna.
+
+### Dowód i kryterium akceptacji
+
+Fixture produkcyjny obejmuje 5 różnic terminów i 1 opłatę anulacyjną. Każdą pozycję można rozstrzygnąć, ponowny import nie przywraca zamkniętej różnicy, a bez decyzji nie powstaje podwójna rezerwacja ani koszt.
+
+---
+
+## POM-015 — Pełna karta dowodu rozliczenia OTA
+
+**Data dodania:** 2026-07-27<br>
+**Status:** Gotowy do realizacji<br>
+**Priorytet:** P1 — teraz<br>
+**Źródło:** arkusz uzgodnienia finansowego z 27.07
+
+### Problem i oczekiwany efekt
+
+Model danych przechowuje już więcej niż pokazuje karta rezerwacji: pierwotną cenę Mobile Calendar, brutto OTA, prowizję lub opłatę gospodarza, opłatę płatniczą, wypłatę netto, datę i referencję wypłaty, plik źródłowy, metodę dopasowania, pewność oraz korekty.
+
+Użytkownik powinien móc odtworzyć każdą liczbę bez otwierania arkusza i rozróżnić fakt z rozliczenia od założenia modelowego.
+
+### Najmniejszy sensowny zakres
+
+- sekcja „Dowód OTA” w zakładce płatności rezerwacji;
+- cena Mobile Calendar oraz cena brutto OTA pokazane osobno;
+- prowizja/opłata gospodarza i opłata płatnicza jako oddzielne składniki;
+- wypłata netto, data wypłaty, referencja i nazwa pliku;
+- metoda dopasowania i poziom pewności;
+- wyróżnienie, czy wartość jest faktem, korektą, czy modelem 3%;
+- link do pozycji w skrzynce uzgodnień, gdy istnieje różnica.
+
+### Kryterium akceptacji
+
+Dla próbki Airbnb i Booking użytkownik odtwarza równanie `brutto − prowizja − opłata płatnicza = wypłata`, widzi źródło każdej wartości i nie myli salda gościa z rozliczeniem OTA.
+
+---
+
+## POM-016 — Powtarzalna migracja z backupem, dry-runem i rollbackiem
+
+**Data dodania:** 2026-07-27<br>
+**Status:** Gotowy do realizacji<br>
+**Priorytet:** P2 — następne<br>
+**Źródło:** kontrolowana podmiana danych produkcyjnych z 27.07
+
+### Problem i oczekiwany efekt
+
+Jednorazowa migracja wymagała osobnego backupu, manifestu liczebności, sprawdzenia konfliktów, podmiany rekordów i weryfikacji produkcji. Ten proces powinien być możliwy do bezpiecznego powtórzenia przy kolejnym pełnym eksporcie.
+
+### Najmniejszy sensowny zakres
+
+- komenda administracyjna przyjmująca trzy eksporty i generująca tylko podgląd;
+- zaszyfrowana kopia poprzedniego stanu oraz suma kontrolna;
+- manifest: liczba rezerwacji, kontaktów, finansów, zadań, konfliktów i nierozliczonych historii;
+- transakcyjna podmiana albo automatyczne odtworzenie kopii po błędzie;
+- blokada równoległych zapisów na czas krótkiego okna migracji;
+- audyt wykonania i jawna wersja schematu importu.
+
+### Kryterium akceptacji
+
+Na odizolowanym Supabase proces przechodzi import, celowo przerwany import oraz rollback. Po każdym scenariuszu liczebności i sumy zgadzają się z manifestem, a użytkownicy, organizacje i konfiguracja pozostają nietknięte.
+
+---
+
+## POM-017 — Import rozliczeń Aloha Camp
+
+**Data dodania:** 2026-07-27<br>
+**Status:** Do walidacji<br>
+**Priorytet:** P2 — następne<br>
+**Źródło:** eksport Mobile Calendar i rozmowa z Patrykiem
+
+### Problem i oczekiwany efekt
+
+Mobile Calendar zawiera jedną rezerwację Aloha Camp, ale nie ma eksportu rozliczeń Aloha. Nie wiadomo jeszcze, jak portal opisuje cenę brutto, prowizję, podatki, opłaty i wypłatę.
+
+### Najbliższy krok i zakres walidacji
+
+- pobrać CSV/XLSX lub raport wypłat Aloha Camp;
+- wskazać numer rezerwacji, domek, termin, brutto, wszystkie opłaty, walutę, wypłatę i referencję;
+- sprawdzić, czy prowizja i opłata płatnicza są osobne;
+- dodać adapter dopiero po porównaniu co najmniej jednej pozycji z panelem i przelewem.
+
+### Kryterium decyzji
+
+Pomysł przechodzi do realizacji, gdy eksport ma stabilny identyfikator i równanie finansowe dające się uzgodnić bez zgadywania. Do tego czasu Aloha pozostaje źródłem operacyjnym z Mobile Calendar, bez modelowanej wypłaty.

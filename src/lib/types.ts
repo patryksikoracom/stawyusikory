@@ -120,6 +120,12 @@ export type Booking = {
   pricingMode?: "rate-card" | "manual";
   commission?: number;
   payout?: number;
+  /** Całkowita kwota pobrana od gościa przez OTA, gdy została potwierdzona. */
+  guestPaidTotal?: number;
+  /** Opłata serwisowa pobrana od gościa przez OTA. */
+  guestServiceFee?: number;
+  /** Rabat albo korekta ceny pobytu przed wypłatą dla gospodarza. */
+  priceAdjustment?: number;
   depositAmount?: number;
   depositDueDate?: string;
   paymentMethod?: "Brak" | "Przelew" | "Gotówka" | "Karta" | "Online";
@@ -148,6 +154,7 @@ export type Booking = {
 
 export type GuestProfile = {
   bookingId: string;
+  personId?: string;
   groupType?: string;
   segment?: string;
   decisionMaker?: string;
@@ -163,6 +170,26 @@ export type GuestProfile = {
   objections?: string;
   nps?: number;
   satisfaction?: number;
+  firstContactMethod?: "Telefon" | "E-mail" | "OTA" | "Formularz" | "Inne";
+  referralSource?: string;
+  cancellationReason?: string;
+  attribution?: {
+    recordedAt: string;
+    recordedBy: string;
+    basis: "Deklaracja gościa" | "UTM" | "Import" | "Notatka ręczna";
+  };
+};
+
+export type GuestPerson = {
+  id: string;
+  displayName: string;
+  phone?: string;
+  email?: string;
+  preferredLanguage?: "pl" | "de" | "en";
+  createdAt: string;
+  createdBy: string;
+  version?: number;
+  updatedAt?: string;
 };
 
 export type DiscoveryMethod =
@@ -222,6 +249,54 @@ export type ContactConsent = {
   consentWithdrawnAt?: string;
   version?: number;
   updatedAt?: string;
+};
+
+export type ConsentPurpose =
+  | "marketing_email"
+  | "marketing_sms"
+  | "public_quote"
+  | "website_media"
+  | "social_media"
+  | "paid_ads";
+
+export type ConsentRecord = {
+  id: string;
+  personId: string;
+  bookingId?: string;
+  purpose: ConsentPurpose;
+  decision: "granted" | "denied" | "withdrawn";
+  textVersion: string;
+  consentText: string;
+  source: "formularz" | "e-mail" | "SMS" | "rozmowa" | "OTA" | "import";
+  recordedAt: string;
+  recordedBy: string;
+  withdrawnAt?: string;
+  withdrawnBy?: string;
+  version?: number;
+  updatedAt?: string;
+};
+
+export type ReviewRequestStatus =
+  | "not_requested"
+  | "scheduled"
+  | "sent"
+  | "clicked"
+  | "received"
+  | "no_review"
+  | "not_applicable";
+
+export type ReviewRequest = {
+  id: string;
+  bookingId: string;
+  status: ReviewRequestStatus;
+  channel?: "E-mail" | "SMS" | "OTA";
+  scheduledAt?: string;
+  sentAt?: string;
+  clickedAt?: string;
+  receivedAt?: string;
+  updatedAt: string;
+  updatedBy: string;
+  version?: number;
 };
 
 export type OpsTask = {
@@ -367,15 +442,18 @@ export type MessagePurpose =
 
 export type MessageTemplate = {
   id: string;
+  family?: string;
   name: string;
   purpose: MessagePurpose;
   channel: "SMS" | "E-mail" | "OTA";
-  language: "pl" | "en";
+  language: "pl" | "de" | "en";
   subject?: string;
   body: string;
   allowedVariables: string[];
   version: number;
   active: boolean;
+  approvedAt?: string;
+  approvedBy?: string;
 };
 
 export type AutomationTrigger =
@@ -428,10 +506,29 @@ export type ScheduledMessage = {
   providerResult?: string;
   idempotencyKey: string;
   bookingFingerprint: string;
+  deliveryPolicy?: "draft_only" | "manual_send" | "auto_send";
   /** Stan roboczy zachowany na czas pobytu rezerwacji w koszu. */
   statusBeforeBookingDeletion?: ScheduledMessageStatus;
   bookingFingerprintBeforeDeletion?: string;
   createdAt: string;
+  version?: number;
+  updatedAt?: string;
+};
+
+export type CommunicationConfig = {
+  id: string;
+  bankAccountNumber?: string;
+  senderName: string;
+  copyUserIds: string[];
+  travelGuides: Array<{
+    id: string;
+    language: "pl" | "de" | "en";
+    version: number;
+    body: string;
+    routeWarning: string;
+    approvedAt?: string;
+    approvedBy?: string;
+  }>;
   version?: number;
   updatedAt?: string;
 };
@@ -447,7 +544,69 @@ export type MarketingTouchpoint = {
   utmCampaign?: string;
   utmContent?: string;
   landingPage?: string;
+  searchPhraseOrAiPrompt?: string;
+  referralSource?: string;
+  recordedBy?: string;
+  basis?: "Deklaracja gościa" | "UTM" | "Import" | "Notatka ręczna";
   note?: string;
+};
+
+export type AdSpendRecord = {
+  id: string;
+  date: string;
+  channel: string;
+  campaign: string;
+  cost: number;
+  currency: Currency;
+  result?: number;
+  resultLabel?: string;
+  codeOrUtm?: string;
+  sourceFile: string;
+  version?: number;
+  updatedAt?: string;
+};
+
+export type GrowthExperiment = {
+  id: string;
+  name: string;
+  unitId?: string;
+  dateFrom: string;
+  dateTo: string;
+  cost: number;
+  currency: Currency;
+  code: string;
+  successCriterion: string;
+  result?: string;
+  decision: "planned" | "running" | "keep" | "change" | "stop";
+  version?: number;
+  updatedAt?: string;
+};
+
+export type InvestmentModel = {
+  id: string;
+  unitId: string;
+  initialCapital: number;
+  additionalCapex: number;
+  ownerWithdrawals: number;
+  sharedCostAllocation: number;
+  currency: Currency;
+  source: string;
+  version?: number;
+  updatedAt?: string;
+};
+
+export type MeterReading = {
+  id: string;
+  unitId: string;
+  meterId: string;
+  recordedAt: string;
+  value: number;
+  unit: "kWh";
+  source: string;
+  photoUrl?: string;
+  recordedBy: string;
+  version?: number;
+  updatedAt?: string;
 };
 
 export type AuditEvent = {
@@ -576,9 +735,22 @@ export type PlatformImport = {
   children?: number;
   childrenAges?: string;
   grossPrice?: number;
+  mobileCalendarGrossPrice?: number;
+  guestPaidTotal?: number;
+  guestServiceFee?: number;
+  priceAdjustment?: number;
   currency?: string;
   commission?: number;
+  hostServiceFee?: number;
+  paymentProcessingFee?: number;
+  totalOtaFees?: number;
   payout?: number;
+  payoutDate?: string;
+  payoutReference?: string;
+  financialAdjustments?: number;
+  matchMethod?: "platform-unit-dates" | "unit-dates-source-correction" | "guest-unit-overlap" | "ota-only" | "mobile-calendar-only";
+  matchConfidence?: "Pewne" | "Wysokie" | "Do sprawdzenia";
+  sourceFile?: string;
   paymentStatus?: PaymentStatus;
   cancellationPolicy?: string;
   arrivalTime?: string;
@@ -588,6 +760,8 @@ export type PlatformImport = {
   missingFields?: string[];
   dataQuality?: DataQuality;
   matchedBookingId?: string;
+  version?: number;
+  updatedAt?: string;
   transferStatus: "Do przeniesienia" | "Przeniesione" | "Wymaga sprawdzenia" | "Nie przenosić";
 };
 
@@ -611,8 +785,11 @@ export type SourceConnection = {
 export type AppData = {
   units: Unit[];
   bookings: Booking[];
+  people: GuestPerson[];
   guests: GuestProfile[];
   consents: ContactConsent[];
+  consentLedger: ConsentRecord[];
+  reviewRequests: ReviewRequest[];
   tasks: OpsTask[];
   media: MediaAsset[];
   blocks: CalendarBlock[];
@@ -629,7 +806,12 @@ export type AppData = {
   messageTemplates: MessageTemplate[];
   automationRules: AutomationRule[];
   scheduledMessages: ScheduledMessage[];
+  communicationConfigs: CommunicationConfig[];
   marketingTouchpoints: MarketingTouchpoint[];
+  adSpend: AdSpendRecord[];
+  growthExperiments: GrowthExperiment[];
+  investmentModels: InvestmentModel[];
+  meterReadings: MeterReading[];
   auditLog: AuditEvent[];
   settings: AppSettings;
 };

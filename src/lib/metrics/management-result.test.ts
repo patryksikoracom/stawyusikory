@@ -137,6 +137,34 @@ describe("management result engine", () => {
     });
   });
 
+  it("counts a Booking payment-processing fee as a separate actual OTA cost", () => {
+    const result = calculateManagementResult({
+      bookings: [booking({ platform: "Booking" })],
+      payments: [payment({ amount: 100 })],
+      costSettings: [],
+      imports: [importedCommission({
+        commission: 150,
+        paymentProcessingFee: 25,
+        sourceFile: "booking-payout.csv",
+        payoutReference: "PAYOUT-1",
+      })],
+      units: [unit()],
+      period,
+    });
+
+    expect(result.currencies[0]).toMatchObject({
+      actualCommissions: 175,
+      totalCosts: 275,
+      result: 725,
+    });
+    expect(result.lines.filter((line) => line.category === "Prowizja OTA")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: "Prowizja Booking", amount: 150 }),
+        expect.objectContaining({ label: "Opłata za obsługę płatności Booking", amount: 25 }),
+      ]),
+    );
+  });
+
   it("keeps a negative management result visible", () => {
     const result = calculateManagementResult({
       bookings: [booking({ grossPrice: 100 })],

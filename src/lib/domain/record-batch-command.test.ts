@@ -36,6 +36,26 @@ describe("recordBatchCommandSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("przyjmuje osobę niezależną od pobytu", () => {
+    expect(recordBatchCommandSchema.safeParse({
+      ...metadata,
+      changes: [{
+        entityType: "people",
+        entityId: "PERSON-1",
+        operation: "upsert",
+        expectedRecordVersion: 0,
+        payload: {
+          id: "PERSON-1",
+          displayName: "Anna Nowak",
+          phone: "+48500100200",
+          email: "anna@example.com",
+          createdAt: "2026-07-27T12:00:00.000Z",
+          createdBy: "owner",
+        },
+      }],
+    }).success).toBe(true);
+  });
+
   it.each([
     ["duplikat", [
       { entityType: "issues", entityId: "ISSUE-1", operation: "delete", expectedRecordVersion: 1 },

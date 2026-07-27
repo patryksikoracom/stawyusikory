@@ -964,10 +964,10 @@ describe("AppStoreProvider w trybie chmurowym", () => {
       templateId?: string;
       templateVersion?: number;
     }) => item.templateId === "cleaning-standard-v1" && item.templateVersion === 1)).toBe(true);
-    expect(commandBody.aggregate.scheduledMessages).toHaveLength(8);
+    expect(commandBody.aggregate.scheduledMessages).toHaveLength(9);
     expect(store?.data.bookings[0]).toMatchObject({ id: booking.id, version: 1 });
     expect(store?.data.tasks.filter((task) => task.bookingId === booking.id)).toHaveLength(5);
-    expect(store?.data.scheduledMessages.filter((message) => message.bookingId === booking.id)).toHaveLength(8);
+    expect(store?.data.scheduledMessages.filter((message) => message.bookingId === booking.id)).toHaveLength(9);
     expect(store?.syncMode).toBe("cloud");
   });
 

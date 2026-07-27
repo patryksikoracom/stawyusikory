@@ -12,7 +12,7 @@ Produkcyjny fundament systemu operacyjnego Stawów u Sikory: rezerwacje, wspóln
 - trwałe zadania, checklisty sprzątania, usterki i SMSAPI z kluczem idempotencji;
 - rejestr płatności, prowizji, kosztów, zwrotów, faktur/rachunków oraz raporty ADR, RevPAR i obłożenia;
 - profile gości, zgody marketingowe oraz biblioteka mediów;
-- bezpieczny import Mobile-Calendar: podgląd, walidacja, deduplikacja i scalanie bez kasowania danych;
+- bezpieczny import Mobile Calendar z opcjonalnym uzgodnieniem rozliczeń Airbnb i Booking: podgląd, walidacja, deduplikacja, rzeczywiste opłaty OTA i scalanie bez kasowania danych;
 - import i eksport iCal z widocznym stanem synchronizacji i ostrzeżeniem o opóźnieniach;
 - backup JSON, audit log, mobilne menu wszystkich modułów i instalowalna PWA;
 - testy reguł terminów, polskich dat oraz importu.
