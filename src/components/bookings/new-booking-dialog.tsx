@@ -5,14 +5,14 @@ import { useAppStore } from "@/components/layout/app-store";
 import { Icon } from "@/components/ui/icons";
 import { Button, Field, inputClass } from "@/components/ui/primitives";
 import { Dialog } from "@/components/ui/dialog";
-import type { Booking, Channel, ContactConsent, PaymentStatus } from "@/lib/types";
+import type { Booking, CalendarBlock, Channel, ContactConsent, PaymentStatus } from "@/lib/types";
 import { getBookingConflicts, nightsBetween } from "@/lib/workflow/rules";
 import { guestDisplayName, validateGuestStep } from "@/lib/workflow/booking-form";
 import { quoteStay } from "@/lib/workflow/pricing";
 import { formatPolishDate } from "@/lib/date";
 
 type BookingDefaults = Partial<Pick<Booking, "unitId" | "checkIn" | "checkOut" | "arrivalTime" | "departureTime">>;
-const bookingChannels: Channel[] = ["Telefon", "E-mail", "Bezpośrednio", "Strona www", "Booking", "Airbnb", "Facebook", "Google", "Polecenie", "Slowhop", "Aloha Camp", "Agoda", "Expedia", "VRBO", "Influencer/barter", "Inne"];
+const bookingChannels: Channel[] = ["Telefon", "E-mail", "Bezpośrednio", "Strona www", "Booking", "Airbnb", "Slowhop", "Aloha Camp", "Agoda", "Expedia", "VRBO", "Inne"];
 const otaChannels: Channel[] = ["Booking", "Airbnb", "Slowhop", "Aloha Camp", "Agoda", "Expedia", "VRBO"];
 const discoveryChannels = ["Nie wiadomo", "Google", "Facebook", "Instagram", "Polecenie", "Booking", "Airbnb", "Aloha Camp", "Strona www", "Inne"];
 
@@ -29,6 +29,7 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
   );
   const [showChildren, setShowChildren] = useState(Boolean(booking?.children));
   const [depositOverride, setDepositOverride] = useState(Boolean(booking?.depositAmount));
+  const [dateSelection, setDateSelection] = useState<"checkIn" | "checkOut">("checkIn");
   const [draftId] = useState(() => `SUS-${Date.now().toString().slice(-6)}`);
   const [defaultDates] = useState(() => {
     const start = new Date();
@@ -190,6 +191,33 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Domek"><select autoFocus className={inputClass} required value={form.unitId} onChange={(e) => setForm({ ...form, unitId: e.target.value })}>{data.units.map((unit) => <option key={unit.id} value={unit.id}>{unit.name} · do {unit.maxPeople} osób</option>)}</select></Field>
                   <div className={`rounded-xl border px-4 py-3 ${conflicts.length ? "border-[#efb7a8] bg-[#fbe7e1] text-[#8f3b27]" : "border-[#bdd7c3] bg-[#e9f2e7] text-[#275e3f]"}`}><p className="text-[10px] font-black uppercase tracking-[.14em]">Dostępność</p><p className="mt-1 text-sm font-black">{conflicts.length ? "Termin zajęty" : nights > 0 ? sameDayTurnovers.length ? "Termin wolny · turnover tego samego dnia" : "Termin wolny" : "Wybierz poprawne daty"}</p><p className="mt-0.5 text-xs">{conflicts[0] ?? turnoverSummary[0] ?? (nights > 0 ? `${nights} ${nights === 1 ? "noc" : "nocy"} · sprawdzono rezerwacje i blokady` : "Wyjazd musi być po przyjeździe")}</p></div>
+                  <div className="sm:col-span-2">
+                    <StayDateTimeline
+                      blocks={data.blocks}
+                      bookings={data.bookings}
+                      checkIn={form.checkIn}
+                      checkOut={form.checkOut}
+                      selection={dateSelection}
+                      unitId={form.unitId}
+                      onSelect={(date) => {
+                        if (dateSelection === "checkIn") {
+                          setForm((current) => ({
+                            ...current,
+                            checkIn: date,
+                            checkOut: current.checkOut > date ? current.checkOut : shiftDate(date, 1),
+                          }));
+                          setDateSelection("checkOut");
+                          return;
+                        }
+                        if (date <= form.checkIn) {
+                          setForm((current) => ({ ...current, checkIn: date, checkOut: shiftDate(date, 1) }));
+                        } else {
+                          setForm((current) => ({ ...current, checkOut: date }));
+                          setDateSelection("checkIn");
+                        }
+                      }}
+                    />
+                  </div>
                   <Field label="Przyjazd"><input className={inputClass} required type="date" value={form.checkIn} onChange={(e) => setForm({ ...form, checkIn: e.target.value })} /></Field>
                   <Field label="Wyjazd"><input className={inputClass} required type="date" value={form.checkOut} onChange={(e) => setForm({ ...form, checkOut: e.target.value })} /></Field>
                   <Field label="Dorośli"><input className={inputClass} min="1" required type="number" value={form.adults} onChange={(e) => setForm({ ...form, adults: e.target.value })} /></Field>
@@ -293,6 +321,88 @@ function DialogSection({ eyebrow, title, body }: { eyebrow: string; title: strin
   return <div><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#7d8b4d]">{eyebrow}</p><h3 className="font-display text-2xl font-semibold">{title}</h3><p className="mt-1 max-w-2xl text-sm leading-6 text-[#65736c]">{body}</p></div>;
 }
 
+function StayDateTimeline({
+  blocks,
+  bookings,
+  checkIn,
+  checkOut,
+  onSelect,
+  selection,
+  unitId,
+}: {
+  blocks: CalendarBlock[];
+  bookings: Booking[];
+  checkIn: string;
+  checkOut: string;
+  onSelect: (date: string) => void;
+  selection: "checkIn" | "checkOut";
+  unitId: string;
+}) {
+  const [anchor, setAnchor] = useState(() => shiftDate(checkIn || localDateValue(new Date()), -3));
+  const dates = Array.from({ length: 21 }, (_, index) => shiftDate(anchor, index));
+  const first = dates[0];
+  const last = dates[dates.length - 1];
+  const occupied = (date: string) => bookings.some((item) =>
+    item.unitId === unitId
+    && item.workflowStatus !== "Anulowana"
+    && !item.deletedAt
+    && item.checkIn <= date
+    && item.checkOut > date,
+  );
+  const blocked = (date: string) => blocks.some((item) =>
+    item.unitId === unitId
+    && item.status !== "Anulowana"
+    && item.dateFrom <= date
+    && item.dateTo > date,
+  );
+
+  return (
+    <section aria-label="Wizualny wybór terminu pobytu" className="overflow-hidden rounded-2xl border border-[#d8d0c2] bg-[#f7f4ed]">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#ddd6c9] px-3 py-3">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[.15em] text-[#75824e]">Oś pobytu · {selection === "checkIn" ? "wybierz przyjazd" : "teraz wybierz wyjazd"}</p>
+          <p className="mt-0.5 text-sm font-black text-[#29483c]">{formatPolishDate(first, { year: false })} – {formatPolishDate(last)}</p>
+        </div>
+        <div className="flex gap-1.5">
+          <button aria-label="Pokaż wcześniejsze daty" className="grid size-9 place-items-center rounded-xl border border-[#d2cabb] bg-white text-[#355248]" onClick={() => setAnchor((current) => shiftDate(current, -14))} type="button"><Icon className="size-4 rotate-180" name="chevron"/></button>
+          <button className="min-h-9 rounded-xl border border-[#d2cabb] bg-white px-3 text-xs font-black text-[#355248]" onClick={() => setAnchor(shiftDate(localDateValue(new Date()), -3))} type="button">Dzisiaj</button>
+          <button aria-label="Pokaż późniejsze daty" className="grid size-9 place-items-center rounded-xl border border-[#d2cabb] bg-white text-[#355248]" onClick={() => setAnchor((current) => shiftDate(current, 14))} type="button"><Icon className="size-4" name="chevron"/></button>
+        </div>
+      </header>
+      <div className="scrollbar-thin overflow-x-auto">
+        <div className="grid min-w-[840px] grid-cols-[repeat(21,minmax(40px,1fr))]">
+          {dates.map((date) => {
+            const parsed = new Date(`${date}T12:00:00`);
+            const isStart = date === checkIn;
+            const isEnd = date === checkOut;
+            const inStay = date > checkIn && date < checkOut;
+            const unavailable = occupied(date) || blocked(date);
+            const weekend = [0, 6].includes(parsed.getDay());
+            return (
+              <button
+                aria-label={`${selection === "checkIn" ? "Ustaw przyjazd" : "Ustaw wyjazd"} ${formatPolishDate(date)}`}
+                className={`relative min-h-[76px] border-r border-[#ded8cd] px-1 py-2 text-center transition focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#174d3b] ${isStart || isEnd ? "bg-[#174d3b] text-white" : inStay ? "bg-[#dce8d4] text-[#234b3a]" : unavailable ? "bg-[#f4ddd5] text-[#843f2d]" : weekend ? "bg-[#eeece6] text-[#52635b]" : "bg-white text-[#3e5148] hover:bg-[#e8efe1]"}`}
+                key={date}
+                onClick={() => onSelect(date)}
+                type="button"
+              >
+                <span className="block text-[8px] font-black uppercase tracking-[.08em] opacity-65">{new Intl.DateTimeFormat("pl-PL", { weekday: "short" }).format(parsed).replace(".", "")}</span>
+                <span className="mt-1 block font-display text-lg font-semibold">{parsed.getDate()}</span>
+                <span className="mt-0.5 block text-[8px] font-black uppercase">{isStart ? "przyjazd" : isEnd ? "wyjazd" : unavailable ? "zajęte" : inStay ? "pobyt" : "wolne"}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <footer className="flex flex-wrap gap-x-4 gap-y-1 border-t border-[#ddd6c9] px-3 py-2 text-[10px] font-bold text-[#69756f]">
+        <span><i className="mr-1 inline-block size-2 rounded-full bg-[#174d3b]"/>wybrany termin</span>
+        <span><i className="mr-1 inline-block size-2 rounded-full bg-[#dce8d4]"/>noce pobytu</span>
+        <span><i className="mr-1 inline-block size-2 rounded-full bg-[#e9bdae]"/>zajęte lub zablokowane</span>
+      </footer>
+    </section>
+  );
+}
+
 function MoneyInput({ suffix, value, onChange }: { suffix: string; value: string; onChange: (value: string) => void }) {
   return <div className="relative"><input className={`${inputClass} pr-14`} inputMode="decimal" min="0" placeholder="0" type="number" value={value} onChange={(event) => onChange(event.target.value)} /><span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-black text-[#78827c]">{suffix}</span></div>;
 }
@@ -306,4 +416,10 @@ function localDateValue(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function shiftDate(value: string, days: number) {
+  const date = new Date(`${value}T12:00:00`);
+  date.setDate(date.getDate() + days);
+  return localDateValue(date);
 }

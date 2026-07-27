@@ -68,6 +68,15 @@ describe("CalendarView — potwierdzane blokady", () => {
     expect(screen.queryByRole("button", { name: /Przewiń kalendarz/ })).not.toBeInTheDocument();
   });
 
+  it("pokazuje oś kalendarza przed instrukcjami i statystykami", () => {
+    render(<CalendarView />);
+
+    const timeline = screen.getByText("Domek").closest(".min-w-max")?.parentElement?.parentElement;
+    expect(timeline).toBeTruthy();
+    expect(timeline).toHaveClass("order-[-1]");
+    expect(screen.getByText("Praca z kalendarzem")).toBeInTheDocument();
+  });
+
   it("filtruje wyłącznie po kanałach rezerwacji, bez źródeł odkrycia", () => {
     mocks.store.current = {
       ...createStore(),

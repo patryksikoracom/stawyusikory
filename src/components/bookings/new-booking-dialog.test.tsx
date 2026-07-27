@@ -54,6 +54,28 @@ describe("NewBookingDialog — PR-10c", () => {
     expect(screen.getByLabelText("Liczba dzieci")).toBeInTheDocument();
   });
 
+  it("pozwala wybrać pobyt wizualnie i synchronizuje pola dat", () => {
+    renderDialog();
+
+    expect(screen.getByRole("region", { name: "Wizualny wybór terminu pobytu" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Ustaw przyjazd.*14.*2027/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Ustaw wyjazd.*17.*2027/ }));
+
+    expect(screen.getByLabelText("Przyjazd")).toHaveValue("2027-01-14");
+    expect(screen.getByLabelText("Wyjazd")).toHaveValue("2027-01-17");
+    expect(screen.getAllByText(/3 nocy/).length).toBeGreaterThan(0);
+  });
+
+  it("nadal pozwala wpisać daty ręcznie i pokazuje je na osi", () => {
+    renderDialog();
+
+    fireEvent.change(screen.getByLabelText("Przyjazd"), { target: { value: "2027-01-11" } });
+    fireEvent.change(screen.getByLabelText("Wyjazd"), { target: { value: "2027-01-15" } });
+
+    expect(screen.getByRole("button", { name: /Ustaw przyjazd.*11.*2027/ })).toHaveTextContent("przyjazd");
+    expect(screen.getByRole("button", { name: /Ustaw przyjazd.*15.*2027/ })).toHaveTextContent("wyjazd");
+  });
+
   it("oddziela kanał, kontakt i odkrycie oraz stosuje zadatek 33% z jawnym wyjątkiem", () => {
     renderDialog();
     fireEvent.click(screen.getByRole("button", { name: /Dalej/ }));
