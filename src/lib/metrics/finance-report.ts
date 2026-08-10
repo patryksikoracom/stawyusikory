@@ -9,7 +9,7 @@ import {
   type ManagementCompleteness,
   type ManagementResult,
 } from "@/lib/metrics/management-result";
-import type { AppData, Currency, PaymentTransaction } from "@/lib/types";
+import type { AppData, Currency, PaymentTransaction, PlatformImport } from "@/lib/types";
 
 export type FinancePeriodPreset = "today" | "next14" | "month" | "ytd" | "custom";
 
@@ -72,9 +72,9 @@ export const FINANCE_METRIC_DEFINITIONS: Record<
     source: "Rezerwacje · saldo otwarcia · ledger zaksięgowanych transakcji",
   },
   cashflow_posted_transactions_v1: {
-    label: "Cashflow netto",
-    definition: "Zaksięgowane wpływy minus zwroty, prowizje i koszty według daty zdarzenia.",
-    source: "Ledger zaksięgowanych transakcji · data zdarzenia",
+    label: "Wpłynęło na konto",
+    definition: "Faktyczne wypłaty Airbnb i Booking oraz zaksięgowane wpłaty bezpośrednie, pomniejszone o zaksięgowane zwroty i koszty. Liczy się data przepływu pieniędzy, nie data pobytu.",
+    source: "Rozliczenia OTA · data wypłaty · ledger zaksięgowanych transakcji",
   },
   management_result_v1: {
     label: "Wynik zarządczy",
@@ -143,6 +143,39 @@ function plainMoneyValues(values: Record<Currency, number>) {
 
 function transactionContribution(type: PaymentTransaction["type"], amount: number) {
   return ["Wpłata", "Zaliczka", "Wypłata OTA"].includes(type) ? amount : -amount;
+}
+
+function isInPeriod(date: string, period: FinancePeriod) {
+  return date >= period.from && date < period.toExclusive;
+}
+
+function importCurrency(item: PlatformImport): Currency | null {
+  return item.currency === "PLN" || item.currency === "EUR" ? item.currency : null;
+}
+
+export function confirmedOtaPayouts(input: {
+  imports: PlatformImport[];
+  payments: PaymentTransaction[];
+  period: FinancePeriod;
+  calculatedAt: string;
+}) {
+  const calculatedThrough = input.calculatedAt.slice(0, 10);
+  const bookingIdsWithPostedPayout = new Set(input.payments
+    .filter((payment) => payment.status === "Zaksięgowana" && payment.type === "Wypłata OTA")
+    .map((payment) => payment.bookingId));
+
+  return input.imports.filter((item) => (
+    item.transferStatus === "Przeniesione"
+    && item.matchedBookingId
+    && !bookingIdsWithPostedPayout.has(item.matchedBookingId)
+    && item.payout != null
+    && Number.isFinite(item.payout)
+    && item.payout >= 0
+    && item.payoutDate
+    && item.payoutDate <= calculatedThrough
+    && isInPeriod(item.payoutDate, input.period)
+    && importCurrency(item)
+  ));
 }
 
 function csvCell(value: string | number | null) {
@@ -228,6 +261,32 @@ export function createFinanceReport(input: {
         href: booking ? `/bookings/${booking.id}` : null,
       };
     });
+  const importedPayouts = confirmedOtaPayouts({
+    imports: input.data.imports,
+    payments: input.data.payments,
+    period: input.period,
+    calculatedAt: input.calculatedAt,
+  });
+  for (const imported of importedPayouts) {
+    const currency = importCurrency(imported)!;
+    overview.cashflow[currency] += imported.payout!;
+    overview.otaPayouts[currency] += imported.payout!;
+    overview.transactionCount += 1;
+    cashflowEvidence.push({
+      recordId: imported.id,
+      recordType: "transaction",
+      label: imported.guestName || imported.reservationNo || imported.platform,
+      date: imported.payoutDate!,
+      currency,
+      contribution: imported.payout!,
+      source: `${imported.platform} · ${imported.sourceFile || "rozliczenie OTA"}`,
+      detail: `wypłata na konto${imported.payoutReference ? ` · ${imported.payoutReference}` : ""}`,
+      href: imported.matchedBookingId ? `/bookings/${imported.matchedBookingId}` : null,
+    });
+  }
+  if (importedPayouts.length && overview.completeness.cashflow === "unavailable") {
+    overview.completeness.cashflow = "complete";
+  }
 
   const managementEvidence: FinanceEvidenceRow[] = [
     ...overview.bookingFinances.map((finance) => {
@@ -286,7 +345,7 @@ export function createFinanceReport(input: {
     {
       id: "cashflow_posted_transactions_v1",
       ...definitions.cashflow_posted_transactions_v1,
-      note: `${overview.transactionCount} zaksięgowanych transakcji`,
+      note: `${overview.transactionCount} potwierdzonych przepływów`,
       completeness: overview.completeness.cashflow,
       values: moneyValues(overview.cashflow, cashflowEvidence),
       evidence: cashflowEvidence,
