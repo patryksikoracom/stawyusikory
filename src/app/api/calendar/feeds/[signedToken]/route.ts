@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { initialData } from "@/lib/demo-data";
 import type { AppData } from "@/lib/types";
+import { isOutboundCalendarBlock } from "@/lib/integrations/ical-export";
 
 function escapeIcs(value: string) {
   return value.replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/,/g, "\\,").replace(/;/g, "\\;");
@@ -18,7 +19,7 @@ function renderCalendar(data: AppData, unitId: string) {
       .filter((item) => item.unitId === unitId && item.workflowStatus !== "Anulowana")
       .map((item) => ({ id: `booking-${item.id}`, from: item.checkIn, to: item.checkOut, label: "Zajęte — Stawy OS" })),
     ...data.blocks
-      .filter((item) => item.unitId === unitId && item.status !== "Anulowana")
+      .filter((item) => item.unitId === unitId && isOutboundCalendarBlock(item))
       .map((item) => ({ id: `block-${item.id}`, from: item.dateFrom, to: item.dateTo, label: "Niedostępne — Stawy OS" })),
   ];
   const lines = [
