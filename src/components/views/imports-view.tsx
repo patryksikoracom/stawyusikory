@@ -22,6 +22,10 @@ export function ImportsView() {
   const { data, replaceWithImportedBookings, updateConnection, exportSnapshot, exportPricingAnalysis } = useAppStore();
   const [rawImport, setRawImport] = useState("");
   const [fileName, setFileName] = useState("");
+  const [airbnbRaw, setAirbnbRaw] = useState("");
+  const [airbnbFileName, setAirbnbFileName] = useState("");
+  const [bookingRaw, setBookingRaw] = useState("");
+  const [bookingFileName, setBookingFileName] = useState("");
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -55,7 +59,11 @@ export function ImportsView() {
 
   async function previewImport() {
     setBusy(true); setMessage("");
-    const response = await fetch("/api/imports/mobile-calendar/preview", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ raw: rawImport }) });
+    const response = await fetch("/api/imports/mobile-calendar/preview", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ raw: rawImport, airbnbRaw, bookingRaw }),
+    });
     const result = await response.json().catch(() => null) as ImportPreview | { error?: string } | null;
     setBusy(false);
     if (!response.ok || !result || !("rows" in result)) { setMessage((result && "error" in result && result.error) || "Nie udało się przeanalizować importu."); return; }
@@ -70,17 +78,45 @@ export function ImportsView() {
     catch { setMessage("Nie udało się odczytać pliku CSV."); }
   }
 
+  async function selectFinancialFile(platform: "Airbnb" | "Booking", file?: File) {
+    if (!file) return;
+    setMessage("");
+    setPreview(null);
+    try {
+      const raw = await file.text();
+      if (platform === "Airbnb") {
+        setAirbnbRaw(raw);
+        setAirbnbFileName(file.name);
+      } else {
+        setBookingRaw(raw);
+        setBookingFileName(file.name);
+      }
+    } catch {
+      setMessage(`Nie udało się odczytać pliku ${platform}.`);
+    }
+  }
+
   async function commitImport() {
     if (!preview?.rows.length) return;
     setBusy(true);
-    const response = await fetch("/api/imports/mobile-calendar/commit", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ rows: preview.rows, contacts: preview.contacts }) });
+    const response = await fetch("/api/imports/mobile-calendar/commit", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        rows: preview.rows,
+        contacts: preview.contacts,
+        imports: preview.imports,
+        costSettings: preview.costSettings,
+      }),
+    });
     setBusy(false);
     if (!response.ok) { setMessage("Walidacja importu nie powiodła się."); return; }
     const existing = new Set(data.bookings.map((booking) => booking.id));
     const newCount = preview.rows.filter((booking) => !existing.has(booking.id)).length;
-    replaceWithImportedBookings(preview.rows, preview.contacts);
-    setMessage(`Dodano ${newCount} rekordów; pominięto ${preview.rows.length - newCount} już istniejących. Dane zapisują się teraz w chmurze.`);
-    setRawImport(""); setFileName(""); setPreview(null);
+    const updatedCount = preview.rows.length - newCount;
+    replaceWithImportedBookings(preview.rows, preview.contacts, preview.imports, preview.costSettings);
+    setMessage(`Dodano ${newCount} rezerwacji, wzbogacono ${updatedCount} istniejących i zapisano ${preview.imports.length} rekordów źródłowych OTA. Dane zapisują się teraz w chmurze.`);
+    setRawImport(""); setFileName(""); setAirbnbRaw(""); setAirbnbFileName(""); setBookingRaw(""); setBookingFileName(""); setPreview(null);
   }
 
   async function syncNow() {
@@ -111,6 +147,18 @@ export function ImportsView() {
 
     <Card className="overflow-hidden border-[#cedbb9] bg-[#fbfcf5]"><div className="grid gap-5 p-5 lg:grid-cols-[1fr_320px] sm:p-6"><div><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#66813d]">Import jednorazowy i historyczny</p><h2 className="mt-1 font-display text-2xl font-semibold">Mobile Calendar: wgraj eksport CSV</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-[#5d6b61]">Wybierz oryginalny plik eksportu. Zachowamy pobyty, kontakty, ceny i płatności; techniczne ID, wyżywienie oraz opłaty za sprzątanie nie trafią do codziennego widoku.</p><label className="mt-4 flex cursor-pointer items-center gap-4 rounded-2xl border border-dashed border-[#9dad7b] bg-white p-4 transition hover:border-[#50734a] hover:bg-[#f7faef]"><span className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#e6efdc] text-[#3f6c48]"><Icon className="size-5" name="upload"/></span><span className="min-w-0"><span className="block text-sm font-black">{fileName || "Wybierz plik .csv"}</span><span className="block truncate text-xs text-[#69766f]">Eksport pozostaje w tej sesji do momentu zatwierdzenia.</span></span><input accept=".csv,text/csv" className="sr-only" type="file" onChange={(event) => void selectFile(event.target.files?.[0])}/></label><details className="mt-3"><summary className="cursor-pointer text-xs font-black text-[#4a6c50]">Wklej dane ręcznie zamiast pliku</summary><textarea aria-label="Dane z Mobile Calendar" className="mt-3 min-h-36 w-full rounded-2xl border border-[#cfd8c2] bg-white px-4 py-3 font-mono text-xs leading-5 outline-none focus:border-[#759655]" value={rawImport} onChange={(event) => { setRawImport(event.target.value); setFileName(""); setPreview(null); }} placeholder={"Wklej zawartość eksportu CSV…"}/></details></div><div className="rounded-2xl bg-[#e8f0dd] p-5"><span className="grid size-10 place-items-center rounded-xl bg-white text-[#477346]"><Icon className="size-5" name="refresh"/></span><p className="mt-4 text-sm font-black">Najpierw kontrola, potem zapis</p><p className="mt-2 text-xs leading-5 text-[#60725e]">Podgląd pokaże historię, aktywne pobyty i rekordy wymagające uwagi. Ponowne wgranie tego samego eksportu nie stworzy duplikatów.</p><Button className="mt-5 w-full" disabled={busy || !rawImport.trim()} onClick={() => void previewImport()}>1. Sprawdź dane</Button><Button className="mt-2 w-full" disabled={busy || !preview?.rows.length} variant="secondary" onClick={() => void commitImport()}>2. Dodaj {preview?.rows.length ?? 0} rekordów</Button></div></div>{preview ? <PreviewTable data={data} preview={preview}/> : null}</Card>
 
+    <Card className="overflow-hidden border-[#cedbb9] bg-[#fbfcf5]">
+      <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
+        <div className="sm:col-span-2">
+          <p className="text-[10px] font-black uppercase tracking-[.16em] text-[#66813d]">Opcjonalne rozliczenia OTA</p>
+          <h2 className="mt-1 font-display text-2xl font-semibold">Wypłaty Booking i Airbnb</h2>
+          <p className="mt-2 text-sm leading-6 text-[#5d6b61]">Dodaj pliki przed użyciem przycisku „Sprawdź dane” w imporcie Mobile Calendar. Podgląd połączy rezerwacje z prowizjami, opłatami i faktycznymi wypłatami.</p>
+        </div>
+        <FinancialFilePicker fileName={bookingFileName} label="Booking · wypłaty CSV" onSelect={(file) => selectFinancialFile("Booking", file)}/>
+        <FinancialFilePicker fileName={airbnbFileName} label="Airbnb · historia transakcji CSV" onSelect={(file) => selectFinancialFile("Airbnb", file)}/>
+      </div>
+    </Card>
+
     {configuring ? <ConnectionDialog connection={configuring} units={data.units} onClose={() => setConfiguring(null)} onSave={(connection) => { updateConnection(connection); setConfiguring(null); setMessage("Konfiguracja zapisana. Uruchom „Sprawdź teraz”, aby pobrać blokady."); }}/>:null}
     {showBackup ? <EncryptedBackupDialog onClose={() => setShowBackup(false)} onExport={exportSnapshot}/> : null}
   </div>;
@@ -119,6 +167,8 @@ export function ImportsView() {
 function PreviewTable({ data, preview }: { data: ReturnType<typeof useAppStore>["data"]; preview: ImportPreview }) { return <div className="border-t border-[#ded7ca] p-4"><div className="mb-4 grid gap-2 sm:grid-cols-4"><ImportMini label="Wszystkie" value={preview.summary.total}/><ImportMini label="Historia" value={preview.summary.historical}/><ImportMini label="Aktywne" value={preview.summary.active}/><ImportMini label="Do sprawdzenia" value={preview.summary.needsReview} warn={preview.summary.needsReview>0}/></div><div className="overflow-x-auto"><table className="w-full min-w-[820px] text-left text-sm"><thead className="text-[10px] font-black uppercase tracking-[.13em] text-[#78837d]"><tr><th className="p-3">Gość</th><th>Termin</th><th>Domek</th><th>Stan</th><th>Kontrola</th></tr></thead><tbody>{preview.rows.map((booking:Booking)=><tr className="border-t" key={booking.id}><td className="p-3"><p className="font-black">{booking.guestLabel}</p><p className="text-xs text-[#6e7973]">{booking.platform}</p></td><td>{formatPolishDate(booking.checkIn)} – {formatPolishDate(booking.checkOut)}<p className="text-xs">{nightsBetween(booking.checkIn,booking.checkOut)} nocy</p></td><td>{unitName(data.units,booking.unitId)}</td><td><Badge tone={data.bookings.some((item)=>item.id===booking.id)?"warn":"good"}>{data.bookings.some((item)=>item.id===booking.id)?"Już istnieje":"Nowy"}</Badge></td><td className="max-w-[300px] text-xs">{booking.importWarnings?.length ? <span className="font-bold text-[#9a402b]">{booking.importWarnings.join(" · ")}</span> : <span className="font-bold text-[#3f6e4c]">Gotowe</span>}</td></tr>)}</tbody></table></div><p className="mt-3 text-xs font-bold text-[#586b61]">Suma eksportu: {preview.summary.plnTotal.toLocaleString("pl-PL")} PLN{preview.summary.eurTotal ? ` · ${preview.summary.eurTotal.toLocaleString("pl-PL")} EUR` : ""}</p>{preview.errors.length?<div className="mt-3 rounded-xl bg-[#f9dfd7] p-3 text-xs font-bold text-[#963c27]">Pominięte wiersze: {preview.errors.map((item)=>`${item.line}: ${item.message}`).join(" · ")}</div>:null}</div> }
 
 function ImportMini({label,value,warn=false}:{label:string;value:number;warn?:boolean}) { return <div className={`rounded-xl border p-3 ${warn?"border-[#ecc5b8] bg-[#f9e7df]":"border-[#dbe1cf] bg-white"}`}><p className="text-[9px] font-black uppercase tracking-[.13em] text-[#7c8780]">{label}</p><p className="font-display text-xl font-semibold">{value}</p></div>; }
+
+function FinancialFilePicker({fileName,label,onSelect}:{fileName:string;label:string;onSelect:(file?:File)=>void|Promise<void>}) { return <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-dashed border-[#9dad7b] bg-white p-4 transition hover:border-[#50734a] hover:bg-[#f7faef]"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#e6efdc] text-[#3f6c48]"><Icon className="size-5" name="upload"/></span><span className="min-w-0"><span className="block truncate text-sm font-black">{fileName||label}</span><span className="block text-xs text-[#69766f]">Plik pozostaje lokalnie do zatwierdzenia importu.</span></span><input accept=".csv,text/csv" className="sr-only" type="file" onChange={(event)=>void onSelect(event.target.files?.[0])}/></label> }
 
 function IcalSlotCard({platform,source,unitName:slotUnitName,onConfigure}:{platform:IcalPlatform;source?:SourceConnection;unitName:string;onConfigure:()=>void}) { const status=source?.status??"Do podłączenia";return <article className="rounded-2xl border border-[#ded7ca] bg-white p-5"><div className="flex items-start justify-between gap-3"><div className="flex items-center gap-3"><span className={`grid size-11 place-items-center rounded-2xl ${platform === "Booking" ? "bg-[#dbeaec] text-[#246675]" : "bg-[#f9dfd8] text-[#b04c37]"}`}><span className="font-display text-xl font-semibold">{platform[0]}</span></span><div><p className="font-display text-xl font-semibold">{platform}</p><p className="text-xs font-bold text-[#6c7872]">{slotUnitName}</p></div></div><Badge tone={status === "Aktywne" ? "good" : status === "Błąd" ? "bad" : "warn"}>{status}</Badge></div><p className="mt-4 text-sm font-bold leading-6 text-[#43594f]">{source?.nextStep??`Wklej prywatny link ${platform} dla tego domku.`}</p>{source?.lastSyncAt?<p className="mt-2 text-xs text-[#748078]">Ostatni odczyt: {formatPolishDateTime(source.lastSyncAt)}</p>:null}{source?.lastError?<p className="mt-2 text-xs font-bold text-[#9b4029]">{source.lastError}</p>:null}<Button className="mt-4 w-full" variant="secondary" onClick={onConfigure}>{source?.importUrl?"Edytuj":"Podłącz"} {platform} · {slotUnitName}</Button></article> }
 
