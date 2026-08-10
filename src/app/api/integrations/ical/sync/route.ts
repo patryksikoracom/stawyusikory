@@ -3,6 +3,7 @@ import { isOrganizationEditor, requireOrganization } from "@/lib/supabase/auth-c
 import { createServiceClient } from "@/lib/supabase/server";
 import type { CalendarBlock, SourceConnection } from "@/lib/types";
 import { validateExternalCalendarUrlForFetch } from "@/lib/integrations/ical-security";
+import { configuredIcalConnections } from "@/lib/integrations/ical-connections";
 
 const MAX_ICAL_BYTES = 2_000_000;
 
@@ -67,6 +68,7 @@ export async function POST(request: Request) {
 
   let feeds = 0;
   let blocks = 0;
+  let preservedBlocks = 0;
   let failures = 0;
 
   for (const organizationId of organizationIds) {
@@ -80,9 +82,16 @@ export async function POST(request: Request) {
     const connections = (records ?? [])
       .filter((record) => record.entity_type === "sourceConnections")
       .map((record) => record.payload as SourceConnection);
+    const configuredConnections = configuredIcalConnections(connections);
+    const existingImportedBlocks = (records ?? [])
+      .filter((record) => record.entity_type === "blocks")
+      .map((record) => record.payload as CalendarBlock)
+      .filter((block) => block.id.startsWith("ICAL-"));
     const importedBlocks: CalendarBlock[] = [];
+    let organizationFailures = 0;
+    let organizationPreservedBlocks = 0;
 
-    for (const connection of connections.filter((item) => item.connectionType === "iCal" && item.importUrl && item.unitId)) {
+    for (const connection of configuredConnections) {
       feeds += 1;
       const startedAt = new Date().toISOString();
       try {
@@ -112,22 +121,37 @@ export async function POST(request: Request) {
         await service.from("integration_sync_runs").insert({ organization_id: organizationId, connection_id: connection.id, status: "success", imported_count: imported.length, started_at: startedAt, finished_at: new Date().toISOString() });
       } catch (syncError) {
         failures += 1;
+        organizationFailures += 1;
         const message = syncError instanceof Error ? syncError.message : "Nieznany błąd";
-        Object.assign(connection, { status: "Błąd", lastError: message });
+        const prefix = `ICAL-${connection.id}-`;
+        const lastSuccessfulBlocks = existingImportedBlocks.filter((block) => block.id.startsWith(prefix));
+        importedBlocks.push(...lastSuccessfulBlocks);
+        preservedBlocks += lastSuccessfulBlocks.length;
+        organizationPreservedBlocks += lastSuccessfulBlocks.length;
+        Object.assign(connection, {
+          status: "Błąd",
+          lastError: `${message}. Zachowano ostatni poprawny stan (${lastSuccessfulBlocks.length} blokad).`,
+          nextStep: "Sprawdź adres feedu. Do tego czasu kalendarz używa ostatnich poprawnych danych.",
+        });
         await service.from("integration_sync_runs").insert({ organization_id: organizationId, connection_id: connection.id, status: "error", error_message: message, started_at: startedAt, finished_at: new Date().toISOString() });
       }
     }
 
-    if (connections.length) {
+    if (configuredConnections.length) {
       const { error: commitError } = await service.rpc("apply_ical_sync", {
         p_organization_id: organizationId,
         p_connections: connections,
         p_blocks: importedBlocks,
-        p_summary: { feeds: connections.length, blocks: importedBlocks.length, failures },
+        p_summary: {
+          feeds: configuredConnections.length,
+          blocks: importedBlocks.length,
+          failures: organizationFailures,
+          preservedBlocks: organizationPreservedBlocks,
+        },
       });
       if (commitError) return NextResponse.json({ error: commitError.message }, { status: 500 });
     }
   }
 
-  return NextResponse.json({ ok: failures === 0, feeds, blocks, failures });
+  return NextResponse.json({ ok: failures === 0, feeds, blocks, failures, preservedBlocks });
 }
