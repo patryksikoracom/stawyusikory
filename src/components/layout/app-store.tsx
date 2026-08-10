@@ -98,7 +98,12 @@ type AppStore = {
   upsertCostSetting: (cost: CostSetting) => void;
   deleteCostSetting: (costId: string) => void;
   updateSettings: (settings: AppData["settings"]) => Promise<boolean>;
-  replaceWithImportedBookings: (bookings: Booking[], contacts?: ContactConsent[]) => void;
+  replaceWithImportedBookings: (
+    bookings: Booking[],
+    contacts?: ContactConsent[],
+    imports?: AppData["imports"],
+    costSettings?: CostSetting[],
+  ) => void;
   exportSnapshot: (passphrase: string) => Promise<void>;
   exportPricingAnalysis: () => void;
   resetDemo: () => void;
@@ -362,6 +367,49 @@ function tasksForImportedBookings(bookings: Booking[]) {
       return !task.dueDate || task.dueDate >= today;
     });
   });
+}
+
+function mergedImportNotes(existing?: string, incoming?: string) {
+  const current = existing?.trim();
+  const next = incoming?.trim();
+  if (!current) return next;
+  if (!next || current.includes(next)) return current;
+  if (next.includes(current)) return next;
+  return `${current}\n${next}`;
+}
+
+function mergeImportedBooking(existing: Booking, incoming: Booking): Booking {
+  const historical = incoming.historicalImport || incoming.checkOut <= todayInPoland();
+  return {
+    ...existing,
+    ...incoming,
+    arrivalTime: existing.arrivalTime ?? incoming.arrivalTime,
+    departureTime: existing.departureTime ?? incoming.departureTime,
+    cityArea: existing.cityArea ?? incoming.cityArea,
+    paymentMethod: existing.paymentMethod ?? incoming.paymentMethod,
+    specialRequests: mergedImportNotes(existing.specialRequests, incoming.specialRequests),
+    createdBy: existing.createdBy,
+    workflowStatus: existing.workflowStatus === "Anulowana"
+      ? "Anulowana"
+      : historical ? incoming.workflowStatus : existing.workflowStatus,
+    paymentStatus: existing.paymentStatus === "Barter" || existing.paymentStatus === "Anulowane"
+      ? existing.paymentStatus
+      : incoming.paymentStatus,
+    version: existing.version,
+    updatedAt: existing.updatedAt,
+    deletedAt: existing.deletedAt,
+    purgeAfter: existing.purgeAfter,
+    workflowStatusBeforeDeletion: existing.workflowStatusBeforeDeletion,
+  };
+}
+
+function mergeImportedContact(existing: ContactConsent, incoming: ContactConsent): ContactConsent {
+  return {
+    ...incoming,
+    ...existing,
+    phone: incoming.phone || existing.phone,
+    email: incoming.email || existing.email,
+  };
 }
 
 function readLocalData() {
@@ -2320,19 +2368,49 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       auditLog: [audit("cost", costId, "deleted", "Usunięto założenie kosztowe"), ...current.auditLog],
     })),
     updateSettings,
-    replaceWithImportedBookings: (bookings, contacts = []) => batchMutate((current) => {
+    replaceWithImportedBookings: (bookings, contacts = [], imports = [], importedCostSettings = []) => batchMutate((current) => {
       const existingById = new Map(current.bookings.map((booking) => [booking.id, booking]));
       const created = bookings.filter((booking) => !existingById.has(booking.id));
+      const updated = bookings.filter((booking) => existingById.has(booking.id));
       const createdIds = new Set(created.map((booking) => booking.id));
       const tasks = tasksForImportedBookings(created);
-      const importedContacts = contacts.filter((contact) => createdIds.has(contact.bookingId));
+      const incomingById = new Map(bookings.map((booking) => [booking.id, booking]));
+      const nextBookings = [
+        ...created,
+        ...current.bookings.map((booking) => {
+          const incoming = incomingById.get(booking.id);
+          return incoming ? mergeImportedBooking(booking, incoming) : booking;
+        }),
+      ];
+      const existingContacts = new Map(current.consents.map((contact) => [contact.bookingId, contact]));
+      const incomingContacts = new Map(contacts.map((contact) => [contact.bookingId, contact]));
+      const nextContacts = [
+        ...contacts.filter((contact) => createdIds.has(contact.bookingId) && !existingContacts.has(contact.bookingId)),
+        ...current.consents.map((contact) => {
+          const incoming = incomingContacts.get(contact.bookingId);
+          return incoming ? mergeImportedContact(contact, incoming) : contact;
+        }),
+      ];
+      const incomingImports = new Map(imports.map((item) => [item.id, item]));
+      const currentImportIds = new Set(current.imports.map((item) => item.id));
+      const nextImports = [
+        ...imports.filter((item) => !currentImportIds.has(item.id)),
+        ...current.imports.map((item) => {
+          const incoming = incomingImports.get(item.id);
+          return incoming ? { ...item, ...incoming } : item;
+        }),
+      ];
+      const existingCostIds = new Set(current.costSettings.map((item) => item.id));
+      const newCostSettings = importedCostSettings.filter((item) => !existingCostIds.has(item.id));
       const next: AppData = {
         ...current,
-        bookings: [...created, ...current.bookings],
-        consents: [...importedContacts, ...current.consents],
+        bookings: nextBookings,
+        consents: nextContacts,
         tasks: [...tasks, ...current.tasks],
         checklistItems: [...defaultChecklist(tasks), ...current.checklistItems],
-        auditLog: [audit("import", uid("IMP"), "committed", `Dodano ${created.length} rekordów z Mobile Calendar; pominięto ${bookings.length - created.length} istniejących`), ...current.auditLog],
+        imports: nextImports,
+        costSettings: [...newCostSettings, ...current.costSettings],
+        auditLog: [audit("import", uid("IMP"), "committed", `Dodano ${created.length} rezerwacji, wzbogacono ${updated.length}, uzgodniono ${imports.length} rekordów OTA`), ...current.auditLog],
       };
       next.scheduledMessages = reconcileScheduledMessages(next);
       return next;

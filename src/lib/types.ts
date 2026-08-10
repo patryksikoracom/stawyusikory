@@ -120,6 +120,12 @@ export type Booking = {
   pricingMode?: "rate-card" | "manual";
   commission?: number;
   payout?: number;
+  /** Całkowita kwota pobrana od gościa przez OTA, gdy została potwierdzona. */
+  guestPaidTotal?: number;
+  /** Opłata serwisowa pobrana od gościa przez OTA. */
+  guestServiceFee?: number;
+  /** Rabat albo korekta ceny pobytu przed wypłatą dla gospodarza. */
+  priceAdjustment?: number;
   depositAmount?: number;
   depositDueDate?: string;
   paymentMethod?: "Brak" | "Przelew" | "Gotówka" | "Karta" | "Online";
@@ -576,8 +582,15 @@ export type PlatformImport = {
   children?: number;
   childrenAges?: string;
   grossPrice?: number;
+  mobileCalendarGrossPrice?: number;
+  guestPaidTotal?: number;
+  guestServiceFee?: number;
+  priceAdjustment?: number;
   currency?: string;
   commission?: number;
+  hostServiceFee?: number;
+  paymentProcessingFee?: number;
+  totalOtaFees?: number;
   payout?: number;
   /** Data faktycznej wypłaty środków przez platformę OTA. */
   payoutDate?: string;
@@ -587,6 +600,8 @@ export type PlatformImport = {
   sourceFile?: string;
   /** Sposób powiązania rozliczenia OTA z rezerwacją operacyjną. */
   matchMethod?: "platform-unit-dates" | "unit-dates-source-correction" | "guest-unit-overlap" | "ota-only" | "mobile-calendar-only";
+  matchConfidence?: "Pewne" | "Wysokie" | "Do sprawdzenia";
+  financialAdjustments?: number;
   paymentStatus?: PaymentStatus;
   cancellationPolicy?: string;
   arrivalTime?: string;
