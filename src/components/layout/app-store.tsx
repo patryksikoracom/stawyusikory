@@ -2289,7 +2289,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     }),
     updateConnection: (connection) => batchMutate((current) => ({
       ...current,
-      sourceConnections: current.sourceConnections.map((item) => item.id === connection.id ? connection : item),
+      sourceConnections: current.sourceConnections.some((item) => item.id === connection.id)
+        ? current.sourceConnections.map((item) => item.id === connection.id ? connection : item)
+        : [connection, ...current.sourceConnections],
       auditLog: [audit("connection", connection.id, "updated", `${connection.platform}: ${connection.status}`), ...current.auditLog],
     })),
     updateUnit: (unit) => batchMutate((current) => ({

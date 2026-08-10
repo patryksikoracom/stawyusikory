@@ -33,7 +33,7 @@ const id = z.string().trim().min(1).max(256);
 const optionalText = (max: number) => z.string().trim().max(max).optional();
 const versionMetadata = {
   version: z.number().int().positive().optional(),
-  updatedAt: z.iso.datetime().optional(),
+  updatedAt: z.iso.datetime({ offset: true }).optional(),
 };
 
 const schemas: Record<BatchEntityType, z.ZodType<Record<string, unknown>>> = {
