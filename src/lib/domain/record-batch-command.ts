@@ -41,7 +41,7 @@ const id = z.string().trim().min(1).max(256);
 const optionalText = (max: number) => z.string().trim().max(max).optional();
 const versionMetadata = {
   version: z.number().int().positive().optional(),
-  updatedAt: z.iso.datetime().optional(),
+  updatedAt: z.iso.datetime({ offset: true }).optional(),
 };
 
 const schemas: Record<BatchEntityType, z.ZodType<Record<string, unknown>>> = {
@@ -109,6 +109,7 @@ const schemas: Record<BatchEntityType, z.ZodType<Record<string, unknown>>> = {
     travelGuides: z.array(z.object({
       id,
       language: z.enum(["pl", "de", "en"]),
+      unitIds: z.array(id).max(50).optional(),
       version: z.number().int().positive(),
       body: z.string().trim().min(1).max(20_000),
       routeWarning: z.string().trim().min(1).max(5_000),
@@ -288,7 +289,13 @@ export const recordBatchCommandSchema = z.object({
     }
     const parsed = schemas[change.entityType].safeParse(change.payload);
     if (!parsed.success) {
-      context.addIssue({ code: "custom", path: ["changes", index, "payload"], message: "Payload rekordu narusza kontrakt domenowy." });
+      for (const issue of parsed.error.issues) {
+        context.addIssue({
+          code: "custom",
+          path: ["changes", index, "payload", ...issue.path],
+          message: issue.message,
+        });
+      }
       continue;
     }
     const payloadId = change.entityType === "guests" || change.entityType === "consents"

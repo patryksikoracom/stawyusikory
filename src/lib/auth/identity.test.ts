@@ -60,7 +60,7 @@ describe("tożsamość widoczna w aplikacji", () => {
   });
 
   it("rozpoznaje nowe role bez odczytywania ich z user metadata", () => {
-    expect(roleLabel("manager")).toBe("Manager");
+    expect(roleLabel("manager")).toBe("Operator");
     expect(roleLabel("marketing")).toBe("Marketing");
     expect(roleLabel("accounting")).toBe("Księgowość");
   });

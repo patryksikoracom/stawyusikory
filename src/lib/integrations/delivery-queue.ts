@@ -17,6 +17,17 @@ export function normalizeDeliveryEmail(value?: string) {
   return email;
 }
 
+export function isOutboundClaimable(
+  existing: { status: string; next_attempt_at: string | null } | null,
+  now: Date,
+) {
+  if (!existing || ["queued", "error"].includes(existing.status)) {
+    return !existing?.next_attempt_at || existing.next_attempt_at <= now.toISOString();
+  }
+  return existing.status === "processing"
+    && (!existing.next_attempt_at || existing.next_attempt_at <= now.toISOString());
+}
+
 export function deliveryRetry(input: { attempts: number; now: Date; important: boolean }) {
   const maxAttempts = input.important ? 5 : 3;
   const exhausted = input.attempts >= maxAttempts;
@@ -63,7 +74,7 @@ export function preflightDelivery(data: AppData, message: ScheduledMessage) {
   if (template?.language && person?.preferredLanguage && template.language !== person.preferredLanguage) {
     blockers.push("język szablonu różni się od preferencji gościa");
   }
-  if (template?.family === "review") {
+  if (template && ["Opinia publiczna", "Przypomnienie opinii"].includes(template.purpose)) {
     const hasPurpose = message.channel === "SMS"
       ? hasActiveConsent(data.consentLedger, profile?.personId, "marketing_sms")
       : message.channel === "E-mail"

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initialData } from "@/lib/demo-data";
 import { GuestsView } from "./guests-view";
 
@@ -20,12 +20,15 @@ function storeWithData(overrides: Partial<typeof initialData>) {
     updateGuest: vi.fn(),
     updateConsent: vi.fn(),
     upsertPerson: vi.fn(),
+    saveGuestProfile: vi.fn().mockResolvedValue({ ok: true }),
     mergePeople: vi.fn(),
     upsertConsentRecord: vi.fn(),
   };
 }
 
 describe("GuestsView — uczciwe insighty", () => {
+  afterEach(cleanup);
+
   beforeEach(() => {
     mocks.store.current = storeWithData({
       bookings: [initialData.bookings[0]],
@@ -88,5 +91,32 @@ describe("GuestsView — uczciwe insighty", () => {
     expect(screen.getByText("0/0")).toBeInTheDocument();
     expect(screen.getByText("Brak rezerwacji, na podstawie których można utworzyć profile gości.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Przejdź do rezerwacji/ })).toHaveAttribute("href", "/bookings");
+  });
+
+  it("pozostawia formularz otwarty i pokazuje błąd odrzuconego zapisu", async () => {
+    const store = storeWithData({
+      bookings: [initialData.bookings[0]],
+      guests: [],
+      consents: [],
+      tasks: [],
+      media: [],
+      issues: [],
+      departureDebriefs: [],
+    });
+    store.saveGuestProfile.mockResolvedValue({
+      ok: false,
+      message: "Paczka zmian narusza reguły operacyjne.",
+      requestId: "request-profile-422",
+      resolution: "rolled-back",
+    });
+    mocks.store.current = store;
+    render(<GuestsView />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Edytuj profil/ }));
+    fireEvent.change(screen.getByLabelText("Segment"), { target: { value: "Rodzina" } });
+    fireEvent.click(screen.getByRole("button", { name: "Zapisz profil" }));
+
+    expect(await screen.findByText(/request-profile-422/)).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: /Profil gościa/ })).toBeInTheDocument();
   });
 });

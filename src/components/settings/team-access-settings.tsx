@@ -8,7 +8,7 @@ type InvitationRole = Exclude<UserRole, "owner">;
 
 const roleLabels: Record<InvitationRole, string> = {
   admin: "Administrator — może edytować dane",
-  manager: "Manager — operacje i dane gości",
+  manager: "Operator — kalendarz i rezerwacje",
   viewer: "Podgląd — tylko odczyt",
   cleaning: "Sprzątanie — tylko zadania i checklisty",
   marketing: "Marketing — materiały bez danych kontaktowych",

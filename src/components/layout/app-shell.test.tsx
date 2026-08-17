@@ -137,4 +137,20 @@ describe("AppShell przed zakończeniem ładowania", () => {
     expect(select).toHaveValue("org-test");
     expect(within(select).getByRole("option", { name: "Drugi obiekt" })).toBeInTheDocument();
   });
+
+  it("pokazuje operatorowi wyłącznie kalendarz i rezerwacje", () => {
+    mocks.store.current = {
+      data: initialData,
+      dataStatus: "ready" as const,
+      syncMode: "cloud" as const,
+      retryDataLoad: vi.fn(),
+    };
+    render(<AppShell identity={{ ...identity, role: "manager", roleLabel: "Operator" }}><div>Treść aplikacji</div></AppShell>);
+
+    expect(screen.getAllByRole("link", { name: /Kalendarz/ }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /Rezerwacje/ }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("link", { name: /Finanse/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Integracje/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Więcej/ })).not.toBeInTheDocument();
+  });
 });

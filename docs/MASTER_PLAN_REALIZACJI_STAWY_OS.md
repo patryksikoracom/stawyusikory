@@ -1,8 +1,21 @@
 # Stawy OS — nadrzędny plan realizacji
 
 **Status:** plan obowiązujący
-**Data aktualizacji:** 27 lipca 2026
+**Data aktualizacji:** 10 sierpnia 2026
 **Źródła:** audyt aplikacji, plan wdrożenia poprawek, plan restrukturyzacji, ADR-001, słownik KPI, raport z przejścia przez aplikację z 19 lipca oraz ustalenia z realizacji PR-1–PR-5
+
+## Aktualizacja kolejki — 10 sierpnia 2026
+
+Całościowy audyt bieżącej gałęzi zastępuje nieaktualne wskazanie PR-10f jako następnej implementacji. Komendy managera zostały scalone w PR #34; pozostał ich test operacyjny na koncie taty. Najbliższy pakiet lokalny ma cztery, wykonywane kolejno bramki P0:
+
+1. **Jedno źródło prawdy wydania — gotowe lokalnie** — manifest kod↔schema, blokada niezgodnego odczytu i procedura rollbacku.
+2. **Wiarygodny zapis formularzy — gotowe lokalnie** — wynik asynchroniczny, jawne stany błędu i diagnostyka odrzuconej komendy.
+3. **Trwałe reguły cenowe — gotowe lokalnie** — poprawny domek po wczytaniu danych, walidacja pól, potwierdzenie zapisu i pełna ścieżka dodaj/wyłącz/usuń.
+4. **Bezpieczny iCal — gotowe lokalnie** — zachowanie ostatniego poprawnego stanu błędnego feedu, walidacja i test awarii częściowej.
+
+Łączna regresja z 10.08.2026: **456/456 testów**, zero błędów lint, TypeScript i produkcyjny build 36 tras. Pakiet jest gotowy do ręcznej akceptacji właściciela. Nadal nie wykonano pushu, deploymentu, migracji produkcyjnych, testu konta taty ani podłączenia prawdziwych feedów.
+
+Push, wdrożenie, migracje produkcyjne i prawdziwe feedy są wstrzymane do łącznej akceptacji całego pakietu. Źródłem diagnozy jest `AUDYT_CALOSCIOWY_APLIKACJI_2026-07-27.md`, a kontrakt wydania opisuje `MANIFEST_WYDANIA.md`.
 
 ## Jak czytać plan
 

@@ -43,8 +43,8 @@ function bookingFixture(index: number): Booking {
     guestLabel: `Wydajność ${String(index).padStart(4, "0")}`,
     platformReservationNo: undefined,
     importRef: undefined,
-    checkIn: "2026-08-01",
-    checkOut: "2026-08-04",
+    checkIn: "2099-08-01",
+    checkOut: "2099-08-04",
     workflowStatus: "Potwierdzona",
   };
 }
@@ -111,5 +111,16 @@ describe("BookingsView — fundament UX", () => {
       name: "Wróć do listy z zachowaniem filtrów",
     }));
     expect(router.back).toHaveBeenCalledOnce();
+  });
+
+  it("ukrywa przed operatorem niewydane zakładki i eksport", () => {
+    render(<BookingsView initialId={initialData.bookings[0]!.id} role="manager" />);
+
+    expect(screen.getByRole("button", { name: "Podsumowanie" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Historia" })).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: "Płatności" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Wiadomości" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Eksport" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Napisz" })).not.toBeInTheDocument();
   });
 });

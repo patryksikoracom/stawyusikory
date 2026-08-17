@@ -12,6 +12,7 @@ const store = vi.hoisted(() => ({
   addBooking: vi.fn(),
   updateBooking: vi.fn(),
   deleteBooking: vi.fn(),
+  saveGuestProfile: vi.fn(),
 }));
 
 vi.mock("@/components/layout/app-store", () => ({
@@ -25,6 +26,7 @@ describe("NewBookingDialog — PR-10c", () => {
     store.addBooking.mockResolvedValue({ ok: true });
     store.updateBooking.mockResolvedValue({ ok: true });
     store.deleteBooking.mockResolvedValue({ ok: true });
+    store.saveGuestProfile.mockResolvedValue({ ok: true });
   });
 
   afterEach(cleanup);
@@ -144,5 +146,90 @@ describe("NewBookingDialog — PR-10c", () => {
     fireEvent.click(screen.getByRole("button", { name: "Ustaw wyjątek" }));
     expect(screen.getByLabelText(/Wyjątkowa kwota zadatku/)).toBeInTheDocument();
     expect(screen.getByText("Dane opcjonalne: faktura i adres")).toBeInTheDocument();
+  });
+
+  it("materializuje wskazany wpis iCal bez konfliktu z nim samym", async () => {
+    const blockId = "ICAL-SRC-AIRBNB-RESERVED";
+    store.data = {
+      ...initialData,
+      bookings: [],
+      blocks: [{
+        id: blockId,
+        unitId: initialData.units[0].id,
+        dateFrom: "2027-01-10",
+        dateTo: "2027-01-12",
+        blockType: "Inne",
+        reason: "[Airbnb] Reserved",
+        status: "Aktywna",
+      }],
+    };
+    render(
+      <NewBookingDialog
+        defaults={{
+          unitId: initialData.units[0].id,
+          checkIn: "2027-01-10",
+          checkOut: "2027-01-12",
+          platform: "Airbnb",
+          importRef: { source: "ical", key: blockId },
+        }}
+        onAdded={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Termin wolny")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Dalej/ }));
+    expect(screen.getByLabelText("Kanał zawarcia rezerwacji")).toHaveValue("Airbnb");
+    fireEvent.change(screen.getByLabelText("Imię"), { target: { value: "Anna" } });
+    fireEvent.click(screen.getByRole("button", { name: /Dalej/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Dodaj rezerwację" }));
+
+    await waitFor(() => expect(store.addBooking).toHaveBeenCalledWith(
+      expect.objectContaining({
+        platform: "Airbnb",
+        importRef: { source: "ical", key: blockId },
+      }),
+      expect.any(Object),
+    ));
+  });
+
+  it("pozwala świadomie zastąpić bufor sprzątania, ale wymaga planu", async () => {
+    const bufferId = "ICAL-SRC-AIRBNB-BUFFER";
+    store.data = {
+      ...initialData,
+      bookings: [],
+      blocks: [{
+        id: bufferId,
+        unitId: initialData.units[0].id,
+        dateFrom: "2027-01-10",
+        dateTo: "2027-01-11",
+        blockType: "Inne",
+        reason: "[Airbnb] Not available",
+        status: "Aktywna",
+      }],
+    };
+    renderDialog();
+
+    expect(screen.getByText("Termin dostępny warunkowo · bufor sprzątania")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Dalej/ }));
+    expect(screen.getByText("Wybierz sposób sprzątania i potwierdź świadome obejście buforu.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("Posprzątamy samodzielnie"));
+    fireEvent.click(screen.getByLabelText(/Potwierdzam, że sprawdziłem termin/));
+    fireEvent.click(screen.getByRole("button", { name: /Dalej/ }));
+    fireEvent.change(screen.getByLabelText("Imię"), { target: { value: "Anna" } });
+    fireEvent.click(screen.getByRole("button", { name: /Dalej/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Dodaj rezerwację" }));
+
+    await waitFor(() => expect(store.addBooking).toHaveBeenCalledWith(
+      expect.objectContaining({
+        availabilityOverride: expect.objectContaining({
+          kind: "cleaning-buffer",
+          blockIds: [bufferId],
+          plan: "self-cleaning",
+        }),
+      }),
+      expect.any(Object),
+    ));
   });
 });

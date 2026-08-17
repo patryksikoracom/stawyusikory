@@ -66,6 +66,14 @@ import { ensureGuestPeople, mergeGuestPeople } from "@/lib/crm/guest-identity";
 export type SyncMode = "checking" | "cloud" | "local" | "error" | "conflict";
 export type DataStatus = "loading" | "ready" | "error";
 export type BookingCommandResult = { ok: true } | { ok: false; message: string };
+export type RecordCommandResult =
+  | { ok: true; requestId?: string; savedAt?: string }
+  | {
+      ok: false;
+      message: string;
+      requestId?: string;
+      resolution: "rolled-back" | "refresh-required" | "conflict";
+    };
 
 type AppStore = {
   data: AppData;
@@ -83,38 +91,43 @@ type AppStore = {
   restoreBooking: (bookingId: string) => Promise<BookingCommandResult>;
   updateTask: (task: OpsTask) => void;
   toggleChecklistItem: (item: TaskChecklistItem) => void;
-  addIssue: (issue: IssueReport) => void;
-  updateIssue: (issue: IssueReport) => void;
-  prepareDepartureDebriefs: (bookingIds: string[]) => void;
-  markDeparturePrompted: (bookingId: string) => void;
-  snoozeDepartureDebrief: (bookingId: string) => void;
-  skipDepartureDebrief: (bookingId: string, reason: string) => void;
-  saveDepartureDebrief: (debrief: DepartureDebrief, issue?: IssueReport) => void;
-  updateScheduledMessage: (message: ScheduledMessage) => void;
+  addIssue: (issue: IssueReport) => Promise<RecordCommandResult>;
+  updateIssue: (issue: IssueReport) => Promise<RecordCommandResult>;
+  prepareDepartureDebriefs: (bookingIds: string[]) => Promise<RecordCommandResult>;
+  markDeparturePrompted: (bookingId: string) => Promise<RecordCommandResult>;
+  snoozeDepartureDebrief: (bookingId: string) => Promise<RecordCommandResult>;
+  skipDepartureDebrief: (bookingId: string, reason: string) => Promise<RecordCommandResult>;
+  saveDepartureDebrief: (debrief: DepartureDebrief, issue?: IssueReport) => Promise<RecordCommandResult>;
+  updateScheduledMessage: (message: ScheduledMessage) => Promise<RecordCommandResult>;
   addBlock: (block: CalendarBlock) => Promise<boolean>;
   updateBlock: (block: CalendarBlock) => Promise<boolean>;
   addPayment: (payment: PaymentTransaction) => void;
-  addInvoice: (invoice: InvoiceRecord) => void;
-  addMessage: (message: MessageRecord) => void;
-  addMedia: (media: MediaAsset) => void;
-  updateMedia: (media: MediaAsset) => void;
-  upsertPerson: (person: GuestPerson) => void;
-  mergePeople: (sourcePersonId: string, targetPersonId: string) => void;
-  updateGuest: (profile: GuestProfile) => void;
-  updateConsent: (consent: ContactConsent) => void;
-  upsertConsentRecord: (consent: ConsentRecord) => void;
-  updateReviewRequest: (review: ReviewRequest) => void;
-  upsertCommunicationConfig: (config: CommunicationConfig) => void;
-  importAdSpend: (records: AdSpendRecord[]) => void;
-  upsertGrowthExperiment: (experiment: GrowthExperiment) => void;
-  upsertInvestmentModel: (model: InvestmentModel) => void;
-  addMeterReading: (reading: MeterReading) => void;
-  updateConnection: (connection: SourceConnection) => void;
-  updateUnit: (unit: Unit) => void;
-  upsertRate: (rate: RateRule) => void;
-  deleteRate: (rateId: string) => void;
-  upsertCostSetting: (cost: CostSetting) => void;
-  deleteCostSetting: (costId: string) => void;
+  addInvoice: (invoice: InvoiceRecord) => Promise<RecordCommandResult>;
+  addMessage: (message: MessageRecord) => Promise<RecordCommandResult>;
+  addMedia: (media: MediaAsset) => Promise<RecordCommandResult>;
+  updateMedia: (media: MediaAsset) => Promise<RecordCommandResult>;
+  upsertPerson: (person: GuestPerson) => Promise<RecordCommandResult>;
+  saveGuestProfile: (
+    profile: GuestProfile,
+    consent: ContactConsent,
+    person: GuestPerson,
+  ) => Promise<RecordCommandResult>;
+  mergePeople: (sourcePersonId: string, targetPersonId: string) => Promise<RecordCommandResult>;
+  updateGuest: (profile: GuestProfile) => Promise<RecordCommandResult>;
+  updateConsent: (consent: ContactConsent) => Promise<RecordCommandResult>;
+  upsertConsentRecord: (consent: ConsentRecord) => Promise<RecordCommandResult>;
+  updateReviewRequest: (review: ReviewRequest) => Promise<RecordCommandResult>;
+  upsertCommunicationConfig: (config: CommunicationConfig) => Promise<RecordCommandResult>;
+  importAdSpend: (records: AdSpendRecord[]) => Promise<RecordCommandResult>;
+  upsertGrowthExperiment: (experiment: GrowthExperiment) => Promise<RecordCommandResult>;
+  upsertInvestmentModel: (model: InvestmentModel) => Promise<RecordCommandResult>;
+  addMeterReading: (reading: MeterReading) => Promise<RecordCommandResult>;
+  updateConnection: (connection: SourceConnection) => Promise<RecordCommandResult>;
+  updateUnit: (unit: Unit) => Promise<RecordCommandResult>;
+  upsertRate: (rate: RateRule) => Promise<RecordCommandResult>;
+  deleteRate: (rateId: string) => Promise<RecordCommandResult>;
+  upsertCostSetting: (cost: CostSetting) => Promise<RecordCommandResult>;
+  deleteCostSetting: (costId: string) => Promise<RecordCommandResult>;
   updateSettings: (settings: AppData["settings"]) => Promise<boolean>;
   replaceWithImportedBookings: (
     bookings: Booking[],
@@ -290,6 +303,36 @@ function normalizeData(parsed?: Partial<AppData> | null, fallback: AppData = ini
   const base = { ...fallback, ...parsed };
   const tasks = parsed?.tasks ?? fallback.tasks;
   const rates = parsed?.rates ?? fallback.rates;
+  const storedTemplates = parsed?.messageTemplates?.length
+    ? parsed.messageTemplates
+    : fallback.messageTemplates.length
+      ? fallback.messageTemplates
+      : [];
+  const defaultTemplateById = new Map(defaultMessageTemplates.map((template) => [template.id, template]));
+  const messageTemplates = [
+    ...storedTemplates.map((template) => {
+      const currentDefault = defaultTemplateById.get(template.id);
+      return currentDefault && currentDefault.version > template.version
+        ? { ...currentDefault, active: template.active }
+        : template;
+    }),
+    ...defaultMessageTemplates.filter((template) => !storedTemplates.some((stored) => stored.id === template.id)),
+  ];
+  const storedRules = parsed?.automationRules?.length
+    ? parsed.automationRules
+    : fallback.automationRules.length
+      ? fallback.automationRules
+      : [];
+  const defaultRuleById = new Map(defaultAutomationRules.map((rule) => [rule.id, rule]));
+  const automationRules = [
+    ...storedRules.map((stored) => {
+      const currentDefault = defaultRuleById.get(stored.id);
+      return currentDefault && (currentDefault.definitionVersion ?? 0) > (stored.definitionVersion ?? 0)
+        ? { ...currentDefault, active: stored.active }
+        : stored;
+    }),
+    ...defaultAutomationRules.filter((rule) => !storedRules.some((stored) => stored.id === rule.id)),
+  ];
   const normalized = ensureGuestPeople({
     ...base,
     units: (parsed?.units ?? fallback.units).map((unit) => ({
@@ -345,8 +388,8 @@ function normalizeData(parsed?: Partial<AppData> | null, fallback: AppData = ini
     issues: parsed?.issues ?? fallback.issues,
     messages: parsed?.messages ?? fallback.messages,
     departureDebriefs: parsed?.departureDebriefs ?? fallback.departureDebriefs,
-    messageTemplates: parsed?.messageTemplates?.length ? parsed.messageTemplates : fallback.messageTemplates.length ? fallback.messageTemplates : defaultMessageTemplates,
-    automationRules: parsed?.automationRules?.length ? parsed.automationRules : fallback.automationRules.length ? fallback.automationRules : defaultAutomationRules,
+    messageTemplates,
+    automationRules,
     scheduledMessages: (parsed?.scheduledMessages ?? fallback.scheduledMessages).map((message) => ({
       ...message,
       version: message.version ?? 1,
@@ -961,37 +1004,58 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setLoadRequest((request) => request + 1);
   }, []);
 
-  const batchMutate = useCallback((fn: (current: AppData) => AppData) => {
-    if (!dataReady.current) return;
+  const batchMutate = useCallback(async (fn: (current: AppData) => AppData): Promise<RecordCommandResult> => {
+    if (!dataReady.current) return {
+      ok: false,
+      message: "Dane aplikacji nie są jeszcze gotowe. Spróbuj ponownie.",
+      resolution: "rolled-back",
+    };
     if (!cloudConfigured) {
       mutate(fn);
-      return;
+      return { ok: true };
     }
-    if (!cloudReady.current) return;
+    if (!cloudReady.current) return {
+      ok: false,
+      message: "Brak gotowego połączenia z chmurą. Odśwież dane i spróbuj ponownie.",
+      resolution: "refresh-required",
+    };
 
     const previous = latestData.current;
     const next = fn(previous);
-    if (next === previous) return;
+    if (next === previous) return { ok: true };
     const revision = ++localRevision.current;
     pendingRecordCommands.current += 1;
     latestData.current = next;
     setData(next);
 
-    cloudSaveQueue.current = cloudSaveQueue.current.then(async () => {
+    const requestId = typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : uid("REQ");
+    let outcome: RecordCommandResult = {
+      ok: false,
+      message: "Nie potwierdzono zapisu.",
+      requestId,
+      resolution: "refresh-required",
+    };
+    const queuedCommand = cloudSaveQueue.current.then(async () => {
       if (!cloudReady.current) {
+        outcome = {
+          ok: false,
+          message: "Połączenie z chmurą zostało przerwane przed zapisem.",
+          requestId,
+          resolution: "refresh-required",
+        };
         finishRecordCommand();
         return;
       }
       const changes = buildRecordBatchChanges(previous, next, batchRecordVersions.current);
       if (!changes.length) {
         savedRevision.current = Math.max(savedRevision.current, revision);
+        outcome = { ok: true, requestId };
         finishRecordCommand();
         return;
       }
 
-      const requestId = typeof crypto !== "undefined" && crypto.randomUUID
-        ? crypto.randomUUID()
-        : uid("REQ");
       const clientSentAt = new Date().toISOString();
       try {
         const response = await fetch("/api/records/batch", {
@@ -1027,9 +1091,34 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
             changes: summarizeSyncChanges(baseData.current, next),
           });
           void compareConflictWithCloud(conflict, next, generation);
+          outcome = {
+            ok: false,
+            message: "Rekord zmienił się na innym urządzeniu. Porównaj zmiany przed dalszą pracą.",
+            requestId: conflictPayload.requestId ?? requestId,
+            resolution: "conflict",
+          };
           return;
         }
-        if (!response.ok) throw new Error("batch save failed");
+        if (!response.ok) {
+          const errorPayload = await response.json().catch(() => ({})) as {
+            error?: string;
+            requestId?: string;
+          };
+          if (response.status >= 400 && response.status < 500) {
+            latestData.current = previous;
+            setData(previous);
+            cloudReady.current = false;
+            setSyncMode("error");
+            outcome = {
+              ok: false,
+              message: errorPayload.error ?? "Serwer odrzucił zmianę.",
+              requestId: errorPayload.requestId ?? requestId,
+              resolution: "rolled-back",
+            };
+            return;
+          }
+          throw new Error(errorPayload.error ?? "batch save failed");
+        }
         const payload = await response.json() as RecordBatchCommandResult;
         if (
           typeof payload.stateVersion !== "number"
@@ -1062,6 +1151,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         baseData.current = next;
         setSyncMode("cloud");
         const savedAt = payload.savedAt ?? new Date().toISOString();
+        outcome = { ok: true, requestId, savedAt };
         setLastSavedAt(savedAt);
         syncChannel.current?.postMessage({
           type: "state-committed",
@@ -1075,10 +1165,19 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         // wymagamy ponownego pobrania zamiast ryzykować wtórną komendę.
         cloudReady.current = false;
         setSyncMode("error");
+        outcome = {
+          ok: false,
+          message: "Nie udało się potwierdzić zapisu. Odśwież dane przed ponowieniem.",
+          requestId,
+          resolution: "refresh-required",
+        };
       } finally {
         finishRecordCommand();
       }
     });
+    cloudSaveQueue.current = queuedCommand;
+    await queuedCommand;
+    return outcome;
   }, [compareConflictWithCloud, finishRecordCommand, mutate]);
 
   const createBooking = useCallback(async (booking: Booking, contact?: ContactConsent): Promise<BookingCommandResult> => {
@@ -2372,6 +2471,26 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         : [person, ...current.people],
       auditLog: [audit("person", person.id, "updated", "Zapisano tożsamość gościa"), ...current.auditLog],
     })),
+    saveGuestProfile: (profile, consent, person) => batchMutate((current) => {
+      const next: AppData = {
+        ...current,
+        people: current.people.some((item) => item.id === person.id)
+        ? current.people.map((item) => item.id === person.id ? person : item)
+        : [person, ...current.people],
+        guests: current.guests.some((item) => item.bookingId === profile.bookingId)
+        ? current.guests.map((item) => item.bookingId === profile.bookingId ? profile : item)
+        : [profile, ...current.guests],
+        consents: current.consents.some((item) => item.bookingId === consent.bookingId)
+        ? current.consents.map((item) => item.bookingId === consent.bookingId ? consent : item)
+        : [consent, ...current.consents],
+        auditLog: [
+          audit("person", person.id, "updated", "Zapisano profil i kontakt gościa"),
+          ...current.auditLog,
+        ],
+      };
+      next.scheduledMessages = reconcileScheduledMessages(next);
+      return next;
+    }),
     mergePeople: (sourcePersonId, targetPersonId) => batchMutate((current) => {
       const next = mergeGuestPeople(current, sourcePersonId, targetPersonId);
       if (next === current) return current;
@@ -2454,7 +2573,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     })),
     updateConnection: (connection) => batchMutate((current) => ({
       ...current,
-      sourceConnections: current.sourceConnections.map((item) => item.id === connection.id ? connection : item),
+      sourceConnections: current.sourceConnections.some((item) => item.id === connection.id)
+        ? current.sourceConnections.map((item) => item.id === connection.id ? connection : item)
+        : [connection, ...current.sourceConnections],
       auditLog: [audit("connection", connection.id, "updated", `${connection.platform}: ${connection.status}`), ...current.auditLog],
     })),
     updateUnit: (unit) => batchMutate((current) => ({

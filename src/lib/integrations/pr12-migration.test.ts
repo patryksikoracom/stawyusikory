@@ -23,6 +23,10 @@ describe("PR-12 integration go-live migration", () => {
 
   it("keeps provider writes behind server-side service-role paths", () => {
     expect(migration).toContain("enable row level security");
+    expect(migration).toContain(
+      "private.has_org_permission(organization_id, 'read')",
+    );
+    expect(migration).not.toContain("public.is_org_member");
     expect(migration).toMatch(/revoke insert, update on table[\s\S]+from authenticated;/);
     expect(migration).not.toContain("for all to authenticated");
   });

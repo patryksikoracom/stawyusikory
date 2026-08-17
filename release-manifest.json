@@ -1,0 +1,5 @@
+{
+  "releaseId": "stawy-os-email-hotfix-2026-08-17",
+  "schemaVersion": "2026-08-17.1",
+  "requiredMigration": "20260817164427_fix_resend_webhook_service_role_auth.sql"
+}

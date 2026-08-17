@@ -77,6 +77,13 @@ describe("CalendarView — potwierdzane blokady", () => {
     expect(screen.getByText("Praca z kalendarzem")).toBeInTheDocument();
   });
 
+  it("ukrywa skrót do importów przed Operatorem", () => {
+    render(<CalendarView role="manager" />);
+
+    expect(screen.getByRole("link", { name: "Arkusz rezerwacji" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Import danych" })).not.toBeInTheDocument();
+  });
+
   it("filtruje wyłącznie po kanałach rezerwacji, bez źródeł odkrycia", () => {
     mocks.store.current = {
       ...createStore(),
@@ -280,5 +287,102 @@ describe("CalendarView — potwierdzane blokady", () => {
     expect(screen.getByRole("region", {
       name: "Stan synchronizacji kalendarza",
     })).toBeInTheDocument();
+  });
+
+  it("odróżnia bufor sprzątania od rezerwacji oczekującej na szczegóły", () => {
+    const today = todayInPoland();
+    mocks.store.current = {
+      ...createStore(),
+      data: {
+        ...createStore().data,
+        blocks: [
+          {
+            id: "ICAL-SRC-BOOKING-1",
+            unitId: initialData.units[0]!.id,
+            dateFrom: today,
+            dateTo: addLocalDays(today, 2),
+            blockType: "Inne" as const,
+            reason: "[Booking] CLOSED - Not available",
+            status: "Aktywna" as const,
+          },
+          {
+            id: "ICAL-SRC-AIRBNB-1",
+            unitId: initialData.units[1]!.id,
+            dateFrom: addLocalDays(today, 1),
+            dateTo: addLocalDays(today, 4),
+            blockType: "Inne" as const,
+            reason: "[Airbnb] Reserved",
+            status: "Aktywna" as const,
+          },
+        ],
+      },
+    };
+    render(<CalendarView />);
+
+    expect(screen.getByLabelText(/Bufor sprzątania · Booking/)).toHaveClass("bg-[#f5e8c5]/95");
+    expect(screen.getByRole("button", { name: /Airbnb · nowa rezerwacja, uzupełnij szczegóły/ })).toHaveClass("bg-[#f8ddd5]/95");
+    expect(screen.queryByText("Inne")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Airbnb · nowa rezerwacja, uzupełnij szczegóły/ }));
+    expect(screen.getByRole("dialog", { name: "Dodaj rezerwację" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Dalej/ }));
+    expect(screen.getByRole("combobox", { name: "Kanał zawarcia rezerwacji" })).toHaveValue("Airbnb");
+  });
+
+  it("nie rozpycha wiersza domku przy wielu blokach iCal", () => {
+    const today = todayInPoland();
+    mocks.store.current = {
+      ...createStore(),
+      data: {
+        ...createStore().data,
+        blocks: Array.from({ length: 5 }, (_, index) => ({
+          id: `ICAL-SRC-BOOKING-${index}`,
+          unitId: initialData.units[1]!.id,
+          dateFrom: addLocalDays(today, index * 2),
+          dateTo: addLocalDays(today, index * 2 + 1),
+          blockType: "Inne" as const,
+          reason: "[Booking] CLOSED - Not available",
+          status: "Aktywna" as const,
+        })),
+      },
+    };
+    render(<CalendarView />);
+
+    expect(screen.getAllByLabelText(/Bufor sprzątania · Booking/).map((bar) => bar.style.marginBottom))
+      .toEqual(["8px", "32px", "8px", "32px", "8px"]);
+  });
+
+  it("nie maluje rezerwacji na czerwono przez jej odbicie iCal", () => {
+    const today = todayInPoland();
+    const booking = {
+      ...initialData.bookings[0]!,
+      id: "VISIBLE-BOOKING",
+      unitId: initialData.units[0]!.id,
+      checkIn: today,
+      checkOut: addLocalDays(today, 3),
+      platform: "Booking" as const,
+    };
+    mocks.store.current = {
+      ...createStore(),
+      data: {
+        ...createStore().data,
+        bookings: [booking],
+        blocks: [{
+          id: "ICAL-SRC-BOOKING-DUPLICATE",
+          unitId: booking.unitId,
+          dateFrom: booking.checkIn,
+          dateTo: booking.checkOut,
+          blockType: "Inne" as const,
+          reason: "[Booking] CLOSED - Not available",
+          status: "Aktywna" as const,
+        }],
+      },
+    };
+    render(<CalendarView />);
+
+    const bar = screen.getByRole("link", { name: /VISIBLE-BOOKING|kanał Booking/ });
+    expect(bar).toHaveClass("bg-[#27727d]");
+    expect(bar).not.toHaveClass("bg-[#c94e37]");
+    expect(screen.queryByRole("button", { name: /Booking · nowa rezerwacja/ })).not.toBeInTheDocument();
   });
 });

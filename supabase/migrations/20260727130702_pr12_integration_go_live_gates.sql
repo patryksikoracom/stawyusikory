@@ -85,16 +85,16 @@ to authenticated;
 
 create policy "members read integration contracts"
   on public.integration_contracts for select to authenticated
-  using (public.is_org_member(organization_id));
+  using (private.has_org_permission(organization_id, 'read'));
 create policy "members read shadow reports"
   on public.integration_shadow_reports for select to authenticated
-  using (public.is_org_member(organization_id));
+  using (private.has_org_permission(organization_id, 'read'));
 create policy "members read cutover gates"
   on public.integration_cutover_gates for select to authenticated
-  using (public.is_org_member(organization_id));
+  using (private.has_org_permission(organization_id, 'read'));
 create policy "members read webhook receipts"
   on public.integration_webhook_receipts for select to authenticated
-  using (public.is_org_member(organization_id));
+  using (private.has_org_permission(organization_id, 'read'));
 
 -- Writes are deliberately limited to service-role paths. Production enablement
 -- must therefore pass a server-side gate and cannot be toggled from the browser.

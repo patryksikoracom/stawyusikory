@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { releaseManifest } from "@/lib/release";
 import { GET } from "./route";
 
 const mocks = vi.hoisted(() => ({
@@ -99,6 +100,20 @@ describe("GET /api/state wersje rekordów", () => {
     };
     revisionQuery.select.mockReturnValue(revisionQuery);
     revisionQuery.eq.mockReturnValue(revisionQuery);
+    const releaseQuery = {
+      select: vi.fn(),
+      eq: vi.fn(),
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: {
+          schema_version: releaseManifest.schemaVersion,
+          required_migration: releaseManifest.requiredMigration,
+          applied_at: "2026-08-10T11:35:19.000Z",
+        },
+        error: null,
+      }),
+    };
+    releaseQuery.select.mockReturnValue(releaseQuery);
+    releaseQuery.eq.mockReturnValue(releaseQuery);
 
     mocks.createClient.mockResolvedValue({
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-test" } } }) },
@@ -109,6 +124,7 @@ describe("GET /api/state wersje rekordów", () => {
     });
     mocks.createServiceClient.mockReturnValue({
       from: vi.fn((table: string) => {
+        if (table === "app_release_manifest") return releaseQuery;
         if (table === "operational_records") return recordsQuery;
         if (table === "operational_state_versions") return revisionQuery;
         throw new Error(`Unexpected service table: ${table}`);

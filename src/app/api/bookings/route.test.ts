@@ -159,6 +159,58 @@ describe("POST /api/bookings", () => {
     );
   });
 
+  it("materializuje kandydaturę iCal przez zawężoną funkcję transakcyjną", async () => {
+    const blockId = "ICAL-SRC-AIRBNB-RESERVED";
+    const response = await POST(request({
+      aggregate: {
+        ...aggregate,
+        booking: {
+          ...booking,
+          platform: "Airbnb",
+          importRef: { source: "ical", key: blockId },
+        },
+      },
+    }));
+
+    expect(response.status).toBe(200);
+    expect(mocks.context.supabase.rpc).toHaveBeenCalledWith(
+      "create_operational_booking_from_ical",
+      expect.objectContaining({
+        p_booking: expect.objectContaining({ importRef: { source: "ical", key: blockId } }),
+        p_ical_block_id: blockId,
+      }),
+    );
+  });
+
+  it("przekazuje potwierdzony bufor do zawężonej funkcji obejścia", async () => {
+    const response = await POST(request({
+      aggregate: {
+        ...aggregate,
+        booking: {
+          ...booking,
+          availabilityOverride: {
+            kind: "cleaning-buffer",
+            blockIds: ["ICAL-SRC-AIRBNB-BUFFER"],
+            plan: "self-cleaning",
+            confirmedAt: "2026-08-10T19:30:00.000Z",
+          },
+        },
+      },
+    }));
+
+    expect(response.status).toBe(200);
+    expect(mocks.context.supabase.rpc).toHaveBeenCalledWith(
+      "create_operational_booking_with_cleaning_buffer_override",
+      expect.objectContaining({
+        p_booking: expect.objectContaining({
+          availabilityOverride: expect.objectContaining({
+            blockIds: ["ICAL-SRC-AIRBNB-BUFFER"],
+          }),
+        }),
+      }),
+    );
+  });
+
   it("akceptuje bezpieczne ponowienie tej samej komendy", async () => {
     mocks.context.supabase.rpc.mockResolvedValue({
       data: {

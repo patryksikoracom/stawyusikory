@@ -9,7 +9,7 @@ Produkcyjny fundament systemu operacyjnego Stawów u Sikory: rezerwacje, wspóln
 - organizacje, członkostwa i RLS izolujące dane właścicieli;
 - tworzenie, edycja, anulowanie, deep-link i historia rezerwacji;
 - kontrola konfliktów, pobyty stykające się tego samego dnia i blokady z kalendarza;
-- trwałe zadania, checklisty sprzątania, usterki i SMSAPI z kluczem idempotencji;
+- trwałe zadania, checklisty sprzątania, usterki, SMSAPI i transakcyjne e-maile Resend z kluczem idempotencji;
 - rejestr płatności, prowizji, kosztów, zwrotów, faktur/rachunków oraz raporty ADR, RevPAR i obłożenia;
 - profile gości, zgody marketingowe oraz biblioteka mediów;
 - bezpieczny import Mobile Calendar z opcjonalnym uzgodnieniem rozliczeń Airbnb i Booking: podgląd, walidacja, deduplikacja, rzeczywiste opłaty OTA i scalanie bez kasowania danych;
@@ -17,7 +17,7 @@ Produkcyjny fundament systemu operacyjnego Stawów u Sikory: rezerwacje, wspóln
 - backup JSON, audit log, mobilne menu wszystkich modułów i instalowalna PWA;
 - testy reguł terminów, polskich dat oraz importu.
 
-Bez skonfigurowanego Supabase aplikacja działa w wyraźnie oznaczonym trybie lokalnym. Nie udaje wtedy synchronizacji chmurowej. Wysyłka SMS jest domyślnie zablokowana przez `STAWY_OS_SMS_ENABLED=false`; sam `SMSAPI_TOKEN` nie otwiera kanału.
+Bez skonfigurowanego Supabase aplikacja działa w wyraźnie oznaczonym trybie lokalnym. Nie udaje wtedy synchronizacji chmurowej. Wysyłka SMS i e-mail jest domyślnie zablokowana przez osobne przełączniki; sam token dostawcy nie otwiera kanału.
 
 ## Uruchomienie
 
@@ -37,9 +37,12 @@ Kontrola jakości:
 npm run lint
 npm run typecheck
 npm test
+npm run check:release
 npm run check:auth-config
 npm run build
 ```
+
+Build oraz odczyt danych chmurowych mają bramkę zgodności kodu ze schematem. Zasady wydania i rollbacku opisuje [`docs/MANIFEST_WYDANIA.md`](docs/MANIFEST_WYDANIA.md).
 
 ## Supabase
 
@@ -61,7 +64,7 @@ Wbudowane dane demonstracyjne są rozpoznawane i nie mogą zostać automatycznie
 - W panelu portalu trzeba potwierdzić, czy dana oferta Booking.com ma import i eksport iCal.
 - iCal nie przenosi ceny, danych gościa ani płatności i może odświeżać się z opóźnieniem.
 
-Workflow `.github/workflows/operations-cron.yml` uruchamia synchronizację co 15 minut, ale interfejs zakłada próg nieaktualności czterech godzin ze względu na ograniczenia portali. Ponowienia SMS są uruchamiane dopiero po ustawieniu sekretu GitHub `STAWY_OS_SMS_ENABLED=true`, a endpoint wymaga dodatkowo tej samej wartości w środowisku aplikacji. Warunki otwarcia kanału opisuje ADR-001.
+Workflow `.github/workflows/operations-cron.yml` uruchamia synchronizację co 15 minut, ale interfejs zakłada próg nieaktualności czterech godzin ze względu na ograniczenia portali. Kanały SMS i e-mail są wywoływane dopiero po ustawieniu odpowiadających im sekretów GitHub na `true`, a endpointy wymagają dodatkowo tej samej wartości w środowisku aplikacji. Warunki otwarcia kanału SMS opisuje ADR-001.
 
 ## Testy integracyjne Supabase
 
@@ -75,11 +78,23 @@ RUN_SUPABASE_INTEGRATION=1 SUPABASE_INTEGRATION_TEST_PROJECT=1 npm run test:inte
 
 W pilocie pozostaw `STAWY_OS_SMS_ENABLED=false`. Po formalnym przejściu bramki wysyłki ustaw `SMSAPI_TOKEN` i `STAWY_OS_SMS_ENABLED=true`, a następnie wpisz numer osoby sprzątającej w Ustawieniach. Endpoint `POST /api/messages/sms` waliduje numer i treść, wymaga zalogowanego użytkownika oraz chroni przed powtórnym wysłaniem tym samym kluczem idempotencji.
 
+## Resend i automatyczne e-maile
+
+Konto Resend może być założone na `patryksikora98@gmail.com`; adres logowania nie musi być adresem nadawcy. W Resend dodaj i zweryfikuj całą domenę `stawyusikory.pl` rekordami SPF i DKIM. Wiadomości wychodzą z `rezerwacja@stawyusikory.pl`, odpowiedzi trafiają do `marcin@stawyusikory.pl`, a Marcin zawsze otrzymuje także kopię przez CC.
+
+1. Ustaw `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `RESEND_REPLY_TO` i sekret webhooka `RESEND_WEBHOOK_SECRET` w środowisku aplikacji.
+2. W Resend dodaj webhook `https://<adres-aplikacji>/api/webhooks/resend` dla zdarzeń wysłania, dostarczenia, odbicia, skargi, błędu i blokady.
+3. Zastosuj migrację `20260810200914_resend_email_delivery.sql`.
+4. Sprawdź i zatwierdź treści oraz przewodniki dojazdowe w ustawieniach. Dziewięć treści z Mobile Calendar jest importowanych wyłącznie jako nieaktywne materiały do przeglądu; jawne hasła i dane płatnicze zostały z nich usunięte.
+5. Wyślij test na własny adres. Dopiero po sprawdzeniu nadawcy, odpowiedzi, linków, języków oraz webhooków ustaw `STAWY_OS_EMAIL_ENABLED=true` w aplikacji i w sekrecie GitHub Actions.
+
+Proces tworzy automatycznie: potwierdzenie rezerwacji, potwierdzenie zaliczki, informacje pięć dni przed przyjazdem, krótkie przypomnienie dzień wcześniej i podziękowanie dzień po wyjeździe. Wiadomości z prośbą o publiczną opinię wymagają aktywnej zgody marketingowej. Lokalny limit `STAWY_OS_EMAIL_DAILY_LIMIT` domyślnie wynosi 80 wiadomości w ruchomych 24 godzinach.
+
 ## Granice obecnej wersji
 
 - Rejestr faktur nie wysyła danych do KSeF i nie zastępuje programu księgowego.
 - Pełne API Booking/Airbnb nie jest aktywne; model integracji jest przygotowany pod przyszły adapter/channel manager.
 - AI jest ograniczone do jawnych sugestii. Nie zmienia cen, nie wysyła wiadomości i nie publikuje kampanii.
-- Automatyczne e-maile i marketing pozostają wyłączone do czasu konfiguracji dostawcy i procesu zgód.
+- Marketing pozostaje wyłączony bez aktywnej zgody; transakcyjne e-maile Resend wymagają osobnego przełącznika bezpieczeństwa.
 
 Szczegółowa strategia produktu znajduje się w [`docs/PLAN_RESTRUKTURYZACJI_STAWY_OS.md`](docs/PLAN_RESTRUKTURYZACJI_STAWY_OS.md).

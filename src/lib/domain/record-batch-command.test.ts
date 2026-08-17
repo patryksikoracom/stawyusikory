@@ -56,6 +56,29 @@ describe("recordBatchCommandSchema", () => {
     }).success).toBe(true);
   });
 
+  it("przyjmuje znacznik czasu PostgreSQL z przesunięciem podczas edycji po synchronizacji", () => {
+    expect(recordBatchCommandSchema.safeParse({
+      ...metadata,
+      changes: [{
+        entityType: "sourceConnections",
+        entityId: "SRC-AIRBNB",
+        operation: "upsert",
+        expectedRecordVersion: 2,
+        payload: {
+          id: "SRC-AIRBNB",
+          platform: "Airbnb",
+          connectionType: "iCal",
+          status: "Wymaga sprawdzenia",
+          coverage: 0,
+          nextStep: "Uruchom kontrolę połączenia.",
+          notes: "iCal blokuje terminy.",
+          priority: "Teraz",
+          updatedAt: "2026-08-10T13:45:00+00:00",
+        },
+      }],
+    }).success).toBe(true);
+  });
+
   it.each([
     ["duplikat", [
       { entityType: "issues", entityId: "ISSUE-1", operation: "delete", expectedRecordVersion: 1 },

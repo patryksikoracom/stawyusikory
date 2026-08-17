@@ -67,4 +67,19 @@ describe("Dialog", () => {
     fireEvent.mouseDown(document.querySelector("[data-dialog-overlay]")!);
     expect(close).not.toHaveBeenCalled();
   });
+
+  it("renderuje warstwę poza rodzicem, żeby overflow i transformacja nie ucinały dialogu", () => {
+    const { container } = render(
+      <div style={{ overflow: "hidden", transform: "translateY(0)" }}>
+        <Dialog ariaLabel="Edycja rezerwacji" onClose={() => undefined}>
+          <p>Pełny formularz</p>
+        </Dialog>
+      </div>,
+    );
+
+    const overlay = document.querySelector<HTMLElement>("[data-dialog-overlay]");
+    expect(overlay).toBeInTheDocument();
+    expect(container).not.toContainElement(overlay);
+    expect(overlay?.parentElement).toBe(document.body);
+  });
 });

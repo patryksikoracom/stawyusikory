@@ -1,23 +1,28 @@
 # Rejestr pomysłów Stawy OS
 
-To jest jedno źródło prawdy dla luźnych pomysłów produktowych. Pomysł nie musi być gotową specyfikacją. Najpierw go zapisujemy, potem porównujemy z istniejącym systemem, zawężamy do małego testu i dopiero wtedy kierujemy do realizacji.
+To jest jedno źródło prawdy dla luźnych pomysłów, problemów operacyjnych i możliwych usprawnień Stawów u Sikory. Wpis nie musi być gotową specyfikacją ani prowadzić do funkcji w aplikacji. Najpierw zapisujemy rzeczywistą potrzebę, szukamy prostego zabezpieczenia, a dopiero potem rozważamy zmianę procesu lub Stawy OS.
 
-Ostatnia aktualizacja: 2026-07-27.
+Ostatnia aktualizacja: 2026-08-04.
 
-## Jak dodawać pomysły
+## Jak dodawać wpisy
 
 Wystarczy powiedzieć na przykład:
 
 > Dodaj pomysł: chciałbym móc...
 
+albo:
+
+> Zapisz problem operacyjny: wydarzyło się... i chcę zapobiec powtórce.
+
 Codex ma wtedy:
 
 1. zapisać pomysł, nawet jeśli jest nieprecyzyjny;
 2. sprawdzić, czy coś podobnego już istnieje w kodzie lub planie;
-3. wskazać najmniejszy użyteczny zakres;
-4. nadać status i priorytet;
-5. umieścić go w kolejce;
-6. nie wdrażać go bez osobnego polecenia.
+3. przy problemie operacyjnym wskazać działanie doraźne możliwe bez budowania funkcji;
+4. wskazać najmniejszy użyteczny zakres rozwiązania;
+5. nadać status i priorytet;
+6. umieścić go w kolejce;
+7. nie wdrażać go bez osobnego polecenia.
 
 ## Statusy
 
@@ -45,7 +50,7 @@ Priorytet nie wynika z atrakcyjności funkcji. Liczą się: waga problemu, częs
 
 ## Kolejka
 
-| Kolejność | ID | Pomysł | Status | Priorytet | Najbliższy krok |
+| Kolejność | ID | Wpis | Status | Priorytet | Najbliższy krok |
 |---:|---|---|---|---|---|
 | 1 | POM-014 | Skrzynka uzgodnień Mobile Calendar ↔ OTA | Gotowy do realizacji | P1 — teraz | Pokazać 5 różnic terminów i 1 korektę Airbnb jako osobne decyzje z dowodem oraz akcją zatwierdzenia. |
 | 2 | POM-018 | Cena końcowa gościa i koszt konkurencyjności OTA | Do pilotażu | P1 — teraz | Zebrać pełne szczegóły 20 rezerwacji Airbnb i Booking oraz porównać opłatę gościa, cenę gospodarza, prowizję i wypłatę. |
@@ -62,9 +67,203 @@ Priorytet nie wynika z atrakcyjności funkcji. Liczą się: waga problemu, częs
 | 13 | POM-016 | Powtarzalna migracja z backupem, dry-runem i rollbackiem | Gotowy do realizacji | P2 — następne | Zamienić jednorazowy skrypt z 27.07 na komendę administracyjną z manifestem, kontrolą konfliktów i automatycznym odtworzeniem kopii. |
 | 14 | POM-017 | Import rozliczeń Aloha Camp | Do walidacji | P2 — następne | Pobrać pierwszy eksport rozliczeń Aloha i porównać kolumny z istniejącym modelem prowizji oraz wypłaty. |
 | 15 | POM-012 | Audyt zmian ról i przełączeń organizacji | Do walidacji | P2 — następne | Ustalić minimalny zestaw zdarzeń audytu, retencję oraz osobę przeglądającą log. |
-| 16 | POM-013 | Uprawnienia zapisu dla managera | Gotowy do realizacji | P0 — blokuje pilot | Zrealizować PR-10f według diagnozy incydentu z 27.07: zapis rezerwacji, cennik i finanse pojedynczego pobytu bez pełnego dostępu właściciela. |
+| 16 | POM-013 | Uprawnienia zapisu dla managera | Do pilotażu | P1 — teraz | Po zatwierdzeniu i wdrożeniu pakietu przejść na koncie taty kontrolną wycenę, zapis, odświeżenie i usunięcie rezerwacji. |
 | 17 | POM-002 | Odczyty liczników i koszt energii | Do pilotażu | P2 — następne | Zapisać 2–3 kolejne odczyty jednego licznika ze zdjęciami i ręcznie potwierdzonymi wartościami. |
 | 18 | POM-003 | Rejestr zdarzeń operacyjnych, np. wcześniejszy wyjazd | Do walidacji | P3 — później | Zebrać pięć rzeczywistych przykładów i sprawdzić, których nie obsługuje już podsumowanie pobytu, zadanie lub usterka. |
+| 19 | POM-019 | Wersjonowane zasady wędkowania PL/EN/DE | Do walidacji | P2 — następne | Zatwierdzić jedną polską treść i przetestować papierową kartę podczas trzech pobytów przed włączeniem jej do komunikacji. |
+| 20 | POM-020 | Przygotowanie temperatury domku i automatyzacja klimatyzacji | Do walidacji | P3 — później | Przez pięć przyjazdów zmierzyć czas schładzania Czapli i sprawdzić model klimatyzatora, Wi-Fi oraz możliwość zdalnego sterowania. |
+| 21 | POM-021 | Pakiet ubezpieczenia domków i utraty przychodu z najmu | Do walidacji | P1 — teraz | Wysłać jeden identyczny opis ryzyka do PZU, Generali i Warty oraz porównać pisemne oferty, OWU, limity i wyłączenia. |
+
+---
+
+## POM-021 — Pakiet ubezpieczenia domków i utraty przychodu z najmu
+
+**Data dodania:** 2026-08-04<br>
+**Typ:** Ryzyko operacyjne / zabezpieczenie finansowe<br>
+**Status:** Do walidacji<br>
+**Priorytet:** P1 — teraz<br>
+**Źródło:** research Patryka po szkodzie obejmującej zamoczoną podłogę i niedomykające się drzwi tarasowe<br>
+
+### Oryginalna potrzeba
+
+Domki nie mają obecnie pakietu ubezpieczenia dopasowanego do odpłatnego najmu krótkoterminowego. Roczny koszt rzędu około 1 500–3 500 zł może być rozsądną ceną za przeniesienie części ryzyka szkód w budynkach i wyposażeniu, odpowiedzialności wobec gości oraz przestoju po szkodzie. Potrzebna jest krótka propozycja dla taty i porównanie rzeczywistych ofert na wspólnych założeniach.
+
+### Problem i oczekiwany efekt
+
+Jedna ulewa, zalanie, dewastacja albo szkoda wyrządzona gościowi może oznaczać jednocześnie koszt naprawy oraz brak przychodu podczas wyłączenia domku. Zwykła polisa nieruchomości może nie obejmować działalności, najmu krótkoterminowego, drewnianej konstrukcji, szkód wyrządzonych przez gości ani utraconego dochodu.
+
+Efektem ma być jedna świadomie wybrana polisa obejmująca oba domki i ich rzeczywisty sposób użytkowania, z pisemnym potwierdzeniem zakresu oraz procedurą zgłoszenia szkody.
+
+### Ważne ograniczenie od dziś
+
+Polisa nie zadziała wstecz na obecną zamoczoną podłogę i niedomykające się drzwi tarasowe. Tę usterkę trzeba udokumentować, ustalić źródło wody, ograniczyć dalszą szkodę i naprawić niezależnie. Nie należy zakładać, że podobna przyszła szkoda będzie objęta ochroną: znaczenie mają jej przyczyna, nagłość, stan techniczny, obowiązki konserwacyjne i wyłączenia w OWU.
+
+### Minimalny wymagany zakres zapytania
+
+- formuła `all risks` dla budynków, stałych elementów, instalacji, wyposażenia i mienia gości w zakresie odpowiedzialności gospodarza;
+- jawne zgłoszenie działalności oraz najmu krótkoterminowego obu domków;
+- akceptacja drewnianej konstrukcji po indywidualnej ocenie ubezpieczyciela;
+- OC właściciela i zarządzającego obiektem wobec gości/najemców, w tym szkody osobowe i rzeczowe;
+- szkody wyrządzone przez najemców/gości, dewastacja, wandalizm i kradzież — z jasnymi limitami oraz wymaganiami dowodowymi;
+- zalanie, ulewa, cofnięcie wody, przepięcie, pożar i inne istotne ryzyka właściwe dla lokalizacji;
+- utrata przychodu z najmu / business interruption oraz uzasadnione koszty przestoju po szkodzie objętej polisą;
+- klauzula rażącego niedbalstwa albo ograniczenie prawa do odmowy wypłaty z tego powodu, z podaniem limitu i wyłączeń;
+- koszty osuszania, uprzątnięcia, poszukiwania przyczyny szkody, lokalu zastępczego lub zwrotów dla gości — jeśli dostępne;
+- suma ubezpieczenia odpowiadająca kosztowi odtworzenia, nie wartości księgowej, oraz indeksacja;
+- franszyzy, udziały własne, podlimity, okres odszkodowawczy i sposób dokumentowania utraconego przychodu.
+
+### Wstępny research do potwierdzenia ofertą i OWU
+
+| Ubezpieczyciel / linia | Orientacyjna składka roczna z researchu | Deklarowane mocne strony do sprawdzenia | Najważniejszy punkt walidacji |
+|---|---:|---|---|
+| PZU — pakiet dla klienta biznesowego | 1 800–2 800 zł | `all risks`, klauzula rażącego niedbalstwa, rozszerzenie o najemców i działalność | Czy dokładny kod działalności, oba drewniane domki, szkody gości i utrata czynszu są wpisane do polisy, a nie tylko opisane przez sprzedawcę. |
+| Generali — Strefa Firm | 1 500–2 400 zł | wariant pod wynajem, wyposażenie i dewastacja, OC właściciela/zarządzającego | Czy polisa wprost obejmuje najem krótkoterminowy i rotację gości oraz jakie są limity dewastacji i wyłączenia. |
+| Warta — Ekstrabiznes Plus | 2 000–3 200 zł | wysokie limity OC, business interruption, koszty przestoju, szkody gości | Czy drewniane budynki przejdą ocenę, jaki jest okres i limit utraty przychodu oraz od jakich szkód bazowych zależy wypłata. |
+
+Kwoty i opisy powyżej są notatką z researchu Patryka, nie otrzymanymi i zweryfikowanymi ofertami. Nie mogą być podstawą zakupu bez formularza ofertowego, OWU, klauzul dodatkowych i pisemnych odpowiedzi ubezpieczyciela lub brokera.
+
+### Najmniejszy sensowny zakres
+
+Najpierw zakup i procedura, nie funkcja w Stawy OS:
+
+1. przygotować jeden opis obiektu: adres, konstrukcja i rok budowy, powierzchnia, zabezpieczenia, wyposażenie, obroty z najmu, sezonowość, liczba gości i historia szkód;
+2. wysłać identyczny formularz do trzech ubezpieczycieli lub niezależnego brokera;
+3. wymagać tabeli: ryzyko, suma/limit, udział własny, wyłączenie, okres odszkodowawczy i składka;
+4. wybrać zakres na podstawie kosztu możliwej szkody, a nie wyłącznie najniższej składki;
+5. zapisać polisę, OWU, kontakt do likwidacji szkód, terminy płatności i odnowienia oraz krótką instrukcję dla operatora.
+
+Później Stawy OS może tylko przypominać o płatności i odnowieniu oraz przechowywać metadane polisy i checklistę szkody. Nie powinien sam interpretować, czy zdarzenie jest objęte ochroną.
+
+### Walidacja i kryterium decyzji
+
+Poprosić PZU, Generali i Wartę o pisemną odpowiedź na ten sam przykładowy scenariusz: po intensywnej ulewie nagła szkoda objęta polisą powoduje konieczność wymiany podłogi i miesięczne wyłączenie domku. Odpowiedź ma osobno wskazać pokrycie naprawy, osuszania, szkód w drzwiach, utraconego przychodu, udział własny, limit i wymagane dokumenty. Dodać drugi scenariusz szkody wyrządzonej przez gościa.
+
+Pomysł jest zwalidowany, gdy co najmniej dwie kompletne oferty da się porównać po tych samych sumach i scenariuszach, a wybrany wariant ma pisemne potwierdzenie najmu krótkoterminowego i drewnianej konstrukcji.
+
+### Ryzyka i zależności
+
+- `all risks` nie oznacza „wszystko bez wyjątku”; działa w granicach OWU, klauzul i wyłączeń;
+- klauzula rażącego niedbalstwa może mieć limit, katalog wyjątków lub dotyczyć tylko części mienia;
+- business interruption zwykle zależy od wystąpienia szkody rzeczowej objętej polisą i wymaga wiarygodnej historii przychodów;
+- wilgoć długotrwała, wady wykonawcze, brak konserwacji i znane wcześniejsze uszkodzenia mogą być wyłączone;
+- zaniżona suma ubezpieczenia może prowadzić do niedoubezpieczenia i niższej wypłaty;
+- trzeba sprawdzić obowiązki dotyczące przeglądów instalacji, kominów, zabezpieczeń przeciwpożarowych i dokumentowania szkody;
+- ostateczny zakres wymaga oceny licencjonowanego pośrednika oraz dokumentów ubezpieczyciela.
+
+### Otwarte decyzje
+
+- Kto jest właścicielem budynków, kto prowadzi najem i kto powinien być ubezpieczającym oraz ubezpieczonym?
+- Jakie są aktualne wartości odtworzeniowe obu domków, stałych elementów i wyposażenia?
+- Jaki limit OC oraz maksymalny okres przestoju mają sens przy rzeczywistych przychodach?
+- Czy wolimy wariant tańszy z większym udziałem własnym, czy droższy z szerszym zakresem i obsługą szkody?
+- Czy istnieją wymagane przeglądy i zabezpieczenia, które trzeba uzupełnić przed zawarciem polisy?
+
+## POM-019 — Wersjonowane zasady wędkowania PL/EN/DE
+
+**Data dodania:** 2026-08-04<br>
+**Typ:** Problem operacyjny / komunikacja z gościem<br>
+**Status:** Do walidacji<br>
+**Priorytet:** P2 — następne<br>
+**Źródło:** goście z Niemiec nie wiedzieli, gdzie i na jakich zasadach mogą łowić<br>
+
+### Problem i oczekiwany efekt
+
+Goście domków mogą chcieć wędkować, ale nie otrzymują jednej, zrozumiałej informacji o liczbie wędkujących, stanowiskach i obowiązujących zasadach. Efektem ma być ta sama zatwierdzona treść przekazywana we właściwym języku przed przyjazdem i dostępna na miejscu.
+
+### Zabezpieczenie od dziś
+
+- zapytać gości, ile osób będzie łowić;
+- wskazać dozwolone stanowiska i najważniejsze zasady na miejscu;
+- poprosić o krótkie potwierdzenie, że zasady są zrozumiałe;
+- do zatwierdzenia pełnej treści używać checklisty przyjazdu i nie dopowiadać nieuzgodnionych opłat, zakazów ani zasad odpowiedzialności.
+
+### Co już istnieje
+
+- rezerwacja i profil gościa obsługują preferowany język PL/DE/EN;
+- biblioteka komunikacji rozpoznaje brak szablonu we właściwym języku;
+- plan komunikacji przewiduje wysyłkę regulaminu i informacji o łowisku po zaksięgowaniu zaliczki;
+- checklista przyjazdu została uzupełniona o liczbę wędkujących, stanowiska i przekazanie zasad;
+- nie ma zatwierdzonej, wersjonowanej treści zasad łowiska ani dowodu jej przekazania.
+
+### Najmniejszy sensowny zakres
+
+Najpierw dokument, nie funkcja: jedna zatwierdzona wersja polska, profesjonalnie sprawdzone tłumaczenia EN i DE, numer wersji, data obowiązywania i właściciel treści. Po papierowym pilotażu Stawy OS może:
+
+- dobrać język na podstawie jawnego wyboru gościa;
+- dołączyć aktualną wersję do szkicu wiadomości przed przyjazdem;
+- zapisać wersję i moment przekazania;
+- pokazać operatorowi brak deklaracji liczby wędkujących.
+
+### Walidacja
+
+Przetestować kartę podczas trzech pobytów z wędkowaniem. Goście bez dodatkowego tłumaczenia mają poprawnie wskazać liczbę wędkujących i dozwolone stanowiska. Wszystkie niejasności zapisać przed zatwierdzeniem tłumaczeń i laminowaniem.
+
+### Ryzyka i zależności
+
+- treść merytoryczna wymaga zatwierdzenia przez właściciela łowiska;
+- trzeba ustalić, czy zasady różnią się dla gości domków i wędkarzy dziennych;
+- automatyczna wysyłka zależy od bezpiecznego uruchomienia komunikacji PR-11c/PR-12;
+- tłumaczenie nie może samodzielnie zmieniać znaczenia opłat, zakazów lub odpowiedzialności.
+
+### Otwarte decyzje
+
+- Kto zatwierdza merytorycznie regulamin łowiska?
+- Czy zasady różnią się dla gości domków i wędkarzy dziennych?
+- Czy stanowisko jest przypisywane, czy tylko wskazywane?
+- Czy potrzebne jest podpisane oświadczenie, czy wystarczy potwierdzenie przekazania zasad?
+
+---
+
+## POM-020 — Przygotowanie temperatury domku i automatyzacja klimatyzacji
+
+**Data dodania:** 2026-08-04<br>
+**Typ:** Problem operacyjny / przygotowanie domku<br>
+**Status:** Do walidacji<br>
+**Priorytet:** P3 — później<br>
+**Źródło:** około 40°C w Czapli po zbyt późnym uruchomieniu klimatyzacji<br>
+
+### Problem i oczekiwany efekt
+
+Samo zadanie „włącz klimatyzację” nie gwarantuje komfortowej temperatury przed przyjazdem. Potrzebne są czas uruchomienia, pomiar efektu i eskalacja, jeśli urządzenie nie działa albo nikt nie potwierdził wykonania.
+
+### Zabezpieczenie od dziś
+
+- dzień przed przyjazdem sprawdzić prognozę i temperaturę wewnątrz;
+- przy spodziewanym upale uruchomić klimatyzację z wyprzedzeniem oraz zapisać godzinę, temperaturę zastaną i zadaną;
+- rano potwierdzić pracę urządzenia;
+- 2–3 godziny przed przyjazdem potwierdzić temperaturę rzeczywistą;
+- brak potwierdzenia albo brak efektu od razu eskalować telefonicznie lub wizytą;
+- używać punktów dopisanych do `CHECKLISTA_PRZYJAZDU_OD_DZIS.md`.
+
+### Co już istnieje
+
+- rezerwacje zawierają domek i termin przyjazdu;
+- system ma zadania i checklisty operacyjne;
+- checklista przyjazdu obejmuje teraz kontrolę temperatury dzień wcześniej, rano oraz 2–3 godziny przed przyjazdem;
+- brak integracji z pogodą, czujnikiem temperatury i klimatyzatorem;
+- nie znamy jeszcze modelu urządzenia, dostępnego protokołu ani rzeczywistego czasu schładzania Czapli.
+
+### Najmniejszy sensowny zakres
+
+Pierwszy zakres cyfrowy nie steruje urządzeniem. Na podstawie przyjazdu tworzy zadanie dla wskazanej osoby, wymaga wpisania temperatury i godziny oraz alarmuje Patryka, gdy brakuje potwierdzenia. Dopiero po pilotażu można rozważyć odczyt czujnika, a następnie zdalne sterowanie.
+
+### Walidacja
+
+Przez pięć kolejnych przyjazdów zapisać temperaturę zewnętrzną i wewnętrzną, godzinę uruchomienia, nastawę oraz temperaturę 2–3 godziny przed przyjazdem. Spisać model klimatyzatora, możliwości Wi-Fi/bramki IR i zachowanie po utracie internetu lub zasilania.
+
+### Ryzyka i zależności
+
+- zdalne polecenie nie jest dowodem, że domek faktycznie się schłodził;
+- automatyzacja wymaga ręcznego nadpisania i alertu przy braku efektu;
+- koszty energii i zbyt wczesne uruchamianie wymagają pomiaru;
+- priorytet produktowy pozostaje P3, ponieważ problem jest od dziś zabezpieczony checklistą, a integracja sprzętowa jest nierozpoznana.
+
+### Otwarte decyzje
+
+- Jaka temperatura ma być celem latem i zimą?
+- Ile godzin potrzebuje Czapla na schłodzenie przy różnych temperaturach zewnętrznych?
+- Jaki jest model klimatyzatora i czy ma Wi-Fi lub zgodną bramkę IR?
+- Kto wykonuje zadanie, a kto przejmuje eskalację?
 
 ---
 
@@ -888,8 +1087,8 @@ Na testowej organizacji wykonać każdą zmianę i potwierdzić kompletny wpis. 
 ## POM-013 — Uprawnienia zapisu dla managera
 
 **Data dodania:** 2026-07-26<br>
-**Status:** Do walidacji<br>
-**Priorytet:** P2 — następne<br>
+**Status:** Do pilotażu<br>
+**Priorytet:** P1 — teraz<br>
 **Źródło:** weryfikacja PR-9a
 
 ### Problem i oczekiwany efekt
@@ -913,6 +1112,10 @@ Manager widzi poprawną kwotę po wyborze dat, zapisuje rezerwację widoczną po
 ### Zależności
 
 PR-10f i `INCYDENT_REZERWACJE_OPERATORA_2026-07-27.md`; POM-009 pozostaje bramką pełnego testu RLS.
+
+### Aktualizacja 10.08.2026
+
+Dedykowane komendy managera i projekcja cen zostały scalone w PR #34. Ogólny kontrakt formularzy zwraca teraz potwierdzenie, kontrolowany rollback albo stan wymagający odświeżenia. Pozycja nie jest już zadaniem implementacyjnym P0; pozostaje test operacyjny na rzeczywistym koncie taty po wdrożeniu zatwierdzonego pakietu.
 
 ---
 

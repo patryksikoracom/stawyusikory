@@ -1,13 +1,21 @@
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMiddlewareClient } from "@/lib/supabase/middleware-client";
-import { proxy } from "./proxy";
+import { config, proxy } from "./proxy";
 
 vi.mock("@/lib/supabase/middleware-client", () => ({
   createMiddlewareClient: vi.fn(),
 }));
 
 describe("auth proxy", () => {
+  it("leaves signed automation and webhook endpoints outside the session proxy", () => {
+    const matcher = new RegExp(`^${config.matcher[0]}`);
+
+    expect(matcher.test("/api/automations/process")).toBe(false);
+    expect(matcher.test("/api/webhooks/resend")).toBe(false);
+    expect(matcher.test("/dashboard")).toBe(true);
+  });
+
   beforeEach(() => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://test.supabase.co";
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "test-key";

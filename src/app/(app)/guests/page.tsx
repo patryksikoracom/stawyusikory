@@ -1,5 +1,7 @@
 import { GuestsView } from "@/components/views/guests-view";
+import { requirePageAccess } from "@/lib/auth/require-page-access";
 
-export default function GuestsPage() {
+export default async function GuestsPage() {
+  await requirePageAccess("/guests");
   return <GuestsView />;
 }

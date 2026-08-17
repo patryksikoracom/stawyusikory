@@ -1,7 +1,7 @@
 import { TasksView } from "@/components/views/tasks-view";
-import { getCurrentAppIdentity } from "@/lib/auth/current-identity";
+import { requirePageAccess } from "@/lib/auth/require-page-access";
 
 export default async function TasksPage() {
-  const identity = await getCurrentAppIdentity();
+  const identity = await requirePageAccess("/tasks");
   return <TasksView identity={identity} />;
 }

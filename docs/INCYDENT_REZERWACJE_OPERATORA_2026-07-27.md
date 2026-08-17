@@ -2,8 +2,12 @@
 
 **Data zgłoszenia:** 2026-07-27  
 **Użytkownik dotknięty:** tata — główny operator rezerwacji  
-**Priorytet:** P0 — blokuje pilota i codzienną pracę  
-**Status:** przyczyna potwierdzona w kodzie; poprawka zaplanowana jako PR-10f  
+**Priorytet historyczny:** P0 — blokował pilota i codzienną pracę
+**Status:** naprawa komend managera scalona w PR #34; pozostaje operacyjny retest konta taty
+
+## Stan po naprawie
+
+Kod udostępnia managerowi dedykowane komendy rezerwacji bez nadawania ogólnego `write`, projekcję cennika i finansów pojedynczego pobytu oraz asynchroniczne potwierdzenie zapisu. Lokalny pakiet z 10.08.2026 dodatkowo ujednolica wiarygodny wynik ogólnych formularzy. Incydent nie wymaga ponownej implementacji PR-10f; do zamknięcia pozostaje kontrolny scenariusz na koncie taty po zatwierdzeniu i wdrożeniu pakietu.
 
 ## Objawy
 

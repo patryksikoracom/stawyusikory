@@ -23,12 +23,24 @@
 - [ ] Domek po sprzątaniu sprawdzony własnymi oczami
 - [ ] Łóżka i wyposażenie przygotowane dla właściwej liczby osób
 - [ ] Jeśli są dzieci: odpowiednie miejsce do spania i informacja o bezpieczeństwie przy wodzie
-- [ ] Ciepła woda, ogrzewanie/klimatyzacja, światło i podstawowe urządzenia działają
+- [ ] Dzień przed przyjazdem: sprawdzona prognoza i temperatura w domku
+- [ ] Przy upale/mrozie: ogrzewanie lub klimatyzacja uruchomione z wyprzedzeniem; godzina: ____; temperatura zastana: ____°C; zadana: ____°C
+- [ ] Rano w dniu przyjazdu: potwierdzone, że ogrzewanie/klimatyzacja nadal pracuje
+- [ ] 2–3 godziny przed przyjazdem: temperatura rzeczywista ____°C; sprawdził(a): ____; godzina: ____
+- [ ] Brak potwierdzenia lub brak spadku/wzrostu temperatury przekazany od razu do: ____
+- [ ] Ciepła woda, światło i podstawowe urządzenia działają
 - [ ] Wi-Fi i instrukcje są aktualne
 - [ ] Papier, ręczniki, mydło, kawa/herbata i woda uzupełnione
 - [ ] Klucze/kod/pilot gotowe i sprawdzone
 - [ ] Numer telefonu do gospodarza i godziny kontaktu widoczne w domku
 - [ ] Koszyk/list powitalny przygotowany, jeśli używamy go przy tym pobycie
+
+### Jeśli goście będą wędkować
+
+- [ ] Liczba osób wędkujących: ____
+- [ ] Dozwolone stanowisko/stanowiska wskazane: ____
+- [ ] Aktualna karta zasad przekazana w języku: PL / EN / DE
+- [ ] Goście potwierdzili, że wiedzą, gdzie i na jakich zasadach mogą łowić
 
 ## 2. Powitanie — kolejność rozmowy
 

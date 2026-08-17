@@ -14,6 +14,7 @@ import { formatPolishDate } from "@/lib/date";
 import { deriveShellAlerts } from "@/lib/workflow/shell-alerts";
 import { unitName } from "@/lib/workflow/rules";
 import { Dialog } from "@/components/ui/dialog";
+import { canAccessAppPath } from "@/lib/auth/route-access";
 
 const primaryNav: { href: string; label: string; icon: IconName }[] = [
   { href: "/dashboard", label: "Dzisiaj", icon: "today" },
@@ -118,6 +119,10 @@ function ShellInner({ children, identity }: { children: React.ReactNode; identit
     return data.bookings.filter((booking) => [booking.guestLabel, booking.id, booking.platformReservationNo, unitName(data.units, booking.unitId)].filter(Boolean).some((field) => String(field).toLowerCase().includes(value))).slice(0, 8);
   }, [data, query]);
   const alerts = useMemo(() => dataReady ? deriveShellAlerts(data) : [], [data, dataReady]);
+  const operatorMode = identity.role === "manager";
+  const homeHref = operatorMode ? "/calendar" : "/dashboard";
+  const visiblePrimaryNav = primaryNav.filter((item) => canAccessAppPath(identity.role, item.href));
+  const visibleSecondaryNav = secondaryNav.filter((item) => canAccessAppPath(identity.role, item.href));
 
   function openNewBooking(event: MouseEvent<HTMLButtonElement>) {
     newBookingTriggerRef.current = event.currentTarget;
@@ -167,32 +172,29 @@ function ShellInner({ children, identity }: { children: React.ReactNode; identit
   }
 
   return (
-    <div className="min-h-screen text-[#18332c] lg:grid lg:grid-cols-[252px_minmax(0,1fr)]">
+    <div className={`min-h-screen text-[#18332c] lg:grid lg:grid-cols-[252px_minmax(0,1fr)] ${pathname === "/calendar" ? "calendar-route" : ""}`}>
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-[252px] flex-col border-r border-[#d5cebf] bg-[#f7f3ea]/95 px-3 py-4 backdrop-blur lg:flex">
-        <Link className="mb-6 flex items-center gap-3 px-2 py-1" href="/dashboard">
+        <Link className="mb-6 flex items-center gap-3 px-2 py-1" href={homeHref}>
           <span className="grid size-11 place-items-center rounded-[14px] bg-[#174d3b] font-display text-lg font-semibold text-white shadow-[0_9px_24px_rgba(23,77,59,.24)]">SU</span>
           <span><span className="block font-display text-[19px] font-semibold leading-5">Stawy OS</span><span className="text-[10px] font-black uppercase tracking-[.17em] text-[#829052]">u Sikory</span></span>
         </Link>
 
         <nav className="grid gap-1">
-          {primaryNav.map((item) => <NavItem key={item.href} {...item} />)}
+          {visiblePrimaryNav.map((item) => <NavItem key={item.href} {...item} />)}
         </nav>
-        <div className="mx-3 my-4 h-px bg-[#ded7ca]" />
-        <nav className="grid gap-1">
-          {secondaryNav.map((item) => <NavItem compact key={item.href} {...item} />)}
-        </nav>
+        {visibleSecondaryNav.length ? <><div className="mx-3 my-4 h-px bg-[#ded7ca]" /><nav className="grid gap-1">{visibleSecondaryNav.map((item) => <NavItem compact key={item.href} {...item} />)}</nav></> : null}
 
         <div className="mt-auto rounded-2xl border border-[#d6ddc0] bg-[#edf0df] p-3.5">
           <div className="flex items-center gap-2 text-xs font-black text-[#294e3e]"><span className={`size-2 rounded-full ${syncMode === "cloud" ? "pulse-dot bg-[#4d986b]" : syncMode === "error" || syncMode === "conflict" ? "bg-[#d45f45]" : "bg-[#d3a638]"}`} />{syncLabel}</div>
           <p className="mt-2 text-[12px] leading-5 text-[#5e6d61]">{syncBody}</p>
-          <Link className="mt-2 inline-flex items-center gap-1 text-xs font-black text-[#174d3b]" href="/imports">Zobacz integracje <Icon className="size-3.5" name="arrow" /></Link>
+          {!operatorMode ? <Link className="mt-2 inline-flex items-center gap-1 text-xs font-black text-[#174d3b]" href="/imports">Zobacz integracje <Icon className="size-3.5" name="arrow" /></Link> : null}
         </div>
       </aside>
 
       <div className="min-w-0 lg:col-start-2">
-        <header className="sticky top-0 z-30 border-b border-[#d9d1c1]/85 bg-[#f5f1e7]/88 backdrop-blur-xl">
+        <header className="app-header sticky top-0 z-30 border-b border-[#d9d1c1]/85 bg-[#f5f1e7]/88 backdrop-blur-xl">
           <div className="flex h-[70px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
-            <Link className="flex items-center gap-2 lg:hidden" href="/dashboard"><span className="grid size-9 place-items-center rounded-xl bg-[#174d3b] font-display font-semibold text-white">SU</span><span className="font-display font-semibold">Stawy OS</span></Link>
+            <Link className="flex items-center gap-2 lg:hidden" href={homeHref}><span className="grid size-9 place-items-center rounded-xl bg-[#174d3b] font-display font-semibold text-white">SU</span><span className="font-display font-semibold">Stawy OS</span></Link>
             <div className="hidden items-center gap-2 text-sm font-semibold text-[#64726b] sm:flex"><Icon className="size-4" name="calendar" /><span className="capitalize">{date}</span></div>
             <div className="ml-auto flex items-center gap-2">
               <button aria-label="Szukaj" className="grid size-10 place-items-center rounded-xl border border-[#d5cebf] bg-white text-[#53655d] transition hover:border-[#317a78] hover:text-[#174d3b] disabled:cursor-not-allowed disabled:opacity-45" disabled={!dataReady} onClick={() => setShowSearch(true)}><Icon className="size-[18px]" name="search" /></button>
@@ -201,12 +203,12 @@ function ShellInner({ children, identity }: { children: React.ReactNode; identit
                 {showAlerts ? <div aria-label="Alerty operacyjne" className="absolute right-[-3rem] top-12 w-[min(360px,calc(100vw-2rem))] rounded-2xl border border-[#d7cfc0] bg-[#fffdf8] p-3 shadow-2xl sm:right-0" role="dialog"><div className="flex items-center justify-between gap-3 px-2 py-1"><p className="text-xs font-black uppercase tracking-[.15em] text-[#74814d]">Wymaga uwagi</p>{alerts.length ? <span className="rounded-full bg-[#f6e8c9] px-2 py-0.5 text-[10px] font-black text-[#7a5b19]">{alerts.length}</span> : null}</div>{alerts.map((alert) => <AlertMini key={alert.id} {...alert} />)}{!alerts.length ? <div className="mx-1 mt-2 rounded-xl bg-[#e9f1e3] px-4 py-5 text-center"><span className="mx-auto grid size-9 place-items-center rounded-full bg-[#4d986b] text-white"><Icon className="size-4" name="check" /></span><p className="mt-2 text-sm font-black">Brak spraw wymagających uwagi</p><p className="mt-1 text-xs leading-5 text-[#607069]">Aktualne dane nie tworzą żadnego alertu.</p></div> : null}</div> : null}
               </div>
               <span className="hidden sm:block"><Button disabled={!dataReady} onClick={openNewBooking}><Icon className="size-4" name="plus" />Nowa rezerwacja</Button></span>
-              <div className="relative"><button aria-expanded={showAccount} aria-label={`Konto: ${identity.displayName}`} className="grid size-10 place-items-center rounded-xl bg-[#18332c] text-xs font-black text-white" onClick={() => setShowAccount((value) => !value)}>{identity.initials}</button>{showAccount ? <div className="absolute right-0 top-12 w-[min(290px,calc(100vw-2rem))] rounded-2xl border border-[#d7cfc0] bg-[#fffdf8] p-2 shadow-2xl"><div className="border-b border-[#e8e1d5] px-3 pb-3 pt-2"><p className="truncate text-sm font-black">{identity.displayName}</p><p className="mt-0.5 truncate text-xs text-[#68766f]">{identity.email ?? "Brak adresu e-mail"}</p>{identity.availableOrganizations.length > 1 ? <label className="mt-3 grid gap-1 text-[10px] font-black uppercase tracking-[.12em] text-[#68766f]">Aktywna organizacja<select aria-label="Aktywna organizacja" className="min-h-10 rounded-xl border border-[#d5cebf] bg-white px-2 text-xs font-bold normal-case tracking-normal text-[#18332c]" disabled={organizationSwitching} onChange={(event) => void switchOrganization(event.target.value)} value={identity.organizationId ?? ""}><option disabled value="">Wybierz organizację</option>{identity.availableOrganizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}</select></label> : null}<div className="mt-2 flex flex-wrap gap-1.5"><span className="rounded-full bg-[#e5ead7] px-2 py-1 text-[10px] font-black text-[#315744]">{identity.roleLabel}</span>{identity.organizationName ? <span className="max-w-full truncate rounded-full bg-[#e5ecec] px-2 py-1 text-[10px] font-black text-[#315d61]">{identity.organizationName}</span> : null}</div></div><Link className="mt-1 block rounded-xl px-3 py-2 text-sm font-bold hover:bg-[#f1eee6]" href="/settings" onClick={() => setShowAccount(false)}>Ustawienia</Link><button className="w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-[#9b4029] hover:bg-[#f9dfd7]" onClick={signOut}>Wyloguj się</button></div> : null}</div>
+              <div className="relative"><button aria-expanded={showAccount} aria-label={`Konto: ${identity.displayName}`} className="grid size-10 place-items-center rounded-xl bg-[#18332c] text-xs font-black text-white" onClick={() => setShowAccount((value) => !value)}>{identity.initials}</button>{showAccount ? <div className="absolute right-0 top-12 w-[min(290px,calc(100vw-2rem))] rounded-2xl border border-[#d7cfc0] bg-[#fffdf8] p-2 shadow-2xl"><div className="border-b border-[#e8e1d5] px-3 pb-3 pt-2"><p className="truncate text-sm font-black">{identity.displayName}</p><p className="mt-0.5 truncate text-xs text-[#68766f]">{identity.email ?? "Brak adresu e-mail"}</p>{identity.availableOrganizations.length > 1 ? <label className="mt-3 grid gap-1 text-[10px] font-black uppercase tracking-[.12em] text-[#68766f]">Aktywna organizacja<select aria-label="Aktywna organizacja" className="min-h-10 rounded-xl border border-[#d5cebf] bg-white px-2 text-xs font-bold normal-case tracking-normal text-[#18332c]" disabled={organizationSwitching} onChange={(event) => void switchOrganization(event.target.value)} value={identity.organizationId ?? ""}><option disabled value="">Wybierz organizację</option>{identity.availableOrganizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}</select></label> : null}<div className="mt-2 flex flex-wrap gap-1.5"><span className="rounded-full bg-[#e5ead7] px-2 py-1 text-[10px] font-black text-[#315744]">{identity.roleLabel}</span>{identity.organizationName ? <span className="max-w-full truncate rounded-full bg-[#e5ecec] px-2 py-1 text-[10px] font-black text-[#315d61]">{identity.organizationName}</span> : null}</div></div>{!operatorMode ? <Link className="mt-1 block rounded-xl px-3 py-2 text-sm font-bold hover:bg-[#f1eee6]" href="/settings" onClick={() => setShowAccount(false)}>Ustawienia</Link> : null}<button className="w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-[#9b4029] hover:bg-[#f9dfd7]" onClick={signOut}>Wyloguj się</button></div> : null}</div>
             </div>
           </div>
         </header>
 
-        <main className="px-4 pb-28 pt-7 sm:px-6 lg:px-8 lg:pb-12">
+        <main className="app-main px-4 pb-28 pt-7 sm:px-6 lg:px-8 lg:pb-12">
           <div className="mx-auto max-w-[1460px]">
             <AppDataGate onRetry={retryDataLoad} status={dataStatus}>
               <div className={`animate-rise mb-6 flex-col gap-4 sm:flex sm:flex-row sm:items-end sm:justify-between ${pathname === "/dashboard" || pathname === "/calendar" ? "hidden" : "flex"}`}>
@@ -219,9 +221,9 @@ function ShellInner({ children, identity }: { children: React.ReactNode; identit
         </main>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-[#d4ccbd] bg-[#fffdf8]/95 px-1 pb-[max(.4rem,env(safe-area-inset-bottom))] pt-1.5 shadow-[0_-8px_30px_rgba(29,47,40,.08)] backdrop-blur lg:hidden">
-        {[primaryNav[0], primaryNav[1], primaryNav[2], secondaryNav[0]].map((item) => { const active = isActive(pathname, item.href); return <Link className={`flex min-w-0 flex-col items-center gap-1 rounded-xl px-1 py-1.5 text-[9px] font-black ${active ? "text-[#174d3b]" : "text-[#768079]"}`} href={item.href} key={item.href}><span className={`grid size-8 place-items-center rounded-xl ${active ? "bg-[#e5ead7]" : ""}`}><Icon className="size-[18px]" name={item.icon} /></span><span className="max-w-full truncate">{item.label.replace("Sprzątanie i ", "")}</span></Link>; })}
-        <button className={`flex min-w-0 flex-col items-center gap-1 rounded-xl px-1 py-1.5 text-[9px] font-black ${showMore ? "text-[#174d3b]" : "text-[#768079]"}`} onClick={() => setShowMore(true)}><span className={`grid size-8 place-items-center rounded-xl ${showMore ? "bg-[#e5ead7]" : ""}`}><Icon className="size-[18px]" name="more" /></span>Więcej</button>
+      <nav className={`app-mobile-nav fixed inset-x-0 bottom-0 z-40 grid ${operatorMode ? "grid-cols-2" : "grid-cols-5"} border-t border-[#d4ccbd] bg-[#fffdf8]/95 px-1 pb-[max(.4rem,env(safe-area-inset-bottom))] pt-1.5 shadow-[0_-8px_30px_rgba(29,47,40,.08)] backdrop-blur lg:hidden`}>
+        {(operatorMode ? visiblePrimaryNav : [primaryNav[0], primaryNav[1], primaryNav[2], secondaryNav[0]]).map((item) => { const active = isActive(pathname, item.href); return <Link className={`flex min-w-0 flex-col items-center gap-1 rounded-xl px-1 py-1.5 text-[9px] font-black ${active ? "text-[#174d3b]" : "text-[#768079]"}`} href={item.href} key={item.href}><span className={`grid size-8 place-items-center rounded-xl ${active ? "bg-[#e5ead7]" : ""}`}><Icon className="size-[18px]" name={item.icon} /></span><span className="max-w-full truncate">{item.label.replace("Sprzątanie i ", "")}</span></Link>; })}
+        {!operatorMode ? <button className={`flex min-w-0 flex-col items-center gap-1 rounded-xl px-1 py-1.5 text-[9px] font-black ${showMore ? "text-[#174d3b]" : "text-[#768079]"}`} onClick={() => setShowMore(true)}><span className={`grid size-8 place-items-center rounded-xl ${showMore ? "bg-[#e5ead7]" : ""}`}><Icon className="size-[18px]" name="more" /></span>Więcej</button> : null}
       </nav>
 
       {showNew && dataReady ? <NewBookingDialog onClose={() => setShowNew(false)} onAdded={added} returnFocusRef={newBookingTriggerRef} /> : null}

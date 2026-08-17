@@ -138,8 +138,14 @@ export type Booking = {
   needsReview?: boolean;
   historicalImport?: boolean;
   importRef?: {
-    source: "mobile-calendar";
+    source: "mobile-calendar" | "ical";
     key: string;
+  };
+  availabilityOverride?: {
+    kind: "cleaning-buffer";
+    blockIds: string[];
+    plan: "self-cleaning" | "arranged-cleaning";
+    confirmedAt: string;
   };
   importWarnings?: string[];
   openingPaidAmount?: number;
@@ -458,6 +464,7 @@ export type MessageTemplate = {
 
 export type AutomationTrigger =
   | "Po utworzeniu rezerwacji"
+  | "Po zarejestrowaniu płatności"
   | "Termin płatności"
   | "Przed przyjazdem"
   | "Po przyjeździe"
@@ -478,6 +485,7 @@ export type AutomationRule = {
   unitIds?: string[];
   paymentStatuses?: PaymentStatus[];
   minimumNights?: number;
+  definitionVersion?: number;
 };
 
 export type ScheduledMessageStatus =
@@ -523,6 +531,7 @@ export type CommunicationConfig = {
   travelGuides: Array<{
     id: string;
     language: "pl" | "de" | "en";
+    unitIds?: string[];
     version: number;
     body: string;
     routeWarning: string;

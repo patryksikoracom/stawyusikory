@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { useAppStore } from "@/components/layout/app-store";
+import { useAppStore, type RecordCommandResult } from "@/components/layout/app-store";
 import { Badge, Button, Card, Field, inputClass } from "@/components/ui/primitives";
 import { Icon } from "@/components/ui/icons";
 import type { Channel, ConsentPurpose, ConsentRecord, ContactConsent, DiscoveryMethod, GuestPerson, GuestProfile } from "@/lib/types";
@@ -16,7 +16,7 @@ import { GrowthInputs } from "@/components/growth/growth-inputs";
 const segmentColors = ["bg-[#dfe8c8]", "bg-[#d8e9e6]", "bg-[#f5e7c7]"] as const;
 
 export function GuestsView() {
-  const { data, updateGuest, updateConsent, upsertPerson, mergePeople, upsertConsentRecord } = useAppStore();
+  const { data, saveGuestProfile, mergePeople, upsertConsentRecord } = useAppStore();
   const [search, setSearch] = useState("");
   const [segment, setSegment] = useState("Wszystkie");
   const [editingId,setEditingId]=useState<string>();
@@ -57,7 +57,7 @@ export function GuestsView() {
         <Link className="flex items-center justify-between rounded-2xl border border-[#d8d0c2] bg-[#fffdf8] p-4 text-sm font-black" href="/media"><span className="inline-flex items-center gap-2"><Icon className="size-4" name="guest"/>Media i zgody</span><Icon className="size-4" name="arrow"/></Link>
       </aside>
     </div>
-    {editingId?<GuestDialog bookingId={editingId} data={data} onClose={()=>setEditingId(undefined)} onConsent={upsertConsentRecord} onMerge={mergePeople} onSave={(profile,consent,person)=>{upsertPerson(person);updateGuest(profile);updateConsent(consent);setEditingId(undefined);}}/>:null}
+    {editingId?<GuestDialog bookingId={editingId} data={data} onClose={()=>setEditingId(undefined)} onConsent={upsertConsentRecord} onMerge={mergePeople} onSave={saveGuestProfile}/>:null}
   </div>;
 }
 
@@ -68,7 +68,7 @@ function Opportunity({ href, icon, title, body, action }: { href:string; icon: "
 
 function EmptyInsightState({ bookingId }: { bookingId?: string }) { return <section className="animate-rise-3 overflow-hidden rounded-[20px] border border-dashed border-[#cfc4aa] bg-[#f7f1e4] p-6 sm:p-7"><div className="flex flex-col gap-5 sm:flex-row sm:items-center"><span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[#eadcb9] text-[#715b24]"><Icon className="size-6" name="warning"/></span><div className="flex-1"><p className="text-[10px] font-black uppercase tracking-[.15em] text-[#846f38]">Brak podstawy do wniosku</p><h3 className="mt-1 font-display text-2xl font-semibold">Nie ma jeszcze danych do segmentacji</h3><p className="mt-2 max-w-3xl text-sm leading-6 text-[#6b675b]">Uzupełnij segment przy konkretnych rezerwacjach. Dopiero wtedy pokażemy liczebność grup — bez dopisywania zachowań, wartości pobytu ani motywacji.</p></div>{bookingId ? <Link className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#174d3b] px-4 text-sm font-black text-white" href={`/bookings/${bookingId}`}>Uzupełnij pierwszy profil<Icon className="size-4" name="arrow"/></Link> : <Link className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#cfc6b3] bg-white px-4 text-sm font-black text-[#355248]" href="/bookings">Przejdź do rezerwacji<Icon className="size-4" name="arrow"/></Link>}</div></section>; }
 
-function GuestDialog({bookingId,data,onClose,onSave,onMerge,onConsent}:{bookingId:string;data:ReturnType<typeof useAppStore>["data"];onClose:()=>void;onSave:(profile:GuestProfile,consent:ContactConsent,person:GuestPerson)=>void;onMerge:(sourcePersonId:string,targetPersonId:string)=>void;onConsent:(consent:ConsentRecord)=>void}) {
+function GuestDialog({bookingId,data,onClose,onSave,onMerge,onConsent}:{bookingId:string;data:ReturnType<typeof useAppStore>["data"];onClose:()=>void;onSave:(profile:GuestProfile,consent:ContactConsent,person:GuestPerson)=>Promise<RecordCommandResult>;onMerge:(sourcePersonId:string,targetPersonId:string)=>Promise<RecordCommandResult>;onConsent:(consent:ConsentRecord)=>Promise<RecordCommandResult>}) {
   const booking=data.bookings.find((item)=>item.id===bookingId)!;
   const current=data.guests.find((item)=>item.bookingId===bookingId);
   const currentConsent=data.consents.find((item)=>item.bookingId===bookingId);
@@ -83,11 +83,13 @@ function GuestDialog({bookingId,data,onClose,onSave,onMerge,onConsent}:{bookingI
   const [preferredLanguage,setPreferredLanguage]=useState<GuestPerson["preferredLanguage"]>(currentPerson.preferredLanguage);
   const [consentPurpose,setConsentPurpose]=useState<ConsentPurpose>("marketing_email");
   const [consentDecision,setConsentDecision]=useState<ConsentRecord["decision"]>("granted");
+  const [saving,setSaving]=useState(false);
+  const [saveError,setSaveError]=useState("");
   const candidates=duplicateCandidates(data.people,consent,currentPerson.id);
   const stays=staysForPerson(data.guests,currentPerson.id).length;
   const person:GuestPerson={...currentPerson,displayName:booking.guestLabel,phone:normalizeGuestPhone(consent.phone),email:normalizeGuestEmail(consent.email),preferredLanguage};
-  return <Dialog ariaLabel={`Profil gościa ${booking.guestLabel}`} className="my-6 w-full max-w-2xl rounded-[22px] bg-[#fffdf8] shadow-2xl" onClose={onClose} overlayClassName="grid place-items-center overflow-y-auto">
-    <form className="p-6" onSubmit={(event)=>{event.preventDefault();onSave({...profile,personId:currentPerson.id},consent,person);}}>
+  return <Dialog ariaLabel={`Profil gościa ${booking.guestLabel}`} className="my-6 w-full max-w-2xl rounded-[22px] bg-[#fffdf8] shadow-2xl" closeDisabled={saving} onClose={onClose} overlayClassName="grid place-items-center overflow-y-auto">
+    <form className="p-6" onSubmit={async(event)=>{event.preventDefault();setSaving(true);setSaveError("");const result=await onSave({...profile,personId:currentPerson.id},consent,person);setSaving(false);if(result.ok){onClose();return;}setSaveError(`${result.message}${result.requestId?` Identyfikator: ${result.requestId}.`:""}`);}}>
       <div className="flex items-start justify-between"><div><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#7d8b4d]">Osoba · {stays} {stays===1?"pobyt":"pobyty"}</p><h2 className="font-display text-2xl font-semibold">{booking.guestLabel}</h2></div><button aria-label="Zamknij" type="button" onClick={onClose}><Icon className="size-5" name="close"/></button></div>
       {candidates.length?<div className="mt-5 rounded-2xl border border-[#dfc986] bg-[#fbf2d8] p-4"><p className="text-sm font-black">Możliwa ta sama osoba</p><p className="mt-1 text-xs leading-5 text-[#75613a]">Dopasowanie telefonu lub e-maila jest tylko sugestią. Imię nigdy nie scala profili automatycznie.</p><div className="mt-3 grid gap-2">{candidates.map(({person:candidate,reasons})=><div className="flex items-center justify-between gap-3 rounded-xl bg-white p-3" key={candidate.id}><div><p className="text-sm font-black">{candidate.displayName}</p><p className="text-[10px] uppercase tracking-[.1em] text-[#716f63]">zgodny: {reasons.join(" i ")}</p></div><Button type="button" variant="secondary" onClick={()=>{onMerge(currentPerson.id,candidate.id);onClose();}}>Połącz po weryfikacji</Button></div>)}</div></div>:null}
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -105,7 +107,8 @@ function GuestDialog({bookingId,data,onClose,onSave,onMerge,onConsent}:{bookingI
         <div className="sm:col-span-2"><Field label="Pierwsze pytanie / fraza"><textarea className={`${inputClass} min-h-20`} value={profile.searchPhraseOrAiPrompt??""} onChange={(event)=>setProfile({...profile,searchPhraseOrAiPrompt:event.target.value})}/></Field></div>
       </div>
       <div className="mt-5 rounded-2xl border border-[#d9d1c1] bg-[#f4f1e9] p-4"><p className="text-sm font-black">Rejestr zgód per cel</p><p className="mt-1 text-xs leading-5 text-[#68756f]">E-mail, SMS, cytat, strona, social media i reklama są osobnymi decyzjami. Wycofanie blokuje tylko wskazany cel.</p><div className="mt-3 grid gap-3 sm:grid-cols-[1fr_150px_auto]"><select aria-label="Cel zgody" className={inputClass} value={consentPurpose} onChange={(event)=>setConsentPurpose(event.target.value as ConsentPurpose)}>{[["marketing_email","Marketing e-mail"],["marketing_sms","Marketing SMS"],["public_quote","Dokładny cytat"],["website_media","Media na stronie"],["social_media","Social media"],["paid_ads","Reklama płatna"]].map(([value,label])=><option key={value} value={value}>{label}</option>)}</select><select aria-label="Decyzja zgody" className={inputClass} value={consentDecision} onChange={(event)=>setConsentDecision(event.target.value as ConsentRecord["decision"])}><option value="granted">Udzielona</option><option value="denied">Odmowa</option><option value="withdrawn">Wycofana</option></select><Button type="button" variant="secondary" onClick={()=>{const now=new Date().toISOString();onConsent({id:`CONSENT-${crypto.randomUUID()}`,personId:currentPerson.id,bookingId,purpose:consentPurpose,decision:consentDecision,textVersion:`${consentPurpose}-v1`,consentText:consentDecision==="withdrawn"?`Wycofanie zgody: ${consentPurpose}`:`Decyzja zgody: ${consentPurpose}`,source:"rozmowa",recordedAt:now,recordedBy:"Użytkownik aplikacji",withdrawnAt:consentDecision==="withdrawn"?now:undefined,withdrawnBy:consentDecision==="withdrawn"?"Użytkownik aplikacji":undefined});}}>Zapisz decyzję</Button></div></div>
-      <div className="mt-6 flex justify-end gap-2"><Button type="button" variant="ghost" onClick={onClose}>Anuluj</Button><Button type="submit">Zapisz profil</Button></div>
+      {saveError?<p aria-live="assertive" className="mt-5 rounded-xl border border-[#e3b5a7] bg-[#f9e7e1] p-3 text-sm font-bold text-[#8a3b29]">{saveError}</p>:null}
+      <div className="mt-6 flex justify-end gap-2"><Button disabled={saving} type="button" variant="ghost" onClick={onClose}>Anuluj</Button><Button disabled={saving} type="submit">{saving?"Zapisywanie…":"Zapisz profil"}</Button></div>
     </form>
   </Dialog>;
 }
