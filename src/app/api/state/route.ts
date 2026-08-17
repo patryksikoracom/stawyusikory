@@ -3,9 +3,14 @@ import { isGeneralStateReader } from "@/lib/auth/permissions";
 import { visibleOperationalRecord } from "@/lib/auth/state-visibility";
 import { requireOrganization } from "@/lib/supabase/auth-context";
 import { createServiceClient } from "@/lib/supabase/server";
+import {
+  isCompatibleDatabaseRelease,
+  releaseIdentity,
+  type DatabaseReleaseManifest,
+} from "@/lib/release";
 
 const entityTypes = [
-  "units", "bookings", "guests", "consents", "tasks", "media", "blocks",
+  "units", "bookings", "people", "guests", "consents", "consentLedger", "reviewRequests", "communicationConfigs", "adSpend", "growthExperiments", "investmentModels", "meterReadings", "tasks", "media", "blocks",
   "rates", "costSettings", "imports", "sourceConnections", "payments", "invoices",
   "checklistItems", "issues", "messages", "departureDebriefs", "messageTemplates",
   "automationRules", "scheduledMessages", "marketingTouchpoints", "auditLog", "settings",
@@ -30,6 +35,18 @@ export async function GET(request: Request) {
   }
   const service = createServiceClient();
   if (!service) return NextResponse.json({ error: "Bezpieczny odczyt danych nie jest skonfigurowany." }, { status: 503 });
+
+  const { data: databaseRelease, error: releaseError } = await service
+    .from("app_release_manifest")
+    .select("schema_version,required_migration,applied_at")
+    .eq("singleton", true)
+    .maybeSingle();
+  if (releaseError || !isCompatibleDatabaseRelease(databaseRelease as DatabaseReleaseManifest | null)) {
+    return NextResponse.json({
+      error: "Wersja aplikacji nie jest zgodna ze schematem bazy. Dane nie zostały otwarte.",
+      release: releaseIdentity(),
+    }, { status: 503, headers: { "cache-control": "private, no-store" } });
+  }
 
   const [{ data: records, error: recordsError }, { data: revision, error: revisionError }] = await Promise.all([
     service
@@ -66,7 +83,15 @@ export async function GET(request: Request) {
       }
       else if (
         type === "bookings"
+        || type === "people"
         || type === "consents"
+        || type === "consentLedger"
+        || type === "reviewRequests"
+        || type === "communicationConfigs"
+        || type === "adSpend"
+        || type === "growthExperiments"
+        || type === "investmentModels"
+        || type === "meterReadings"
         || type === "tasks"
         || type === "checklistItems"
         || type === "payments"
@@ -91,6 +116,7 @@ export async function GET(request: Request) {
           Number(record.record_version),
         ]),
       ),
+      release: releaseIdentity(),
     }, { headers: { "cache-control": "private, no-store" } });
   }
 
@@ -100,6 +126,7 @@ export async function GET(request: Request) {
       version: revision?.version ?? 0,
       updatedAt: revision?.updated_at,
       source: "empty",
+      release: releaseIdentity(),
     }, { headers: { "cache-control": "private, no-store" } });
   }
 
@@ -125,5 +152,6 @@ export async function GET(request: Request) {
     version: revision?.version ?? 0,
     updatedAt: legacy?.updated_at,
     source: legacy?.state ? "legacy_snapshot" : "empty",
+    release: releaseIdentity(),
   }, { headers: { "cache-control": "private, no-store" } });
 }

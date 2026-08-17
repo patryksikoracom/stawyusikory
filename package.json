@@ -3,17 +3,19 @@
   "version": "0.1.0",
   "private": true,
   "overrides": {
+    "nanoid": "3.3.17",
     "postcss": "8.5.23",
     "sharp": "0.35.3"
   },
   "scripts": {
     "dev": "next dev",
-    "build": "next build --webpack",
+    "build": "npm run check:release && next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:integration": "node scripts/supabase-integration.mjs",
+    "check:release": "node scripts/verify-release-manifest.mjs",
     "check:auth-config": "node scripts/verify-supabase-auth-config.mjs",
     "test:watch": "vitest"
   },
@@ -25,6 +27,7 @@
     "next": "16.2.12",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "resend": "6.18.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {

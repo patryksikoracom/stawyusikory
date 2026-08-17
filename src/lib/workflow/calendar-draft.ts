@@ -1,6 +1,7 @@
 import type { AppData, Booking } from "@/lib/types";
 import { addLocalDays } from "@/lib/date";
 import { getBookingConflicts } from "@/lib/workflow/rules";
+import { isOverridableCleaningBuffer } from "@/lib/integrations/ical-block-classification";
 
 export type CalendarBookingDraft = {
   unitId: string;
@@ -39,6 +40,10 @@ export function buildCalendarBookingDraft(
     workflowStatus: "Nowa",
     createdBy: "Stawy OS",
   };
-  const conflict = getBookingConflicts(data.bookings, data.blocks, probe)[0];
+  const conflict = getBookingConflicts(
+    data.bookings,
+    data.blocks.filter((block) => !isOverridableCleaningBuffer(block)),
+    probe,
+  )[0];
   return conflict ? { conflict } : { draft };
 }

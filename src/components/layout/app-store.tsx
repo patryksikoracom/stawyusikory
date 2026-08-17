@@ -14,20 +14,28 @@ import { initialData } from "@/lib/demo-data";
 import { todayInPoland } from "@/lib/date";
 import type {
   AppData,
+  AdSpendRecord,
   AuditEvent,
   Booking,
   CalendarBlock,
+  CommunicationConfig,
+  ConsentRecord,
   ContactConsent,
   CostSetting,
   DepartureDebrief,
+  GuestPerson,
   GuestProfile,
+  GrowthExperiment,
   IssueReport,
   InvoiceRecord,
+  InvestmentModel,
   MessageRecord,
   MediaAsset,
+  MeterReading,
   OpsTask,
   PaymentTransaction,
   RateRule,
+  ReviewRequest,
   SourceConnection,
   ScheduledMessage,
   TaskChecklistItem,
@@ -53,10 +61,19 @@ import {
   type SyncConflict,
 } from "@/lib/sync/state-conflict";
 import { instantiateCleaningChecklist } from "@/lib/cleaning/operations";
+import { ensureGuestPeople, mergeGuestPeople } from "@/lib/crm/guest-identity";
 
 export type SyncMode = "checking" | "cloud" | "local" | "error" | "conflict";
 export type DataStatus = "loading" | "ready" | "error";
 export type BookingCommandResult = { ok: true } | { ok: false; message: string };
+export type RecordCommandResult =
+  | { ok: true; requestId?: string; savedAt?: string }
+  | {
+      ok: false;
+      message: string;
+      requestId?: string;
+      resolution: "rolled-back" | "refresh-required" | "conflict";
+    };
 
 type AppStore = {
   data: AppData;
@@ -74,31 +91,50 @@ type AppStore = {
   restoreBooking: (bookingId: string) => Promise<BookingCommandResult>;
   updateTask: (task: OpsTask) => void;
   toggleChecklistItem: (item: TaskChecklistItem) => void;
-  addIssue: (issue: IssueReport) => void;
-  updateIssue: (issue: IssueReport) => void;
-  prepareDepartureDebriefs: (bookingIds: string[]) => void;
-  markDeparturePrompted: (bookingId: string) => void;
-  snoozeDepartureDebrief: (bookingId: string) => void;
-  skipDepartureDebrief: (bookingId: string, reason: string) => void;
-  saveDepartureDebrief: (debrief: DepartureDebrief, issue?: IssueReport) => void;
-  updateScheduledMessage: (message: ScheduledMessage) => void;
+  addIssue: (issue: IssueReport) => Promise<RecordCommandResult>;
+  updateIssue: (issue: IssueReport) => Promise<RecordCommandResult>;
+  prepareDepartureDebriefs: (bookingIds: string[]) => Promise<RecordCommandResult>;
+  markDeparturePrompted: (bookingId: string) => Promise<RecordCommandResult>;
+  snoozeDepartureDebrief: (bookingId: string) => Promise<RecordCommandResult>;
+  skipDepartureDebrief: (bookingId: string, reason: string) => Promise<RecordCommandResult>;
+  saveDepartureDebrief: (debrief: DepartureDebrief, issue?: IssueReport) => Promise<RecordCommandResult>;
+  updateScheduledMessage: (message: ScheduledMessage) => Promise<RecordCommandResult>;
   addBlock: (block: CalendarBlock) => Promise<boolean>;
   updateBlock: (block: CalendarBlock) => Promise<boolean>;
   addPayment: (payment: PaymentTransaction) => void;
-  addInvoice: (invoice: InvoiceRecord) => void;
-  addMessage: (message: MessageRecord) => void;
-  addMedia: (media: MediaAsset) => void;
-  updateMedia: (media: MediaAsset) => void;
-  updateGuest: (profile: GuestProfile) => void;
-  updateConsent: (consent: ContactConsent) => void;
-  updateConnection: (connection: SourceConnection) => void;
-  updateUnit: (unit: Unit) => void;
-  upsertRate: (rate: RateRule) => void;
-  deleteRate: (rateId: string) => void;
-  upsertCostSetting: (cost: CostSetting) => void;
-  deleteCostSetting: (costId: string) => void;
+  addInvoice: (invoice: InvoiceRecord) => Promise<RecordCommandResult>;
+  addMessage: (message: MessageRecord) => Promise<RecordCommandResult>;
+  addMedia: (media: MediaAsset) => Promise<RecordCommandResult>;
+  updateMedia: (media: MediaAsset) => Promise<RecordCommandResult>;
+  upsertPerson: (person: GuestPerson) => Promise<RecordCommandResult>;
+  saveGuestProfile: (
+    profile: GuestProfile,
+    consent: ContactConsent,
+    person: GuestPerson,
+  ) => Promise<RecordCommandResult>;
+  mergePeople: (sourcePersonId: string, targetPersonId: string) => Promise<RecordCommandResult>;
+  updateGuest: (profile: GuestProfile) => Promise<RecordCommandResult>;
+  updateConsent: (consent: ContactConsent) => Promise<RecordCommandResult>;
+  upsertConsentRecord: (consent: ConsentRecord) => Promise<RecordCommandResult>;
+  updateReviewRequest: (review: ReviewRequest) => Promise<RecordCommandResult>;
+  upsertCommunicationConfig: (config: CommunicationConfig) => Promise<RecordCommandResult>;
+  importAdSpend: (records: AdSpendRecord[]) => Promise<RecordCommandResult>;
+  upsertGrowthExperiment: (experiment: GrowthExperiment) => Promise<RecordCommandResult>;
+  upsertInvestmentModel: (model: InvestmentModel) => Promise<RecordCommandResult>;
+  addMeterReading: (reading: MeterReading) => Promise<RecordCommandResult>;
+  updateConnection: (connection: SourceConnection) => Promise<RecordCommandResult>;
+  updateUnit: (unit: Unit) => Promise<RecordCommandResult>;
+  upsertRate: (rate: RateRule) => Promise<RecordCommandResult>;
+  deleteRate: (rateId: string) => Promise<RecordCommandResult>;
+  upsertCostSetting: (cost: CostSetting) => Promise<RecordCommandResult>;
+  deleteCostSetting: (costId: string) => Promise<RecordCommandResult>;
   updateSettings: (settings: AppData["settings"]) => Promise<boolean>;
-  replaceWithImportedBookings: (bookings: Booking[], contacts?: ContactConsent[]) => void;
+  replaceWithImportedBookings: (
+    bookings: Booking[],
+    contacts?: ContactConsent[],
+    imports?: AppData["imports"],
+    costSettings?: CostSetting[],
+  ) => void;
   exportSnapshot: (passphrase: string) => Promise<void>;
   exportPricingAnalysis: () => void;
   resetDemo: () => void;
@@ -108,7 +144,8 @@ const StoreContext = createContext<AppStore | null>(null);
 const storageKey = "stawy-u-sikory-app-data-v3";
 const oldStorageKey = "stawy-u-sikory-app-data-v2";
 const syncChannelName = "stawy-os-state-sync-v1";
-const cloudConfigured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+const cloudConfigured = process.env.NEXT_PUBLIC_LOCAL_MODE !== "1"
+  && Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
 type StateCommittedMessage = {
   type: "state-committed";
@@ -129,8 +166,16 @@ type CloudStatePayload = {
 type BatchCollectionKey =
   | "units"
   | "bookings"
+  | "people"
   | "guests"
   | "consents"
+  | "consentLedger"
+  | "reviewRequests"
+  | "communicationConfigs"
+  | "adSpend"
+  | "growthExperiments"
+  | "investmentModels"
+  | "meterReadings"
   | "tasks"
   | "media"
   | "rates"
@@ -152,8 +197,16 @@ const batchCollections: Array<{
 }> = [
   { key: "units", entityType: "units", id: (record) => String(record.id ?? "") },
   { key: "bookings", entityType: "bookings", id: (record) => String(record.id ?? "") },
+  { key: "people", entityType: "people", id: (record) => String(record.id ?? "") },
   { key: "guests", entityType: "guests", id: (record) => String(record.bookingId ?? "") },
   { key: "consents", entityType: "consents", id: (record) => String(record.bookingId ?? "") },
+  { key: "consentLedger", entityType: "consentLedger", id: (record) => String(record.id ?? "") },
+  { key: "reviewRequests", entityType: "reviewRequests", id: (record) => String(record.id ?? "") },
+  { key: "communicationConfigs", entityType: "communicationConfigs", id: (record) => String(record.id ?? "") },
+  { key: "adSpend", entityType: "adSpend", id: (record) => String(record.id ?? "") },
+  { key: "growthExperiments", entityType: "growthExperiments", id: (record) => String(record.id ?? "") },
+  { key: "investmentModels", entityType: "investmentModels", id: (record) => String(record.id ?? "") },
+  { key: "meterReadings", entityType: "meterReadings", id: (record) => String(record.id ?? "") },
   { key: "tasks", entityType: "tasks", id: (record) => String(record.id ?? "") },
   { key: "media", entityType: "media", id: (record) => String(record.id ?? "") },
   { key: "rates", entityType: "rates", id: (record) => String(record.id ?? "") },
@@ -250,7 +303,37 @@ function normalizeData(parsed?: Partial<AppData> | null, fallback: AppData = ini
   const base = { ...fallback, ...parsed };
   const tasks = parsed?.tasks ?? fallback.tasks;
   const rates = parsed?.rates ?? fallback.rates;
-  const normalized: AppData = {
+  const storedTemplates = parsed?.messageTemplates?.length
+    ? parsed.messageTemplates
+    : fallback.messageTemplates.length
+      ? fallback.messageTemplates
+      : [];
+  const defaultTemplateById = new Map(defaultMessageTemplates.map((template) => [template.id, template]));
+  const messageTemplates = [
+    ...storedTemplates.map((template) => {
+      const currentDefault = defaultTemplateById.get(template.id);
+      return currentDefault && currentDefault.version > template.version
+        ? { ...currentDefault, active: template.active }
+        : template;
+    }),
+    ...defaultMessageTemplates.filter((template) => !storedTemplates.some((stored) => stored.id === template.id)),
+  ];
+  const storedRules = parsed?.automationRules?.length
+    ? parsed.automationRules
+    : fallback.automationRules.length
+      ? fallback.automationRules
+      : [];
+  const defaultRuleById = new Map(defaultAutomationRules.map((rule) => [rule.id, rule]));
+  const automationRules = [
+    ...storedRules.map((stored) => {
+      const currentDefault = defaultRuleById.get(stored.id);
+      return currentDefault && (currentDefault.definitionVersion ?? 0) > (stored.definitionVersion ?? 0)
+        ? { ...currentDefault, active: stored.active }
+        : stored;
+    }),
+    ...defaultAutomationRules.filter((rule) => !storedRules.some((stored) => stored.id === rule.id)),
+  ];
+  const normalized = ensureGuestPeople({
     ...base,
     units: (parsed?.units ?? fallback.units).map((unit) => ({
       ...unit,
@@ -262,11 +345,19 @@ function normalizeData(parsed?: Partial<AppData> | null, fallback: AppData = ini
       needsReview: booking.needsReview ?? (booking.createdBy === "Import Mobile-Calendar" && (!booking.grossPrice || booking.adults + booking.children === 0)),
       version: booking.version ?? 1,
     })),
+    people: parsed?.people ?? fallback.people,
     guests: parsed?.guests ?? fallback.guests,
     consents: (parsed?.consents ?? fallback.consents).map((consent) => ({
       ...consent,
       version: consent.version ?? 1,
     })),
+    consentLedger: parsed?.consentLedger ?? fallback.consentLedger,
+    reviewRequests: parsed?.reviewRequests ?? fallback.reviewRequests,
+    communicationConfigs: parsed?.communicationConfigs ?? fallback.communicationConfigs,
+    adSpend: parsed?.adSpend ?? fallback.adSpend,
+    growthExperiments: parsed?.growthExperiments ?? fallback.growthExperiments,
+    investmentModels: parsed?.investmentModels ?? fallback.investmentModels,
+    meterReadings: parsed?.meterReadings ?? fallback.meterReadings,
     tasks: tasks.map((task) => ({
       ...task,
       version: task.version ?? 1,
@@ -297,8 +388,8 @@ function normalizeData(parsed?: Partial<AppData> | null, fallback: AppData = ini
     issues: parsed?.issues ?? fallback.issues,
     messages: parsed?.messages ?? fallback.messages,
     departureDebriefs: parsed?.departureDebriefs ?? fallback.departureDebriefs,
-    messageTemplates: parsed?.messageTemplates?.length ? parsed.messageTemplates : fallback.messageTemplates.length ? fallback.messageTemplates : defaultMessageTemplates,
-    automationRules: parsed?.automationRules?.length ? parsed.automationRules : fallback.automationRules.length ? fallback.automationRules : defaultAutomationRules,
+    messageTemplates,
+    automationRules,
     scheduledMessages: (parsed?.scheduledMessages ?? fallback.scheduledMessages).map((message) => ({
       ...message,
       version: message.version ?? 1,
@@ -306,7 +397,7 @@ function normalizeData(parsed?: Partial<AppData> | null, fallback: AppData = ini
     marketingTouchpoints: parsed?.marketingTouchpoints ?? fallback.marketingTouchpoints,
     auditLog: parsed?.auditLog ?? fallback.auditLog,
     settings: parsed?.settings ?? fallback.settings,
-  };
+  });
   normalized.scheduledMessages = reconcileScheduledMessages(normalized);
   return normalized;
 }
@@ -315,8 +406,16 @@ function emptyCloudData(): AppData {
   return normalizeData({
     units: initialData.units,
     bookings: [],
+    people: [],
     guests: [],
     consents: [],
+    consentLedger: [],
+    reviewRequests: [],
+    communicationConfigs: initialData.communicationConfigs,
+    adSpend: [],
+    growthExperiments: [],
+    investmentModels: [],
+    meterReadings: [],
     tasks: [],
     media: [],
     blocks: [],
@@ -362,6 +461,49 @@ function tasksForImportedBookings(bookings: Booking[]) {
       return !task.dueDate || task.dueDate >= today;
     });
   });
+}
+
+function mergedImportNotes(existing?: string, incoming?: string) {
+  const current = existing?.trim();
+  const next = incoming?.trim();
+  if (!current) return next;
+  if (!next || current.includes(next)) return current;
+  if (next.includes(current)) return next;
+  return `${current}\n${next}`;
+}
+
+function mergeImportedBooking(existing: Booking, incoming: Booking): Booking {
+  const historical = incoming.historicalImport || incoming.checkOut <= todayInPoland();
+  return {
+    ...existing,
+    ...incoming,
+    arrivalTime: existing.arrivalTime ?? incoming.arrivalTime,
+    departureTime: existing.departureTime ?? incoming.departureTime,
+    cityArea: existing.cityArea ?? incoming.cityArea,
+    paymentMethod: existing.paymentMethod ?? incoming.paymentMethod,
+    specialRequests: mergedImportNotes(existing.specialRequests, incoming.specialRequests),
+    createdBy: existing.createdBy,
+    workflowStatus: existing.workflowStatus === "Anulowana"
+      ? "Anulowana"
+      : historical ? incoming.workflowStatus : existing.workflowStatus,
+    paymentStatus: existing.paymentStatus === "Barter" || existing.paymentStatus === "Anulowane"
+      ? existing.paymentStatus
+      : incoming.paymentStatus,
+    version: existing.version,
+    updatedAt: existing.updatedAt,
+    deletedAt: existing.deletedAt,
+    purgeAfter: existing.purgeAfter,
+    workflowStatusBeforeDeletion: existing.workflowStatusBeforeDeletion,
+  };
+}
+
+function mergeImportedContact(existing: ContactConsent, incoming: ContactConsent): ContactConsent {
+  return {
+    ...incoming,
+    ...existing,
+    phone: incoming.phone || existing.phone,
+    email: incoming.email || existing.email,
+  };
 }
 
 function readLocalData() {
@@ -862,37 +1004,58 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setLoadRequest((request) => request + 1);
   }, []);
 
-  const batchMutate = useCallback((fn: (current: AppData) => AppData) => {
-    if (!dataReady.current) return;
+  const batchMutate = useCallback(async (fn: (current: AppData) => AppData): Promise<RecordCommandResult> => {
+    if (!dataReady.current) return {
+      ok: false,
+      message: "Dane aplikacji nie są jeszcze gotowe. Spróbuj ponownie.",
+      resolution: "rolled-back",
+    };
     if (!cloudConfigured) {
       mutate(fn);
-      return;
+      return { ok: true };
     }
-    if (!cloudReady.current) return;
+    if (!cloudReady.current) return {
+      ok: false,
+      message: "Brak gotowego połączenia z chmurą. Odśwież dane i spróbuj ponownie.",
+      resolution: "refresh-required",
+    };
 
     const previous = latestData.current;
     const next = fn(previous);
-    if (next === previous) return;
+    if (next === previous) return { ok: true };
     const revision = ++localRevision.current;
     pendingRecordCommands.current += 1;
     latestData.current = next;
     setData(next);
 
-    cloudSaveQueue.current = cloudSaveQueue.current.then(async () => {
+    const requestId = typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : uid("REQ");
+    let outcome: RecordCommandResult = {
+      ok: false,
+      message: "Nie potwierdzono zapisu.",
+      requestId,
+      resolution: "refresh-required",
+    };
+    const queuedCommand = cloudSaveQueue.current.then(async () => {
       if (!cloudReady.current) {
+        outcome = {
+          ok: false,
+          message: "Połączenie z chmurą zostało przerwane przed zapisem.",
+          requestId,
+          resolution: "refresh-required",
+        };
         finishRecordCommand();
         return;
       }
       const changes = buildRecordBatchChanges(previous, next, batchRecordVersions.current);
       if (!changes.length) {
         savedRevision.current = Math.max(savedRevision.current, revision);
+        outcome = { ok: true, requestId };
         finishRecordCommand();
         return;
       }
 
-      const requestId = typeof crypto !== "undefined" && crypto.randomUUID
-        ? crypto.randomUUID()
-        : uid("REQ");
       const clientSentAt = new Date().toISOString();
       try {
         const response = await fetch("/api/records/batch", {
@@ -928,9 +1091,34 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
             changes: summarizeSyncChanges(baseData.current, next),
           });
           void compareConflictWithCloud(conflict, next, generation);
+          outcome = {
+            ok: false,
+            message: "Rekord zmienił się na innym urządzeniu. Porównaj zmiany przed dalszą pracą.",
+            requestId: conflictPayload.requestId ?? requestId,
+            resolution: "conflict",
+          };
           return;
         }
-        if (!response.ok) throw new Error("batch save failed");
+        if (!response.ok) {
+          const errorPayload = await response.json().catch(() => ({})) as {
+            error?: string;
+            requestId?: string;
+          };
+          if (response.status >= 400 && response.status < 500) {
+            latestData.current = previous;
+            setData(previous);
+            cloudReady.current = false;
+            setSyncMode("error");
+            outcome = {
+              ok: false,
+              message: errorPayload.error ?? "Serwer odrzucił zmianę.",
+              requestId: errorPayload.requestId ?? requestId,
+              resolution: "rolled-back",
+            };
+            return;
+          }
+          throw new Error(errorPayload.error ?? "batch save failed");
+        }
         const payload = await response.json() as RecordBatchCommandResult;
         if (
           typeof payload.stateVersion !== "number"
@@ -963,6 +1151,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         baseData.current = next;
         setSyncMode("cloud");
         const savedAt = payload.savedAt ?? new Date().toISOString();
+        outcome = { ok: true, requestId, savedAt };
         setLastSavedAt(savedAt);
         syncChannel.current?.postMessage({
           type: "state-committed",
@@ -976,10 +1165,19 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         // wymagamy ponownego pobrania zamiast ryzykować wtórną komendę.
         cloudReady.current = false;
         setSyncMode("error");
+        outcome = {
+          ok: false,
+          message: "Nie udało się potwierdzić zapisu. Odśwież dane przed ponowieniem.",
+          requestId,
+          resolution: "refresh-required",
+        };
       } finally {
         finishRecordCommand();
       }
     });
+    cloudSaveQueue.current = queuedCommand;
+    await queuedCommand;
+    return outcome;
   }, [compareConflictWithCloud, finishRecordCommand, mutate]);
 
   const createBooking = useCallback(async (booking: Booking, contact?: ContactConsent): Promise<BookingCommandResult> => {
@@ -2266,6 +2464,44 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       media: current.media.map((item) => item.id === media.id ? media : item),
       auditLog: [audit("media", media.id, "updated", `Status: ${media.usageStatus}`), ...current.auditLog],
     })),
+    upsertPerson: (person) => batchMutate((current) => ({
+      ...current,
+      people: current.people.some((item) => item.id === person.id)
+        ? current.people.map((item) => item.id === person.id ? person : item)
+        : [person, ...current.people],
+      auditLog: [audit("person", person.id, "updated", "Zapisano tożsamość gościa"), ...current.auditLog],
+    })),
+    saveGuestProfile: (profile, consent, person) => batchMutate((current) => {
+      const next: AppData = {
+        ...current,
+        people: current.people.some((item) => item.id === person.id)
+        ? current.people.map((item) => item.id === person.id ? person : item)
+        : [person, ...current.people],
+        guests: current.guests.some((item) => item.bookingId === profile.bookingId)
+        ? current.guests.map((item) => item.bookingId === profile.bookingId ? profile : item)
+        : [profile, ...current.guests],
+        consents: current.consents.some((item) => item.bookingId === consent.bookingId)
+        ? current.consents.map((item) => item.bookingId === consent.bookingId ? consent : item)
+        : [consent, ...current.consents],
+        auditLog: [
+          audit("person", person.id, "updated", "Zapisano profil i kontakt gościa"),
+          ...current.auditLog,
+        ],
+      };
+      next.scheduledMessages = reconcileScheduledMessages(next);
+      return next;
+    }),
+    mergePeople: (sourcePersonId, targetPersonId) => batchMutate((current) => {
+      const next = mergeGuestPeople(current, sourcePersonId, targetPersonId);
+      if (next === current) return current;
+      return {
+        ...next,
+        auditLog: [
+          audit("person", targetPersonId, "merged", `Połączono ${sourcePersonId} po decyzji użytkownika`),
+          ...current.auditLog,
+        ],
+      };
+    }),
     updateGuest: (profile) => batchMutate((current) => ({
       ...current,
       guests: current.guests.some((item) => item.bookingId === profile.bookingId)
@@ -2287,6 +2523,54 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         auditLog: [audit("consent", consent.bookingId, "updated", "Zaktualizowano dane kontaktowe i zgody"), ...current.auditLog],
       };
     }),
+    upsertConsentRecord: (consent) => batchMutate((current) => ({
+      ...current,
+      consentLedger: current.consentLedger.some((item) => item.id === consent.id)
+        ? current.consentLedger.map((item) => item.id === consent.id ? consent : item)
+        : [consent, ...current.consentLedger],
+      auditLog: [audit("consent", consent.id, consent.decision, consent.purpose), ...current.auditLog],
+    })),
+    updateReviewRequest: (review) => batchMutate((current) => ({
+      ...current,
+      reviewRequests: current.reviewRequests.some((item) => item.id === review.id)
+        ? current.reviewRequests.map((item) => item.id === review.id ? review : item)
+        : [review, ...current.reviewRequests],
+      auditLog: [audit("review_request", review.id, "updated", review.status), ...current.auditLog],
+    })),
+    upsertCommunicationConfig: (config) => batchMutate((current) => ({
+      ...current,
+      communicationConfigs: current.communicationConfigs.some((item) => item.id === config.id)
+        ? current.communicationConfigs.map((item) => item.id === config.id ? config : item)
+        : [config, ...current.communicationConfigs],
+      auditLog: [audit("communication_config", config.id, "updated", "Zmieniono wersjonowaną konfigurację komunikacji"), ...current.auditLog],
+    })),
+    importAdSpend: (records) => batchMutate((current) => {
+      const incomingIds = new Set(records.map((record) => record.id));
+      return {
+        ...current,
+        adSpend: [...records, ...current.adSpend.filter((record) => !incomingIds.has(record.id))],
+        auditLog: [audit("ad_spend", uid("AD-IMPORT"), "imported", `Zaimportowano ${records.length} wierszy kosztów reklam`), ...current.auditLog],
+      };
+    }),
+    upsertGrowthExperiment: (experiment) => batchMutate((current) => ({
+      ...current,
+      growthExperiments: current.growthExperiments.some((item) => item.id === experiment.id)
+        ? current.growthExperiments.map((item) => item.id === experiment.id ? experiment : item)
+        : [experiment, ...current.growthExperiments],
+      auditLog: [audit("growth_experiment", experiment.id, "updated", experiment.decision), ...current.auditLog],
+    })),
+    upsertInvestmentModel: (model) => batchMutate((current) => ({
+      ...current,
+      investmentModels: current.investmentModels.some((item) => item.id === model.id)
+        ? current.investmentModels.map((item) => item.id === model.id ? model : item)
+        : [model, ...current.investmentModels],
+      auditLog: [audit("investment_model", model.id, "updated", model.source), ...current.auditLog],
+    })),
+    addMeterReading: (reading) => batchMutate((current) => ({
+      ...current,
+      meterReadings: [reading, ...current.meterReadings],
+      auditLog: [audit("meter_reading", reading.id, "created", `${reading.value} ${reading.unit}`), ...current.auditLog],
+    })),
     updateConnection: (connection) => batchMutate((current) => ({
       ...current,
       sourceConnections: current.sourceConnections.some((item) => item.id === connection.id)
@@ -2320,19 +2604,64 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       auditLog: [audit("cost", costId, "deleted", "Usunięto założenie kosztowe"), ...current.auditLog],
     })),
     updateSettings,
-    replaceWithImportedBookings: (bookings, contacts = []) => batchMutate((current) => {
+    replaceWithImportedBookings: (
+      bookings,
+      contacts = [],
+      imports = [],
+      importedCostSettings = [],
+    ) => batchMutate((current) => {
       const existingById = new Map(current.bookings.map((booking) => [booking.id, booking]));
       const created = bookings.filter((booking) => !existingById.has(booking.id));
+      const updated = bookings.filter((booking) => existingById.has(booking.id));
       const createdIds = new Set(created.map((booking) => booking.id));
       const tasks = tasksForImportedBookings(created);
-      const importedContacts = contacts.filter((contact) => createdIds.has(contact.bookingId));
+      const incomingById = new Map(bookings.map((booking) => [booking.id, booking]));
+      const nextBookings = [
+        ...created,
+        ...current.bookings.map((booking) => {
+          const incoming = incomingById.get(booking.id);
+          return incoming ? mergeImportedBooking(booking, incoming) : booking;
+        }),
+      ];
+      const existingContacts = new Map(current.consents.map((contact) => [contact.bookingId, contact]));
+      const incomingContacts = new Map(contacts.map((contact) => [contact.bookingId, contact]));
+      const newContacts = contacts.filter((contact) => (
+        createdIds.has(contact.bookingId) && !existingContacts.has(contact.bookingId)
+      ));
+      const nextContacts = [
+        ...newContacts,
+        ...current.consents.map((contact) => {
+          const incoming = incomingContacts.get(contact.bookingId);
+          return incoming ? mergeImportedContact(contact, incoming) : contact;
+        }),
+      ];
+      const incomingImports = new Map(imports.map((item) => [item.id, item]));
+      const currentImportIds = new Set(current.imports.map((item) => item.id));
+      const nextImports = [
+        ...imports.filter((item) => !currentImportIds.has(item.id)),
+        ...current.imports.map((item) => {
+          const incoming = incomingImports.get(item.id);
+          return incoming
+            ? { ...item, ...incoming, version: item.version, updatedAt: item.updatedAt }
+            : item;
+        }),
+      ];
+      const existingCostIds = new Set(current.costSettings.map((item) => item.id));
+      const newCostSettings = importedCostSettings.filter((item) => !existingCostIds.has(item.id));
       const next: AppData = {
         ...current,
-        bookings: [...created, ...current.bookings],
-        consents: [...importedContacts, ...current.consents],
+        bookings: nextBookings,
+        consents: nextContacts,
         tasks: [...tasks, ...current.tasks],
         checklistItems: [...defaultChecklist(tasks), ...current.checklistItems],
-        auditLog: [audit("import", uid("IMP"), "committed", `Dodano ${created.length} rekordów z Mobile Calendar; pominięto ${bookings.length - created.length} istniejących`), ...current.auditLog],
+        imports: nextImports,
+        costSettings: [...newCostSettings, ...current.costSettings],
+        auditLog: [audit(
+          "import",
+          uid("IMP"),
+          "committed",
+          `Dodano ${created.length} rezerwacji, wzbogacono ${updated.length}, uzgodniono ${imports.length} rekordów OTA`,
+        ), ...current.auditLog],
       };
       next.scheduledMessages = reconcileScheduledMessages(next);
       return next;

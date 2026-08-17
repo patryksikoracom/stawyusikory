@@ -68,6 +68,7 @@ export function getBookingConflicts(bookings: Booking[], blocks: CalendarBlock[]
   const blockConflicts = blocks
     .filter((block) => block.unitId === booking.unitId)
     .filter((block) => block.status !== "Anulowana" && block.status !== "Zakończona")
+    .filter((block) => !booking.availabilityOverride?.blockIds.includes(block.id))
     .filter((block) => overlaps(booking.checkIn, booking.checkOut, block.dateFrom, block.dateTo))
     .map((block) => `Blokada: ${block.reason}`);
 

@@ -127,6 +127,7 @@ describe("POST /api/records/batch", () => {
   });
 
   it("nie ujawnia szczegółów błędu bazy", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     mocks.context.supabase.rpc.mockResolvedValue({
       data: null,
       error: { code: "XX000", message: "tajny szczegół" },
@@ -134,6 +135,14 @@ describe("POST /api/records/batch", () => {
     const response = await POST(request());
 
     expect(response.status).toBe(500);
-    expect(await response.json()).toEqual({ error: "Nie udało się zapisać paczki rekordów." });
+    expect(await response.json()).toEqual({
+      error: "Nie udało się zapisać paczki rekordów.",
+      requestId: "request-batch-123",
+    });
+    expect(consoleError).toHaveBeenCalledWith("record_batch_rejected", {
+      requestId: "request-batch-123",
+      status: 500,
+      code: "XX000",
+    });
   });
 });

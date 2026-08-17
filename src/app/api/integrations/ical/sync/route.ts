@@ -76,7 +76,7 @@ export async function POST(request: Request) {
       .from("operational_records")
       .select("entity_type,payload")
       .eq("organization_id", organizationId)
-      .in("entity_type", ["sourceConnections", "blocks"]);
+      .in("entity_type", ["sourceConnections", "blocks", "bookings"]);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
     const connections = (records ?? [])
@@ -87,6 +87,19 @@ export async function POST(request: Request) {
       .filter((record) => record.entity_type === "blocks")
       .map((record) => record.payload as CalendarBlock)
       .filter((block) => block.id.startsWith("ICAL-"));
+    const materializedIcalBlocks = new Set(
+      (records ?? [])
+        .filter((record) => record.entity_type === "bookings")
+        .map((record) => record.payload as { deletedAt?: string; importRef?: { source?: string; key?: string }; workflowStatus?: string })
+        .filter((booking) => !booking.deletedAt && booking.workflowStatus !== "Anulowana" && booking.importRef?.source === "ical" && booking.importRef.key)
+        .map((booking) => booking.importRef!.key!),
+    );
+    (records ?? [])
+      .filter((record) => record.entity_type === "bookings")
+      .map((record) => record.payload as { availabilityOverride?: { blockIds?: string[] }; deletedAt?: string; workflowStatus?: string })
+      .filter((booking) => !booking.deletedAt && booking.workflowStatus !== "Anulowana")
+      .flatMap((booking) => booking.availabilityOverride?.blockIds ?? [])
+      .forEach((blockId) => materializedIcalBlocks.add(blockId));
     const importedBlocks: CalendarBlock[] = [];
     let organizationFailures = 0;
     let organizationPreservedBlocks = 0;
@@ -114,7 +127,7 @@ export async function POST(request: Request) {
           blockType: "Inne",
           reason: `[${connection.platform}] ${event.summary}`,
           status: "Aktywna",
-        }));
+        })).filter((block) => !materializedIcalBlocks.has(block.id));
         blocks += imported.length;
         importedBlocks.push(...imported);
         Object.assign(connection, { status: "Aktywne", lastSyncAt: new Date().toISOString(), coverage: 100, lastError: undefined });

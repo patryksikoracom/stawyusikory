@@ -20,6 +20,11 @@
 # production
 /build
 
+# local imports, financial exports, and pre-migration backups (contain PII)
+/backups/
+/outputs/
+/tmp/
+
 # misc
 .DS_Store
 *.pem

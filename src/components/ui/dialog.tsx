@@ -4,11 +4,13 @@ import {
   useEffect,
   useEffectEvent,
   useRef,
+  useSyncExternalStore,
   type HTMLAttributes,
   type MouseEvent,
   type RefObject,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 
 const focusableSelector = [
   "a[href]",
@@ -23,6 +25,7 @@ const focusableSelector = [
 let bodyLockDepth = 0;
 let bodyOverflowBeforeLock = "";
 const dialogStack: HTMLElement[] = [];
+const subscribeToClient = () => () => undefined;
 
 function lockBodyScroll() {
   if (bodyLockDepth === 0) {
@@ -71,10 +74,12 @@ export function Dialog({
   className?: string;
 } & Omit<HTMLAttributes<HTMLDivElement>, "children" | "role">) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const mounted = useSyncExternalStore(subscribeToClient, () => true, () => false);
   const requestClose = useEffectEvent(() => onClose());
   const closingIsDisabled = useEffectEvent(() => closeDisabled);
 
   useEffect(() => {
+    if (!mounted) return;
     const dialog = dialogRef.current;
     if (!dialog) return;
     const returnFocusElement = returnFocusRef?.current ?? (document.activeElement instanceof HTMLElement
@@ -126,7 +131,7 @@ export function Dialog({
       unlockBodyScroll();
       if (returnFocusElement?.isConnected) returnFocusElement.focus();
     };
-  }, [returnFocusRef]);
+  }, [mounted, returnFocusRef]);
 
   function onBackdropMouseDown(event: MouseEvent<HTMLDivElement>) {
     if (
@@ -139,7 +144,9 @@ export function Dialog({
     }
   }
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div
       className={`fixed inset-0 z-50 bg-[#102c24]/70 p-4 backdrop-blur-sm ${overlayClassName}`}
       data-dialog-overlay
@@ -158,6 +165,7 @@ export function Dialog({
       >
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

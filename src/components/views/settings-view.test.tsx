@@ -26,6 +26,7 @@ function storeWithSettings(organizationName: string, dataStatus: "loading" | "re
     dataStatus,
     syncMode: dataStatus === "ready" ? "cloud" : "checking",
     updateSettings: mocks.updateSettings,
+    upsertCommunicationConfig: noop,
     exportSnapshot: noop,
     resetDemo: noop,
     updateUnit: noop,
@@ -95,5 +96,28 @@ describe("SettingsView po twardym odświeżeniu", () => {
 
     expect(await screen.findByText(/Nie potwierdzono zapisu/)).toBeInTheDocument();
     expect(mocks.updateSettings).not.toHaveBeenCalled();
+  });
+
+  it("renderuje ustawienia dla starszych rekordów komunikacji bez nowych pól", () => {
+    const store = storeWithSettings("Stawy u Sikory", "ready");
+    store.data = {
+      ...store.data,
+      communicationConfigs: [{ id: "legacy", senderName: "Stawy u Sikory" }],
+      messageTemplates: [{
+        id: "legacy-template",
+        name: "Stary szablon",
+        purpose: "Potwierdzenie",
+        channel: "E-mail",
+        subject: "Rezerwacja",
+        body: "Treść",
+        version: 1,
+        active: true,
+      }],
+    } as typeof store.data;
+    mocks.store.current = store;
+
+    expect(() => render(<SettingsView currentRole="owner" />)).not.toThrow();
+    expect(screen.getByText("Stary szablon")).toBeInTheDocument();
+    expect(screen.getByText("0 dozwolonych zmiennych · PL")).toBeInTheDocument();
   });
 });

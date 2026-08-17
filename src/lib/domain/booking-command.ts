@@ -30,6 +30,9 @@ export const operationalBookingSchema = z.object({
   pricingMode: z.enum(["rate-card", "manual"]).optional(),
   commission: z.number().finite().nonnegative().optional(),
   payout: z.number().finite().nonnegative().optional(),
+  guestPaidTotal: z.number().finite().nonnegative().optional(),
+  guestServiceFee: z.number().finite().nonnegative().optional(),
+  priceAdjustment: z.number().finite().optional(),
   depositAmount: z.number().finite().nonnegative().optional(),
   depositDueDate: z.iso.date().optional(),
   paymentMethod: z.enum(["Brak", "Przelew", "Gotówka", "Karta", "Online"]).optional(),
@@ -48,8 +51,14 @@ export const operationalBookingSchema = z.object({
   needsReview: z.boolean().optional(),
   historicalImport: z.boolean().optional(),
   importRef: z.object({
-    source: z.literal("mobile-calendar"),
+    source: z.enum(["mobile-calendar", "ical"]),
     key: z.string().trim().min(1).max(500),
+  }).optional(),
+  availabilityOverride: z.object({
+    kind: z.literal("cleaning-buffer"),
+    blockIds: z.array(z.string().trim().min(1).max(500)).min(1).max(10),
+    plan: z.enum(["self-cleaning", "arranged-cleaning"]),
+    confirmedAt: z.iso.datetime(),
   }).optional(),
   importWarnings: z.array(z.string().trim().min(1).max(1_000)).max(100).optional(),
   openingPaidAmount: z.number().finite().nonnegative().optional(),
@@ -68,6 +77,20 @@ export const operationalBookingSchema = z.object({
       code: "custom",
       message: "Data wyjazdu musi być późniejsza niż data przyjazdu.",
       path: ["checkOut"],
+    });
+  }
+  if (booking.importRef?.source === "ical" && booking.availabilityOverride) {
+    context.addIssue({
+      code: "custom",
+      message: "Rezerwacja iCal nie może jednocześnie omijać buforu sprzątania.",
+      path: ["availabilityOverride"],
+    });
+  }
+  if (booking.availabilityOverride && new Set(booking.availabilityOverride.blockIds).size !== booking.availabilityOverride.blockIds.length) {
+    context.addIssue({
+      code: "custom",
+      message: "Lista buforów sprzątania zawiera duplikaty.",
+      path: ["availabilityOverride", "blockIds"],
     });
   }
 });
@@ -107,6 +130,7 @@ export const operationalScheduledMessageSchema = z.object({
   providerResult: optionalText(5_000),
   idempotencyKey: z.string().trim().min(1).max(500),
   bookingFingerprint: z.string().max(2_000),
+  deliveryPolicy: z.enum(["draft_only", "manual_send", "auto_send"]).optional(),
   statusBeforeBookingDeletion: z.enum([
     "Wersja robocza", "Zatwierdzona", "Wysłana", "Dostarczona", "Błąd",
     "Anulowana", "Wymaga sprawdzenia",

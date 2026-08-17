@@ -28,6 +28,13 @@ export async function POST(request: Request) {
     })(),
   );
   if (!parsed.success) {
+    console.error("record_batch_contract_rejected", {
+      issues: parsed.error.issues.map((issue) => ({
+        path: issue.path.join("."),
+        code: issue.code,
+        message: issue.message,
+      })),
+    });
     return NextResponse.json({ error: "Paczka zmian narusza kontrakt domenowy." }, { status: 400 });
   }
 
@@ -39,20 +46,25 @@ export async function POST(request: Request) {
     p_tab_id: parsed.data.tabId,
   });
   if (response.error) {
+    const requestId = parsed.data.requestId;
     if (response.error.code === "42501") {
-      return NextResponse.json({ error: "Konto nie ma dostępu do zapisu rekordów." }, { status: 403 });
+      console.error("record_batch_rejected", { requestId, status: 403, code: response.error.code });
+      return NextResponse.json({ error: "Konto nie ma dostępu do zapisu rekordów.", requestId }, { status: 403 });
     }
     if (["22003", "22007", "22023"].includes(response.error.code ?? "")) {
-      return NextResponse.json({ error: "Paczka zmian narusza reguły operacyjne." }, { status: 422 });
+      console.error("record_batch_rejected", { requestId, status: 422, code: response.error.code });
+      return NextResponse.json({ error: "Paczka zmian narusza reguły operacyjne.", requestId }, { status: 422 });
     }
     if (response.error.code === "40001") {
-      return NextResponse.json({ error: "Rekord zmienił się podczas zapisu." }, { status: 409 });
+      console.error("record_batch_rejected", { requestId, status: 409, code: response.error.code });
+      return NextResponse.json({ error: "Rekord zmienił się podczas zapisu.", requestId }, { status: 409 });
     }
-    return NextResponse.json({ error: "Nie udało się zapisać paczki rekordów." }, { status: 500 });
+    console.error("record_batch_rejected", { requestId, status: 500, code: response.error.code ?? "unknown" });
+    return NextResponse.json({ error: "Nie udało się zapisać paczki rekordów.", requestId }, { status: 500 });
   }
 
   const result = response.data as RecordBatchCommandResult | null;
-  if (!result) return NextResponse.json({ error: "Baza zwróciła niepełny wynik zapisu." }, { status: 500 });
+  if (!result) return NextResponse.json({ error: "Baza zwróciła niepełny wynik zapisu.", requestId: parsed.data.requestId }, { status: 500 });
   if (result.status === "conflict") {
     return NextResponse.json({
       error: "Jeden z rekordów zmienił się na innym urządzeniu.",
@@ -66,7 +78,7 @@ export async function POST(request: Request) {
     || typeof result.stateVersion !== "number"
     || !Array.isArray(result.changes)
   ) {
-    return NextResponse.json({ error: "Baza zwróciła niepełny wynik zapisu." }, { status: 500 });
+    return NextResponse.json({ error: "Baza zwróciła niepełny wynik zapisu.", requestId: parsed.data.requestId }, { status: 500 });
   }
   return NextResponse.json({
     ok: true,

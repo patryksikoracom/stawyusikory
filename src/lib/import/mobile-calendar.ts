@@ -1,5 +1,12 @@
 import { z } from "zod";
-import type { Booking, Channel, ContactConsent, PaymentStatus } from "@/lib/types";
+import type {
+  Booking,
+  Channel,
+  ContactConsent,
+  CostSetting,
+  PaymentStatus,
+  PlatformImport,
+} from "@/lib/types";
 import { todayInPoland } from "@/lib/date";
 
 const dateValue = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -12,6 +19,8 @@ function money(value: string) {
 export type ImportPreview = {
   rows: Booking[];
   contacts: ContactConsent[];
+  imports: PlatformImport[];
+  costSettings: CostSetting[];
   errors: { line: number; message: string }[];
   summary: {
     total: number;
@@ -21,9 +30,23 @@ export type ImportPreview = {
     plnTotal: number;
     eurTotal: number;
   };
+  financialSummary?: {
+    airbnbReservations: number;
+    bookingReservations: number;
+    matchedFinancial: number;
+    sourceCorrections: number;
+    dateDiscrepancyMatches: number;
+    otaOnlyBookings: number;
+    historicalSettled: number;
+    financialReview: number;
+    plnGross: number;
+    plnCommission: number;
+    plnPaymentProcessing: number;
+    plnPayout: number;
+  };
 };
 
-function parseDelimited(raw: string, delimiter: string) {
+export function parseDelimited(raw: string, delimiter: string) {
   const records: string[][] = [];
   let record: string[] = [];
   let field = "";
@@ -163,7 +186,14 @@ function fullExport(records: string[][]): ImportPreview {
     const email = get(record, "E-mail");
     if (phone || email) contacts.push({ bookingId: booking.id, phone: phone || undefined, email: email || undefined, marketingConsent: "Do dopytania", photoFbConsent: "Do dopytania", photoSiteAdsConsent: "Do dopytania" });
   });
-  return { rows, contacts, errors, summary: emptySummary(rows) };
+  return {
+    rows,
+    contacts,
+    imports: [],
+    costSettings: [],
+    errors,
+    summary: emptySummary(rows),
+  };
 }
 
 export function parseMobileCalendar(raw: string): ImportPreview {
@@ -228,5 +258,12 @@ export function parseMobileCalendar(raw: string): ImportPreview {
       version: 1,
     });
   });
-  return { rows, contacts: [], errors, summary: emptySummary(rows) };
+  return {
+    rows,
+    contacts: [],
+    imports: [],
+    costSettings: [],
+    errors,
+    summary: emptySummary(rows),
+  };
 }

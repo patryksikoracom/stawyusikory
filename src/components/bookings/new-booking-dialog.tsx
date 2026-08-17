@@ -5,19 +5,21 @@ import { useAppStore } from "@/components/layout/app-store";
 import { Icon } from "@/components/ui/icons";
 import { Button, Field, inputClass } from "@/components/ui/primitives";
 import { Dialog } from "@/components/ui/dialog";
-import type { Booking, CalendarBlock, Channel, ContactConsent, PaymentStatus } from "@/lib/types";
-import { getBookingConflicts, nightsBetween } from "@/lib/workflow/rules";
+import type { Booking, CalendarBlock, Channel, ContactConsent, GuestPerson, PaymentStatus } from "@/lib/types";
+import { getBookingConflicts, nightsBetween, overlaps } from "@/lib/workflow/rules";
 import { guestDisplayName, validateGuestStep } from "@/lib/workflow/booking-form";
 import { quoteStay } from "@/lib/workflow/pricing";
 import { formatPolishDate } from "@/lib/date";
+import { isOverridableCleaningBuffer } from "@/lib/integrations/ical-block-classification";
+import { guestPersonId, normalizeGuestEmail, normalizeGuestPhone } from "@/lib/crm/guest-identity";
 
-type BookingDefaults = Partial<Pick<Booking, "unitId" | "checkIn" | "checkOut" | "arrivalTime" | "departureTime">>;
+export type BookingDefaults = Partial<Pick<Booking, "unitId" | "checkIn" | "checkOut" | "arrivalTime" | "departureTime" | "platform" | "importRef">>;
 const bookingChannels: Channel[] = ["Telefon", "E-mail", "Bezpośrednio", "Strona www", "Booking", "Airbnb", "Slowhop", "Aloha Camp", "Agoda", "Expedia", "VRBO", "Inne"];
 const otaChannels: Channel[] = ["Booking", "Airbnb", "Slowhop", "Aloha Camp", "Agoda", "Expedia", "VRBO"];
 const discoveryChannels = ["Nie wiadomo", "Google", "Facebook", "Instagram", "Polecenie", "Booking", "Airbnb", "Aloha Camp", "Strona www", "Inne"];
 
 export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFocusRef }: { onClose: () => void; onAdded: () => void; booking?: Booking; defaults?: BookingDefaults; returnFocusRef?: RefObject<HTMLElement | null> }) {
-  const { data, addBooking, updateBooking, deleteBooking } = useAppStore();
+  const { data, addBooking, updateBooking, deleteBooking, saveGuestProfile } = useAppStore();
   const [step, setStep] = useState(1);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -31,6 +33,8 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
   const [showChildren, setShowChildren] = useState(Boolean(booking?.children));
   const [depositOverride, setDepositOverride] = useState(Boolean(booking?.depositAmount));
   const [dateSelection, setDateSelection] = useState<"checkIn" | "checkOut">("checkIn");
+  const [confirmedCleaningBufferKey, setConfirmedCleaningBufferKey] = useState("");
+  const [cleaningPlan, setCleaningPlan] = useState<"self-cleaning" | "arranged-cleaning" | "">("");
   const [draftId] = useState(() => `SUS-${Date.now().toString().slice(-6)}`);
   const [defaultDates] = useState(() => {
     const start = new Date();
@@ -41,12 +45,14 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
   const { today, tomorrow } = defaultDates;
   const [form, setForm] = useState(() => {
     const contact = booking ? data.consents.find((item) => item.bookingId === booking.id) : undefined;
+    const profile = booking ? data.guests.find((item) => item.bookingId === booking.id) : undefined;
+    const person = data.people.find((item) => item.id === profile?.personId);
     const name = booking?.guestLabel.trim().split(/\s+/) ?? [];
     return {
-      firstName: name.length > 1 ? name.shift() ?? "" : "", lastName: name.join(" ") || booking?.guestLabel || "", phone: contact?.phone ?? "", email: contact?.email ?? "",
+      firstName: name.length > 1 ? name.shift() ?? "" : "", lastName: name.join(" ") || booking?.guestLabel || "", phone: contact?.phone ?? "", email: contact?.email ?? "", preferredLanguage: person?.preferredLanguage ?? "pl" as NonNullable<GuestPerson["preferredLanguage"]>,
       unitId: booking?.unitId ?? defaults?.unitId ?? data.units[0]?.id ?? "", checkIn: booking?.checkIn ?? defaults?.checkIn ?? today, checkOut: booking?.checkOut ?? defaults?.checkOut ?? tomorrow,
       arrivalTime: booking?.arrivalTime ?? defaults?.arrivalTime ?? data.settings.defaultCheckIn, departureTime: booking?.departureTime ?? defaults?.departureTime ?? data.settings.defaultCheckOut, adults: String(booking?.adults ?? 2), children: String(booking?.children ?? 0),
-      platform: booking?.platform ?? "Telefon", discoveryChannel: discoveryChannels.includes(booking?.source ?? "") ? booking!.source : "Nie wiadomo", externalNo: booking?.platformReservationNo ?? "", commission: booking?.commission ? String(booking.commission) : "", pricePerNight: booking?.pricePerNight ? String(booking.pricePerNight) : "", totalPrice: booking?.grossPrice ? String(booking.grossPrice) : "",
+      platform: booking?.platform ?? defaults?.platform ?? "Telefon", discoveryChannel: discoveryChannels.includes(booking?.source ?? "") ? booking!.source : "Nie wiadomo", externalNo: booking?.platformReservationNo ?? "", commission: booking?.commission ? String(booking.commission) : "", pricePerNight: booking?.pricePerNight ? String(booking.pricePerNight) : "", totalPrice: booking?.grossPrice ? String(booking.grossPrice) : "",
       pricingMode: booking?.pricingMode ?? (booking?.grossPrice ? "manual" as const : "rate-card" as const),
       paymentStatus: booking?.paymentStatus === "Opłacone" ? "Wpłacona całość" : booking?.paymentStatus === "Zaliczka" ? "Wpłacony zadatek" : booking?.paymentStatus === "Częściowo" ? "Częściowo opłacone" : "Oczekiwanie na zadatek", depositAmount: booking?.depositAmount ? String(booking.depositAmount) : "", depositDueDate: booking?.depositDueDate ?? "",
       paymentMethod: booking?.paymentMethod ?? "Brak", currency: booking?.currency ?? "PLN", notes: booking?.specialRequests ?? "",
@@ -75,7 +81,21 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
     guestLabel: "Wersja robocza", paymentStatus: "Do uzupełnienia",
     workflowStatus: "Nowa", createdBy: "Stawy OS",
   };
-  const conflicts = form.checkIn && form.checkOut ? getBookingConflicts(data.bookings, data.blocks, conflictProbe) : [];
+  const ignoredIcalBlockId = booking?.importRef?.source === "ical"
+    ? booking.importRef.key
+    : defaults?.importRef?.source === "ical" ? defaults.importRef.key : undefined;
+  const availabilityBlocks = ignoredIcalBlockId
+    ? data.blocks.filter((block) => block.id !== ignoredIcalBlockId)
+    : data.blocks;
+  const cleaningBuffers = availabilityBlocks
+    .filter((block) => block.unitId === form.unitId)
+    .filter((block) => block.status !== "Anulowana" && block.status !== "Zakończona")
+    .filter((block) => isOverridableCleaningBuffer(block))
+    .filter((block) => overlaps(form.checkIn, form.checkOut, block.dateFrom, block.dateTo));
+  const cleaningBufferKey = cleaningBuffers.map((block) => block.id).sort().join("|");
+  const cleaningBufferConfirmed = Boolean(cleaningBufferKey) && confirmedCleaningBufferKey === cleaningBufferKey;
+  const hardAvailabilityBlocks = availabilityBlocks.filter((block) => !cleaningBuffers.some((buffer) => buffer.id === block.id));
+  const conflicts = form.checkIn && form.checkOut ? getBookingConflicts(data.bookings, hardAvailabilityBlocks, conflictProbe) : [];
   const sameDayTurnovers = data.bookings
     .filter((candidate) => candidate.id !== booking?.id && candidate.unitId === form.unitId && candidate.workflowStatus !== "Anulowana")
     .filter((candidate) => candidate.checkOut === form.checkIn || candidate.checkIn === form.checkOut);
@@ -98,6 +118,7 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
       if (Number(form.adults) < 1) return "Rezerwacja musi mieć co najmniej jedną osobę dorosłą.";
       if (selectedUnit && guestCount > selectedUnit.maxPeople) return `${selectedUnit.name} mieści maksymalnie ${selectedUnit.maxPeople} osób.`;
       if (conflicts.length) return `Ten termin jest zajęty: ${conflicts[0]}.`;
+      if (cleaningBuffers.length && (!cleaningBufferConfirmed || !cleaningPlan)) return "Wybierz sposób sprzątania i potwierdź świadome obejście buforu.";
     }
     if (targetStep === 2) return validateGuestStep(form.firstName, form.lastName);
   }
@@ -114,6 +135,7 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
     if (saving) return;
     if (step < 3) { goNext(); return; }
     if (conflicts.length) { setError(`Ten termin jest zajęty: ${conflicts[0]}.`); setStep(1); return; }
+    if (cleaningBuffers.length && (!cleaningBufferConfirmed || !cleaningPlan)) { setError("Potwierdź sposób obsługi buforu sprzątania."); setStep(1); return; }
     if (depositValue > calculatedTotal && calculatedTotal > 0) { setError("Zadatek nie może być większy niż suma rezerwacji."); return; }
     const guestLabel = guestDisplayName(form.firstName, form.lastName);
     const savedBooking: Booking = {
@@ -144,6 +166,13 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
       specialRequests: form.notes.trim() || undefined,
       createdBy: booking?.createdBy ?? "Stawy OS",
       needsReview: false,
+      importRef: booking?.importRef ?? defaults?.importRef,
+      availabilityOverride: cleaningBuffers.length && cleaningPlan ? {
+        kind: "cleaning-buffer",
+        blockIds: cleaningBuffers.map((block) => block.id),
+        plan: cleaningPlan,
+        confirmedAt: new Date().toISOString(),
+      } : booking?.availabilityOverride,
     };
     const contact: ContactConsent = {
       ...(data.consents.find((item) => item.bookingId === savedBooking.id) ?? {
@@ -165,6 +194,23 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
       setError(result.message);
       return;
     }
+    const currentProfile = data.guests.find((item) => item.bookingId === savedBooking.id);
+    const currentPerson = data.people.find((item) => item.id === currentProfile?.personId);
+    const personId = currentPerson?.id ?? currentProfile?.personId ?? guestPersonId(savedBooking.id);
+    await saveGuestProfile(
+      { ...currentProfile, bookingId: savedBooking.id, personId },
+      contact,
+      {
+        ...currentPerson,
+        id: personId,
+        displayName: savedBooking.guestLabel,
+        phone: normalizeGuestPhone(contact.phone),
+        email: normalizeGuestEmail(contact.email),
+        preferredLanguage: form.preferredLanguage,
+        createdAt: currentPerson?.createdAt ?? new Date().toISOString(),
+        createdBy: currentPerson?.createdBy ?? "Stawy OS",
+      },
+    );
     onAdded();
   }
 
@@ -207,11 +253,12 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
                       return <button autoFocus={selected} aria-label={`Wybierz domek ${bird ? "Czapla" : "Rybak"}`} aria-pressed={selected} className={`min-h-20 rounded-2xl border px-4 text-left transition ${selected ? "border-[#174d3b] bg-[#174d3b] text-white shadow-lg" : "border-[#d8d0c2] bg-white text-[#355248] hover:border-[#79927d]"}`} key={unit.id} onClick={() => setForm({ ...form, unitId: unit.id })} type="button"><span aria-hidden="true" className="mr-2 text-2xl">{bird ? "🐦" : "🐟"}</span><span className="text-base font-black">{bird ? "Czapla" : "Rybak"}</span><span className={`mt-1 block text-xs ${selected ? "text-white/75" : "text-[#6d7972]"}`}>do {unit.maxPeople} osób</span></button>;
                     })}
                   </fieldset>
-                  <div className={`rounded-xl border px-4 py-3 ${conflicts.length ? "border-[#efb7a8] bg-[#fbe7e1] text-[#8f3b27]" : "border-[#bdd7c3] bg-[#e9f2e7] text-[#275e3f]"}`}><p className="text-[10px] font-black uppercase tracking-[.14em]">Dostępność</p><p className="mt-1 text-sm font-black">{conflicts.length ? "Termin zajęty" : nights > 0 ? sameDayTurnovers.length ? "Termin wolny · turnover tego samego dnia" : "Termin wolny" : "Wybierz poprawne daty"}</p><p className="mt-0.5 text-xs">{conflicts[0] ?? turnoverSummary[0] ?? (nights > 0 ? `${nights} ${nights === 1 ? "noc" : "nocy"} · sprawdzono rezerwacje i blokady` : "Wyjazd musi być po przyjeździe")}</p></div>
+                  <div className={`rounded-xl border px-4 py-3 ${conflicts.length ? "border-[#efb7a8] bg-[#fbe7e1] text-[#8f3b27]" : cleaningBuffers.length ? "border-[#e4c46f] bg-[#fbf0d3] text-[#745815]" : "border-[#bdd7c3] bg-[#e9f2e7] text-[#275e3f]"}`}><p className="text-[10px] font-black uppercase tracking-[.14em]">Dostępność</p><p className="mt-1 text-sm font-black">{conflicts.length ? "Termin zajęty" : cleaningBuffers.length ? "Termin dostępny warunkowo · bufor sprzątania" : nights > 0 ? sameDayTurnovers.length ? "Termin wolny · turnover tego samego dnia" : "Termin wolny" : "Wybierz poprawne daty"}</p><p className="mt-0.5 text-xs">{conflicts[0] ?? (cleaningBuffers.length ? "Możesz zapisać pobyt po wskazaniu, jak zapewnicie sprzątanie." : turnoverSummary[0]) ?? (nights > 0 ? `${nights} ${nights === 1 ? "noc" : "nocy"} · sprawdzono rezerwacje i blokady` : "Wyjazd musi być po przyjeździe")}</p></div>
+                  {cleaningBuffers.length && !conflicts.length ? <fieldset className="sm:col-span-2 rounded-2xl border border-[#dfc16e] bg-[#fff8e8] p-4"><legend className="px-1 text-sm font-black text-[#654d16]">Jak obsłużycie sprzątanie?</legend><p className="mt-1 text-xs leading-5 text-[#756238]">To jest wyłącznie bufor techniczny. Rezerwacja gościa nadal zawsze blokuje termin.</p><div className="mt-3 grid gap-2 sm:grid-cols-2"><label className="flex min-h-12 items-center gap-3 rounded-xl border border-[#dfd1aa] bg-white px-3 text-sm font-bold"><input checked={cleaningPlan === "self-cleaning"} name="cleaning-plan" onChange={() => setCleaningPlan("self-cleaning")} type="radio"/>Posprzątamy samodzielnie</label><label className="flex min-h-12 items-center gap-3 rounded-xl border border-[#dfd1aa] bg-white px-3 text-sm font-bold"><input checked={cleaningPlan === "arranged-cleaning"} name="cleaning-plan" onChange={() => setCleaningPlan("arranged-cleaning")} type="radio"/>Umówię osobę sprzątającą</label></div><label className="mt-3 flex items-start gap-3 text-sm font-bold text-[#5f4b1d]"><input checked={cleaningBufferConfirmed} className="mt-1" onChange={(event) => setConfirmedCleaningBufferKey(event.target.checked ? cleaningBufferKey : "")} type="checkbox"/>Potwierdzam, że sprawdziłem termin i świadomie zastępuję bufor własnym planem sprzątania.</label></fieldset> : null}
                   <div className="rounded-xl border border-[#c8d8bd] bg-[#f1f5e9] px-4 py-3"><p className="text-[10px] font-black uppercase tracking-[.14em] text-[#66794f]">Wycena</p><p className="mt-1 font-display text-2xl font-semibold text-[#214f3d]">{calculatedTotal ? calculatedTotal.toLocaleString("pl-PL") : "—"} {calculatedTotal ? moneySuffix : ""}</p><p className="mt-0.5 text-xs font-bold text-[#647267]">{nights > 0 ? `${nights} ${nights === 1 ? "noc" : "nocy"}${suggestedNightPrice ? ` · śr. ${Number(suggestedNightPrice).toLocaleString("pl-PL")} zł/noc` : ""}` : "Wybierz daty"}</p></div>
                   <div className="sm:col-span-2">
                     <StayDateTimeline
-                      blocks={data.blocks}
+                      blocks={availabilityBlocks}
                       bookings={data.bookings}
                       checkIn={form.checkIn}
                       checkOut={form.checkOut}
@@ -257,6 +304,7 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
                   <Field label="Nazwisko / nazwa rezerwacji" hint="Opcjonalne, jeśli podano imię."><input className={inputClass} autoComplete="family-name" placeholder="Kowalska" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></Field>
                   <Field label="Telefon"><input className={inputClass} autoComplete="tel" inputMode="tel" placeholder="+48 600 000 000" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
                   <Field label="E-mail"><input className={inputClass} autoComplete="email" placeholder="gosc@example.com" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
+                  <Field label="Język wiadomości"><select className={inputClass} value={form.preferredLanguage} onChange={(e) => setForm({ ...form, preferredLanguage: e.target.value as NonNullable<GuestPerson["preferredLanguage"]> })}><option value="pl">Polski</option><option value="de">Deutsch</option><option value="en">English</option></select></Field>
                 </div>
                 <p className="text-xs font-black uppercase tracking-[.14em] text-[#7d8b4d]">Sprzedaż i odkrycie</p>
                 <div className="grid gap-4 sm:grid-cols-2">

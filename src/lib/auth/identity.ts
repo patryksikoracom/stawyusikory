@@ -30,7 +30,7 @@ type IdentityInput = {
 const roleLabels: Record<UserRole, string> = {
   owner: "Właściciel",
   admin: "Administrator",
-  manager: "Manager",
+  manager: "Operator",
   viewer: "Podgląd",
   cleaning: "Sprzątanie",
   marketing: "Marketing",

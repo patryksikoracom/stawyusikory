@@ -203,6 +203,117 @@ describe("AppStoreProvider w trybie chmurowym", () => {
     expect(store?.syncMode).toBe("cloud");
   });
 
+  it("cofa optymistyczną mutację po jednoznacznym 422 i zwraca błąd akcji", async () => {
+    vi.useFakeTimers();
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "test-anon-key");
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        clear: vi.fn(), getItem: vi.fn(() => null), key: vi.fn(), length: 0,
+        removeItem: vi.fn(), setItem: vi.fn(),
+      },
+    });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: {}, version: 8, recordVersions: {} }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 422,
+        json: async () => ({
+          error: "Paczka zmian narusza reguły operacyjne.",
+          requestId: "request-rejected",
+        }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { AppStoreProvider, useAppStore } = await import("./app-store");
+    let store: ReturnType<typeof useAppStore> | undefined;
+    function Probe() {
+      store = useAppStore();
+      return null;
+    }
+    render(<AppStoreProvider><Probe /></AppStoreProvider>);
+    await act(async () => {
+      vi.advanceTimersByTime(0);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    let result: Awaited<ReturnType<NonNullable<typeof store>["addIssue"]>> | undefined;
+    await act(async () => {
+      result = await store!.addIssue({
+        id: "ISSUE-REJECTED",
+        title: "Odrzucona zmiana",
+        status: "Otwarte",
+        createdAt: "2026-08-10T10:00:00.000Z",
+      });
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      resolution: "rolled-back",
+      requestId: "request-rejected",
+    });
+    expect(store?.data.issues).not.toContainEqual(expect.objectContaining({ id: "ISSUE-REJECTED" }));
+    expect(store?.syncMode).toBe("error");
+  });
+
+  it("zachowuje lokalny obraz po niejednoznacznym 500 i wymaga odświeżenia", async () => {
+    vi.useFakeTimers();
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "test-anon-key");
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        clear: vi.fn(), getItem: vi.fn(() => null), key: vi.fn(), length: 0,
+        removeItem: vi.fn(), setItem: vi.fn(),
+      },
+    });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: {}, version: 8, recordVersions: {} }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: async () => ({
+          error: "Nie udało się zapisać paczki rekordów.",
+          requestId: "request-unknown",
+        }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { AppStoreProvider, useAppStore } = await import("./app-store");
+    let store: ReturnType<typeof useAppStore> | undefined;
+    function Probe() {
+      store = useAppStore();
+      return null;
+    }
+    render(<AppStoreProvider><Probe /></AppStoreProvider>);
+    await act(async () => {
+      vi.advanceTimersByTime(0);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const result = await act(async () => store!.addIssue({
+      id: "ISSUE-UNKNOWN",
+      title: "Niejednoznaczny zapis",
+      status: "Otwarte",
+      createdAt: "2026-08-10T10:00:00.000Z",
+    }));
+
+    expect(result).toMatchObject({ ok: false, resolution: "refresh-required" });
+    expect(store?.data.issues).toContainEqual(expect.objectContaining({ id: "ISSUE-UNKNOWN" }));
+    expect(store?.syncMode).toBe("error");
+  });
+
   it("zatrzymuje konflikt ustawień na wersji rekordu i nie wysyła pełnego PUT", async () => {
     vi.useFakeTimers();
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
@@ -964,10 +1075,10 @@ describe("AppStoreProvider w trybie chmurowym", () => {
       templateId?: string;
       templateVersion?: number;
     }) => item.templateId === "cleaning-standard-v1" && item.templateVersion === 1)).toBe(true);
-    expect(commandBody.aggregate.scheduledMessages).toHaveLength(8);
+    expect(commandBody.aggregate.scheduledMessages).toHaveLength(10);
     expect(store?.data.bookings[0]).toMatchObject({ id: booking.id, version: 1 });
     expect(store?.data.tasks.filter((task) => task.bookingId === booking.id)).toHaveLength(5);
-    expect(store?.data.scheduledMessages.filter((message) => message.bookingId === booking.id)).toHaveLength(8);
+    expect(store?.data.scheduledMessages.filter((message) => message.bookingId === booking.id)).toHaveLength(10);
     expect(store?.syncMode).toBe("cloud");
   });
 

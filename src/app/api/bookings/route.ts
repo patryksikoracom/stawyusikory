@@ -32,7 +32,16 @@ export async function POST(request: Request) {
   }
 
   const { aggregate } = parsed.data;
-  const { data, error } = await context.supabase.rpc("create_operational_booking", {
+  const icalBlockId = aggregate.booking.importRef?.source === "ical"
+    ? aggregate.booking.importRef.key
+    : undefined;
+  const cleaningBufferOverride = aggregate.booking.availabilityOverride?.kind === "cleaning-buffer";
+  const command = icalBlockId
+    ? "create_operational_booking_from_ical"
+    : cleaningBufferOverride
+      ? "create_operational_booking_with_cleaning_buffer_override"
+      : "create_operational_booking";
+  const { data, error } = await context.supabase.rpc(command, {
     p_organization_id: context.organizationId,
     p_booking_id: aggregate.booking.id,
     p_booking: aggregate.booking,
@@ -43,6 +52,7 @@ export async function POST(request: Request) {
     p_request_id: parsed.data.requestId,
     p_client_sent_at: parsed.data.clientSentAt,
     p_tab_id: parsed.data.tabId,
+    ...(icalBlockId ? { p_ical_block_id: icalBlockId } : {}),
   });
 
   if (error) {

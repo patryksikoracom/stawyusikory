@@ -3,6 +3,7 @@ import { z } from "zod";
 import { isOrganizationEditor, requireOrganization } from "@/lib/supabase/auth-context";
 import { sendSmsApi } from "@/lib/integrations/smsapi";
 import { isSmsDeliveryEnabled, smsDeliveryDisabledMessage } from "@/lib/integrations/outbound-delivery";
+import { normalizeE164 } from "@/lib/integrations/delivery-queue";
 
 const schema = z.object({
   to: z.string().min(9).max(20),
@@ -13,6 +14,8 @@ const schema = z.object({
 export async function POST(request: Request) {
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Sprawdź numer telefonu i treść SMS." }, { status: 400 });
+  const recipient = normalizeE164(parsed.data.to);
+  if (!recipient) return NextResponse.json({ error: "Numer telefonu musi mieć poprawny format E.164." }, { status: 400 });
   const context = await requireOrganization(request);
   if (context.error) return context.error;
   if (!isOrganizationEditor(context.role)) return NextResponse.json({ error: "Brak uprawnień do wysyłania wiadomości." }, { status: 403 });
@@ -39,11 +42,12 @@ export async function POST(request: Request) {
     .insert({
       organization_id: context.organizationId,
       channel: "SMS",
-      recipient: parsed.data.to,
+      recipient,
       body: parsed.data.message,
       status: "queued",
       idempotency_key: parsed.data.idempotencyKey,
       attempts: 0,
+      next_attempt_at: new Date().toISOString(),
     })
     .select("id")
     .single();
@@ -58,7 +62,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Dodaj SMSAPI_TOKEN w ustawieniach środowiska." }, { status: 503 });
   }
 
-  const result = await sendSmsApi(token, parsed.data.to, parsed.data.message);
+  const result = await sendSmsApi(token, recipient, parsed.data.message);
   await context.supabase!.from("outbound_messages").update({
     status: result.ok ? "sent" : "error",
     provider_response: result.provider,
