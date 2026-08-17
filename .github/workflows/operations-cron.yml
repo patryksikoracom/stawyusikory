@@ -15,6 +15,7 @@ jobs:
     timeout-minutes: 5
     env:
       SMS_ENABLED: ${{ secrets.STAWY_OS_SMS_ENABLED }}
+      EMAIL_ENABLED: ${{ secrets.STAWY_OS_EMAIL_ENABLED }}
     steps:
       - name: Synchronize iCal feeds
         env:
@@ -39,7 +40,8 @@ jobs:
             -H "Authorization: Bearer $CRON_SECRET" \
             "$APP_URL/api/messages/sms/process"
 
-      - name: Inspect due communication drafts
+      - name: Process queued e-mails
+        if: env.EMAIL_ENABLED == 'true'
         env:
           APP_URL: ${{ secrets.STAWY_OS_APP_URL }}
           CRON_SECRET: ${{ secrets.STAWY_OS_CRON_SECRET }}
