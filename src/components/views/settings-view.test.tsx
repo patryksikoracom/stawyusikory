@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initialData } from "@/lib/demo-data";
 import { AppDataGate } from "@/components/layout/app-data-gate";
@@ -43,6 +43,7 @@ describe("SettingsView po twardym odświeżeniu", () => {
   beforeEach(() => {
     mocks.updateSettings.mockReset();
     mocks.updateSettings.mockResolvedValue(true);
+    vi.stubGlobal("fetch", vi.fn());
   });
 
   it("nie montuje formularza na danych startowych i zapisuje dopiero dane z chmury", async () => {
@@ -119,5 +120,30 @@ describe("SettingsView po twardym odświeżeniu", () => {
     expect(() => render(<SettingsView currentRole="owner" />)).not.toThrow();
     expect(screen.getByText("Stary szablon")).toBeInTheDocument();
     expect(screen.getByText("0 dozwolonych zmiennych · PL")).toBeInTheDocument();
+  });
+
+  it("pozwala właścicielowi wysłać izolowany test e-mail", async () => {
+    mocks.store.current = storeWithSettings("Stawy u Sikory", "ready");
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      providerMessageId: "email_test_123",
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    render(<SettingsView currentRole="owner" />);
+
+    expect(screen.getByRole("textbox", { name: "Adres testowego e-maila" })).toHaveValue("PatrykSikora98@gmail.com");
+    fireEvent.click(screen.getByRole("button", { name: "Wyślij test e-mail" }));
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/admin/email-test", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ email: "PatrykSikora98@gmail.com" }),
+    })));
+    expect(await screen.findByText(/email_test_123/)).toBeInTheDocument();
+  });
+
+  it("ukrywa test e-mail przed rolą tylko do odczytu", () => {
+    mocks.store.current = storeWithSettings("Stawy u Sikory", "ready");
+    render(<SettingsView currentRole="viewer" />);
+
+    expect(screen.queryByRole("button", { name: "Wyślij test e-mail" })).not.toBeInTheDocument();
   });
 });
