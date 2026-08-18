@@ -162,6 +162,34 @@ describe("PATCH /api/bookings/:id", () => {
     });
   });
 
+  it("akceptuje znaczniki czasu PostgreSQL w wyniku zatwierdzonej komendy", async () => {
+    const postgresTimestamp = "2026-08-18T17:55:28.154157+00:00";
+    mocks.context.supabase.rpc.mockResolvedValue({
+      data: {
+        status: "committed",
+        aggregate: {
+          ...aggregate,
+          booking: { ...booking, updatedAt: postgresTimestamp },
+          contact: { ...contact, updatedAt: postgresTimestamp },
+          tasks: [{ ...task, updatedAt: postgresTimestamp }],
+          scheduledMessages: [{ ...scheduledMessage, updatedAt: postgresTimestamp }],
+        },
+        recordVersion: 4,
+        stateVersion: 14,
+        savedAt: postgresTimestamp,
+      },
+      error: null,
+    });
+
+    const response = await PATCH(request(), routeContext);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      ok: true,
+      aggregate: { booking: { updatedAt: postgresTimestamp } },
+    });
+  });
+
   it.each([
     ["booking", { status: "conflict", recordVersion: 8 }],
     ["task", {

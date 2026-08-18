@@ -64,7 +64,7 @@ export const operationalBookingSchema = z.object({
   openingPaidAmount: z.number().finite().nonnegative().optional(),
   openingPaidCurrency: z.enum(["PLN", "EUR"]).optional(),
   openingPaidSource: optionalText(500),
-  updatedAt: z.iso.datetime().optional(),
+  updatedAt: z.iso.datetime({ offset: true }).optional(),
   deletedAt: z.iso.datetime().optional(),
   purgeAfter: z.iso.date().optional(),
   workflowStatusBeforeDeletion: z.enum([
@@ -107,7 +107,7 @@ export const operationalContactConsentSchema = z.object({
   consentDate: z.iso.date().optional(),
   consentWithdrawnAt: z.iso.datetime().optional(),
   version: z.number().int().positive().optional(),
-  updatedAt: z.iso.datetime().optional(),
+  updatedAt: z.iso.datetime({ offset: true }).optional(),
 });
 
 export const operationalScheduledMessageSchema = z.object({
@@ -138,7 +138,7 @@ export const operationalScheduledMessageSchema = z.object({
   bookingFingerprintBeforeDeletion: z.string().max(2_000).optional(),
   createdAt: z.iso.datetime(),
   version: z.number().int().positive().optional(),
-  updatedAt: z.iso.datetime().optional(),
+  updatedAt: z.iso.datetime({ offset: true }).optional(),
 });
 
 export const bookingAggregateSchema = z.object({

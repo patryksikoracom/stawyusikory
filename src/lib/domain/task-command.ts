@@ -59,7 +59,7 @@ export const operationalTaskSchema = z.object({
     "Nie dotyczy",
   ]).optional(),
   version: z.number().int().positive().optional(),
-  updatedAt: z.iso.datetime().optional(),
+  updatedAt: z.iso.datetime({ offset: true }).optional(),
 }).superRefine((task, context) => {
   if (task.readinessEvidence?.source === "owner-override" && !task.readinessEvidence.reason) {
     context.addIssue({
