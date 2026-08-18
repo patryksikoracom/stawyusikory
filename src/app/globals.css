@@ -186,6 +186,7 @@ button:disabled { cursor: not-allowed; }
 @media (orientation: landscape) and (max-height: 600px) and (max-width: 1023px) {
   .calendar-route .app-header,
   .calendar-route .app-mobile-nav,
+  .calendar-route .app-page-heading,
   .calendar-route .calendar-helper,
   .calendar-route .calendar-sync,
   .calendar-route .calendar-secondary-action {
