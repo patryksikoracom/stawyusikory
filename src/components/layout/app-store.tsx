@@ -860,7 +860,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     checklistRecordVersions.current = new Map(loadedData.checklistItems.map((item) => [item.id, item.version ?? 1]));
     paymentRecordVersions.current = new Map(loadedData.payments.map((payment) => [payment.id, payment.version ?? 1]));
     scheduledMessageRecordVersions.current = new Map(
-      loadedData.scheduledMessages.map((message) => [message.id, message.version ?? 1]),
+      loadedData.scheduledMessages
+        .filter((message): message is ScheduledMessage & { version: number } => message.version !== undefined)
+        .map((message) => [message.id, message.version]),
     );
     blockRecordVersions.current = new Map(
       loadedData.blocks.map((block) => [block.id, block.version ?? 1]),
@@ -1404,6 +1406,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       scheduledMessages: new Map(
         latestData.current.scheduledMessages
           .filter((message) => message.bookingId === booking.id)
+          .filter((message) => (
+            scheduledMessageRecordVersions.current.has(message.id)
+            || message.version !== undefined
+          ))
           .map((message) => [
             message.id,
             scheduledMessageRecordVersions.current.get(message.id) ?? message.version ?? 1,

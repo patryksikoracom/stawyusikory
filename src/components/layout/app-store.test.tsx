@@ -1285,6 +1285,10 @@ describe("AppStoreProvider w trybie chmurowym", () => {
       dueDate: "2099-08-14",
       version: 6,
     }));
+    expect(updateBody.aggregate.scheduledMessages).not.toHaveLength(0);
+    expect(updateBody.aggregate.scheduledMessages.every(
+      (message: { version?: number }) => message.version === 1,
+    )).toBe(true);
 
     const firstCancelBody = JSON.parse(String(bookingPatchCalls[1]?.[1]?.body));
     expect(firstCancelBody).toMatchObject({
