@@ -10,7 +10,7 @@ import { getBookingConflicts, nightsBetween, overlaps } from "@/lib/workflow/rul
 import { guestDisplayName, validateGuestStep } from "@/lib/workflow/booking-form";
 import { quoteStay } from "@/lib/workflow/pricing";
 import { formatPolishDate } from "@/lib/date";
-import { isOverridableCleaningBuffer } from "@/lib/integrations/ical-block-classification";
+import { importedReservationBlockMatchesBooking, isOverridableCleaningBuffer } from "@/lib/integrations/ical-block-classification";
 import { guestPersonId, normalizeGuestEmail, normalizeGuestPhone } from "@/lib/crm/guest-identity";
 
 export type BookingDefaults = Partial<Pick<Booking, "unitId" | "checkIn" | "checkOut" | "arrivalTime" | "departureTime" | "platform" | "importRef">>;
@@ -84,9 +84,11 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
   const ignoredIcalBlockId = booking?.importRef?.source === "ical"
     ? booking.importRef.key
     : defaults?.importRef?.source === "ical" ? defaults.importRef.key : undefined;
-  const availabilityBlocks = ignoredIcalBlockId
-    ? data.blocks.filter((block) => block.id !== ignoredIcalBlockId)
-    : data.blocks;
+  const availabilityBlocks = data.blocks.filter((block) => {
+    if (block.id === ignoredIcalBlockId) return false;
+    if (booking && importedReservationBlockMatchesBooking(block, booking)) return false;
+    return true;
+  });
   const cleaningBuffers = availabilityBlocks
     .filter((block) => block.unitId === form.unitId)
     .filter((block) => block.status !== "Anulowana" && block.status !== "Zakończona")
@@ -357,12 +359,12 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
 
           <div className="mobile-dialog-footer flex gap-2 border-t border-[#e3dccf] bg-white px-3 py-2 sm:static sm:items-center sm:justify-between sm:px-7 sm:py-4">
             <div className="grid grid-cols-2 items-center gap-2 sm:flex">
-              {booking ? <Button className="w-full" type="button" variant="danger" onClick={() => setConfirmDeletion(true)}>Usuń do kosza</Button> : null}
-              <Button className="w-full" type="button" variant="ghost" onClick={onClose}>Anuluj</Button>
+              {booking ? <Button className={`${step > 1 ? "mobile-dialog-delete-late" : ""} w-full`} type="button" variant="danger" onClick={() => setConfirmDeletion(true)}>Usuń do kosza</Button> : null}
+              <Button className="mobile-dialog-cancel w-full" type="button" variant="ghost" onClick={onClose}>Anuluj</Button>
             </div>
             <div className="grid grid-cols-2 gap-2 sm:flex">
               {step > 1 ? <Button className="w-full" type="button" variant="secondary" onClick={() => { setError(""); setStep((current) => current - 1); }}><Icon className="size-4 rotate-180" name="arrow" />Wstecz</Button> : <span aria-hidden="true" />}
-              {step < 3 ? <Button className="w-full" type="button" onClick={goNext}>Dalej <Icon className="size-4" name="arrow" /></Button> : <Button className="w-full" disabled={saving} type="submit"><Icon className="size-4" name={saving ? "clock" : "check"} />{saving ? "Zapisywanie…" : booking ? "Zapisz zmiany" : "Dodaj rezerwację"}</Button>}
+              {step < 3 ? <Button className="w-full" type="button" onClick={goNext}>Dalej <Icon className="size-4" name="arrow" /></Button> : <Button aria-label={saving ? "Zapisywanie…" : booking ? "Zapisz zmiany" : "Dodaj rezerwację"} className="w-full" disabled={saving} type="submit"><Icon className="size-4" name={saving ? "clock" : "check"} /><span className="sm:hidden">{saving ? "Zapisuję…" : "Zapisz"}</span><span className="hidden sm:inline">{saving ? "Zapisywanie…" : booking ? "Zapisz zmiany" : "Dodaj rezerwację"}</span></Button>}
             </div>
           </div>
         </form>

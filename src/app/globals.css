@@ -175,9 +175,17 @@ button:disabled { cursor: not-allowed; }
   .mobile-dialog-footer > div > button {
     min-width: 0;
     flex: 1 1 0;
+    white-space: nowrap;
   }
 
   .mobile-dialog-footer > div > span[aria-hidden="true"] {
+    display: none;
+  }
+
+  /* Duże X w nagłówku zapewnia tę samą akcję. Usunięcie duplikatu zostawia
+     wygodne miejsce na Wstecz i główną akcję nawet przy powiększonym UI. */
+  .mobile-dialog-cancel,
+  .mobile-dialog-delete-late {
     display: none;
   }
 }

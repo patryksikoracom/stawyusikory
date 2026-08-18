@@ -71,6 +71,7 @@ describe("NewBookingDialog — PR-10c", () => {
     expect(form).toHaveClass("mobile-dialog-form");
     expect(content).toHaveClass("mobile-dialog-scroll");
     expect(content).toHaveClass("grid-cols-[minmax(0,1fr)]");
+    expect(screen.getByRole("button", { name: "Anuluj" })).toHaveClass("mobile-dialog-cancel");
     expect(screen.getByLabelText("Przyjazd")).toHaveClass("min-w-0", "max-w-full");
     expect(screen.getByLabelText("Przyjazd").closest("label")).toHaveClass("grid-cols-[minmax(0,1fr)]");
     expect(timeline).toHaveClass("overflow-x-auto");
@@ -209,6 +210,37 @@ describe("NewBookingDialog — PR-10c", () => {
       }),
       expect.any(Object),
     ));
+  });
+
+  it("nie blokuje edycji wpisem iCal reprezentującym tę samą rezerwację", () => {
+    const booking = {
+      ...initialData.bookings[0]!,
+      id: "BOOKING-EDIT-1",
+      unitId: initialData.units[0].id,
+      checkIn: "2027-01-10",
+      checkOut: "2027-01-14",
+      platform: "Booking" as const,
+    };
+    store.data = {
+      ...initialData,
+      bookings: [booking],
+      blocks: [{
+        id: "ICAL-SRC-BOOKING-EDIT-1",
+        unitId: booking.unitId,
+        dateFrom: booking.checkIn,
+        dateTo: booking.checkOut,
+        blockType: "Inne",
+        reason: "[Booking] CLOSED - Not available",
+        status: "Aktywna",
+      }],
+    };
+
+    render(<NewBookingDialog booking={booking} onAdded={vi.fn()} onClose={vi.fn()} />);
+
+    expect(screen.getByText("Termin wolny")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Dalej/ }));
+    expect(screen.getByRole("heading", { name: "Gość i kontakt" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Usuń do kosza" })).toHaveClass("mobile-dialog-delete-late");
   });
 
   it("pozwala świadomie zastąpić bufor sprzątania, ale wymaga planu", async () => {

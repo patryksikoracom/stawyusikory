@@ -1,6 +1,6 @@
 # Strategia mobilnej dostępności Stawy OS
 
-Status: wdrożone na produkcji i zweryfikowane automatycznie; oczekuje na końcowy test na telefonie ojca oraz naprawę konfiguracji Resend
+Status: wdrożone i iteracyjnie poprawione po testach na telefonach; oczekuje na końcową, uwierzytelnioną wysyłkę Resend
 
 Priorytet: P0 — warunek używalnego MVP dla głównego operatora
 
@@ -176,8 +176,8 @@ Po poprawce ponownie przeszły: build produkcyjny, TypeScript, ESLint oraz 12 te
 Pozostałe bramki MVP:
 
 1. powtórzyć główne ścieżki na rzeczywistym telefonie ojca i ustawieniach powiększenia, w tym z otwartą klawiaturą;
-2. wymienić nieprawidłowy `RESEND_API_KEY` w Vercel Production;
-3. wykonać kontrolną wysyłkę e-mail przez Resend i potwierdzić dostarczenie/webhook.
+2. wykonać kontrolną wysyłkę e-mail przez Resend z zalogowanej sesji właściciela;
+3. potwierdzić dostarczenie i zapis webhooka (wcześniejsza próba wykazała nieprawidłowy klucz; sama obecność nowej wartości w Vercel nie dowodzi jeszcze poprawności).
 
 ## Preflight wydania — 18 sierpnia 2026
 
@@ -195,3 +195,21 @@ Bezpieczna sekwencja wydania:
 4. wysłać jedną kontrolną wiadomość na wskazany adres;
 5. potwierdzić status wysłania, dostarczenia oraz zapis webhooka;
 6. dopiero wtedy oznaczyć MVP jako gotowe.
+
+## Audyt końcowy po poprawkach użytkownika — 18 sierpnia 2026
+
+Powtórna kontrola rzeczywistego przepływu wykazała i naprawiła jeszcze dwa problemy:
+
+- przy efektywnej szerokości około 290 px trzy akcje stopki formularza łamały tekst niemal po literach; na telefonie zamknięcie pozostaje teraz pod dużym `X`, a stopka pokazuje maksymalnie dwie podstawowe akcje z niełamanymi etykietami;
+- edycję pobytu z Booking mógł blokować odpowiadający mu wpis iCal `CLOSED - Not available`; dopasowany wpis źródłowy jest teraz ignorowany wyłącznie dla tej samej platformy, jednostki i niemal identycznego zakresu dat, a obce blokady nadal zatrzymują zapis.
+
+Dowody z interaktywnej kontroli zalogowanego lokalnego buildu:
+
+- pionowy kalendarz przy override 320 × 568: domyślna `Oś czasu`, brak poziomego overflow dokumentu, lokalny region dat `overflow-x: auto`;
+- poziomy kalendarz przy override 844 × 390: tytuł i shell ukryte, toolbar zaczyna się przy górnej krawędzi, a oś zajmuje pozostałą wysokość;
+- formularz przy 320 × 568: dialog mieści się w viewporcie, środek ma wyłącznie pionowy scroll, jedynym szerszym potomkiem jest jawnie przewijana oś dat;
+- obrót formularza w kroku `Finanse` zachowuje krok oraz dane, nie tworzy poziomego overflow i utrzymuje nagłówek oraz stopkę w viewporcie;
+- lista rezerwacji przy 360 × 640: wszystkie pięć kart pozostaje w szerokości dokumentu, dolna nawigacja nie rozszerza strony;
+- edycja rzeczywistego wpisu Booking przechodzi z kroku `Termin` do `Gość` mimo odpowiadającego wpisu iCal, bez ignorowania innych blokad.
+
+Pozostała jedna bramka zewnętrzna: zalogowana próba wysyłki na `PatrykSikora98@gmail.com`, identyfikator wiadomości Resend oraz zdarzenie dostarczenia/webhook.
