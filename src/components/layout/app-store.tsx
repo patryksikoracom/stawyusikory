@@ -65,7 +65,9 @@ import { ensureGuestPeople, mergeGuestPeople } from "@/lib/crm/guest-identity";
 
 export type SyncMode = "checking" | "cloud" | "local" | "error" | "conflict";
 export type DataStatus = "loading" | "ready" | "error";
-export type BookingCommandResult = { ok: true } | { ok: false; message: string };
+export type BookingCommandResult =
+  | { ok: true }
+  | { ok: false; message: string; retryableConflict?: boolean };
 export type RecordCommandResult =
   | { ok: true; requestId?: string; savedAt?: string }
   | {
@@ -1460,17 +1462,28 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
             detectedAt?: string;
             requestId?: string;
           };
-          cloudReady.current = false;
-          setSyncMode("conflict");
-          setSyncConflict({
-            source: "server-rejection",
-            detectedAt: payload.detectedAt ?? new Date().toISOString(),
-            expectedVersion: expectedRecordVersion,
-            currentVersion: payload.currentRecordVersion,
-            requestId: payload.requestId ?? requestId,
-            changes: summarizeSyncChanges(baseData.current, latestData.current),
-          });
-          outcome = { ok: false, message: "Rezerwacja zmieniła się na innym urządzeniu. Odśwież dane." };
+          if (operation === "cancel") {
+            // Anulowanie jest idempotentne. Wyższa wersja nie wymaga ekranu
+            // konfliktu całej aplikacji: caller pobierze najnowszy agregat,
+            // zmieni wyłącznie status i bezpiecznie ponowi komendę raz.
+            outcome = {
+              ok: false,
+              message: "Rezerwacja zmieniła się podczas anulowania.",
+              retryableConflict: true,
+            };
+          } else {
+            cloudReady.current = false;
+            setSyncMode("conflict");
+            setSyncConflict({
+              source: "server-rejection",
+              detectedAt: payload.detectedAt ?? new Date().toISOString(),
+              expectedVersion: expectedRecordVersion,
+              currentVersion: payload.currentRecordVersion,
+              requestId: payload.requestId ?? requestId,
+              changes: summarizeSyncChanges(baseData.current, latestData.current),
+            });
+            outcome = { ok: false, message: "Rezerwacja zmieniła się na innym urządzeniu. Odśwież dane." };
+          }
           return;
         }
         if (!response.ok) {
@@ -2354,15 +2367,30 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         return { ok: false, message: "Nie udało się pobrać najnowszej wersji rezerwacji. Sprawdź połączenie i spróbuj ponownie." };
       }
     }
-    const booking = latestData.current.bookings.find((item) => item.id === bookingId);
-    if (!booking) return { ok: false, message: "Nie znaleziono tej rezerwacji." };
-    if (booking.workflowStatus === "Anulowana") return { ok: true };
-    const contact = latestData.current.consents.find((item) => item.bookingId === bookingId);
-    return commitBookingMutation(
-      { ...booking, workflowStatus: "Anulowana" },
-      contact,
-      "cancel",
-    );
+    const commitLatestCancellation = async () => {
+      const booking = latestData.current.bookings.find((item) => item.id === bookingId);
+      if (!booking) return { ok: false, message: "Nie znaleziono tej rezerwacji." } satisfies BookingCommandResult;
+      if (booking.workflowStatus === "Anulowana") return { ok: true } satisfies BookingCommandResult;
+      const contact = latestData.current.consents.find((item) => item.bookingId === bookingId);
+      return commitBookingMutation(
+        { ...booking, workflowStatus: "Anulowana" },
+        contact,
+        "cancel",
+      );
+    };
+
+    const firstAttempt = await commitLatestCancellation();
+    if (firstAttempt.ok || !firstAttempt.retryableConflict) return firstAttempt;
+
+    const refreshed = await refreshCloudSnapshot();
+    if (!refreshed) {
+      return { ok: false, message: "Dane zmieniły się w trakcie anulowania. Spróbuj ponownie." };
+    }
+    const retry = await commitLatestCancellation();
+    if (!retry.ok && retry.retryableConflict) {
+      return { ok: false, message: "Dane nadal zmieniają się na innym urządzeniu. Spróbuj ponownie za chwilę." };
+    }
+    return retry;
   }, [commitBookingMutation, refreshCloudSnapshot]);
 
   const value = useMemo<AppStore>(() => ({

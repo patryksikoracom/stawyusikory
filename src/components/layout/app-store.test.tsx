@@ -1138,6 +1138,7 @@ describe("AppStoreProvider w trybie chmurowym", () => {
       title: "Wykonać turnover domku po wyjeździe.",
       version: 5,
     };
+    let cancellationConflictTriggered = false;
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({
         ok: true,
@@ -1158,15 +1159,41 @@ describe("AppStoreProvider w trybie chmurowym", () => {
             status: 200,
             json: async () => ({
               data: {
-                bookings: [{ ...booking, checkOut: "2099-08-14", grossPrice: 2300, version: 4 }],
-                consents: [{ ...contact, phone: "+48 700 000 000", version: 3 }],
-                tasks: [{ ...task, dueDate: "2099-08-14", version: 6 }],
+                bookings: [{
+                  ...booking,
+                  checkOut: "2099-08-14",
+                  grossPrice: cancellationConflictTriggered ? 2400 : 2300,
+                  version: cancellationConflictTriggered ? 5 : 4,
+                }],
+                consents: [{
+                  ...contact,
+                  phone: "+48 700 000 000",
+                  version: cancellationConflictTriggered ? 4 : 3,
+                }],
+                tasks: [{
+                  ...task,
+                  dueDate: "2099-08-14",
+                  owner: cancellationConflictTriggered ? "Marcin" : task.owner,
+                  version: cancellationConflictTriggered ? 7 : 6,
+                }],
               },
-              version: 21,
+              version: cancellationConflictTriggered ? 22 : 21,
             }),
           };
         }
         const body = JSON.parse(String(options?.body));
+        if (body.operation === "cancel" && !cancellationConflictTriggered) {
+          cancellationConflictTriggered = true;
+          return {
+            ok: false,
+            status: 409,
+            json: async () => ({
+              requestId: "request-cancel-race",
+              currentRecordVersion: 5,
+              detectedAt: "2099-07-25T20:00:01.000Z",
+            }),
+          };
+        }
         return {
           ok: true,
           status: 200,
@@ -1233,17 +1260,15 @@ describe("AppStoreProvider w trybie chmurowym", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Anuluj rezerwację" }));
     await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
+      for (let index = 0; index < 12; index += 1) await Promise.resolve();
       vi.advanceTimersByTime(800);
-      await Promise.resolve();
+      for (let index = 0; index < 12; index += 1) await Promise.resolve();
     });
 
     const bookingPatchCalls = fetchMock.mock.calls.filter(
       ([url, options]) => String(url).includes("/api/bookings/") && options?.method === "PATCH",
     );
-    expect(bookingPatchCalls).toHaveLength(2);
+    expect(bookingPatchCalls).toHaveLength(3);
     expect(fetchMock.mock.calls.filter(([, options]) => options?.method === "PUT")).toHaveLength(0);
 
     const updateBody = JSON.parse(String(bookingPatchCalls[0]?.[1]?.body));
@@ -1261,29 +1286,45 @@ describe("AppStoreProvider w trybie chmurowym", () => {
       version: 6,
     }));
 
-    const cancelBody = JSON.parse(String(bookingPatchCalls[1]?.[1]?.body));
-    expect(cancelBody).toMatchObject({
+    const firstCancelBody = JSON.parse(String(bookingPatchCalls[1]?.[1]?.body));
+    expect(firstCancelBody).toMatchObject({
       operation: "cancel",
       expectedRecordVersion: 4,
       aggregate: {
         booking: { id: booking.id, workflowStatus: "Anulowana", version: 5 },
       },
     });
+    const cancelBody = JSON.parse(String(bookingPatchCalls[2]?.[1]?.body));
+    expect(cancelBody).toMatchObject({
+      operation: "cancel",
+      expectedRecordVersion: 5,
+      aggregate: {
+        booking: {
+          id: booking.id,
+          workflowStatus: "Anulowana",
+          grossPrice: 2400,
+          version: 6,
+        },
+      },
+    });
     expect(cancelBody.aggregate.tasks).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: task.id, status: "Nie dotyczy", version: 7 }),
+      expect.objectContaining({ id: task.id, status: "Nie dotyczy", version: 8 }),
     ]));
     expect(cancelBody.aggregate.scheduledMessages.every(
       (message: { status: string }) => message.status === "Anulowana",
     )).toBe(true);
     expect(store?.data.bookings[0]).toMatchObject({
       workflowStatus: "Anulowana",
-      version: 5,
+      grossPrice: 2400,
+      version: 6,
     });
     expect(store?.data.tasks[0]).toMatchObject({
       status: "Nie dotyczy",
-      version: 7,
+      owner: "Marcin",
+      version: 8,
     });
     expect(store?.syncMode).toBe("cloud");
+    expect(store?.syncConflict).toBeUndefined();
   });
 
   it("przenosi rezerwację do kosza i przywraca ją bez pełnego PUT oraz bez utraty statusów", async () => {
