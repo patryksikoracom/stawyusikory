@@ -240,11 +240,11 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
         </div>
 
         <form className="mobile-dialog-form" onSubmit={submit}>
-          <div className="mobile-dialog-scroll grid lg:grid-cols-[minmax(0,1fr)_300px]">
-            <div className="min-w-0 max-w-full p-3 sm:p-7">
-              {step === 1 ? <div className="grid gap-5">
+          <div className="mobile-dialog-scroll grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_300px]">
+            <div className="min-w-0 w-full max-w-full p-3 sm:p-7">
+              {step === 1 ? <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5">
                 <DialogSection title="Domek i termin" />
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2">
                   <fieldset className="grid min-w-0 max-w-full grid-cols-1 gap-2 min-[380px]:grid-cols-2 sm:col-span-2">
                     <legend className="mb-2 text-[10px] font-black uppercase tracking-[.13em] text-[#6c7871]">Domek</legend>
                     {data.units.map((unit) => {
@@ -298,10 +298,10 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
                 {rateQuote.belowMinimum ? <p className="rounded-xl border border-[#ecd39b] bg-[#fbf0d3] p-3 text-xs font-bold text-[#745815]">Cennik sezonowy sugeruje minimum {rateQuote.minimumNights} noce. Możesz przejść dalej, ale sprawdź wyjątek przed potwierdzeniem.</p> : null}
               </div> : null}
 
-              {step === 2 ? <div className="grid gap-5">
+              {step === 2 ? <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5">
                 <DialogSection title="Gość i kontakt" />
                 <p className="text-xs font-black uppercase tracking-[.14em] text-[#7d8b4d]">Gość i kontakt</p>
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2">
                   <Field label="Imię"><input autoFocus className={inputClass} autoComplete="given-name" placeholder="Anna" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} /></Field>
                   <Field label="Nazwisko / nazwa rezerwacji" hint="Opcjonalne, jeśli podano imię."><input className={inputClass} autoComplete="family-name" placeholder="Kowalska" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></Field>
                   <Field label="Telefon"><input className={inputClass} autoComplete="tel" inputMode="tel" placeholder="+48 600 000 000" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
@@ -309,7 +309,7 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
                   <Field label="Język wiadomości"><select className={inputClass} value={form.preferredLanguage} onChange={(e) => setForm({ ...form, preferredLanguage: e.target.value as NonNullable<GuestPerson["preferredLanguage"]> })}><option value="pl">Polski</option><option value="de">Deutsch</option><option value="en">English</option></select></Field>
                 </div>
                 <p className="text-xs font-black uppercase tracking-[.14em] text-[#7d8b4d]">Sprzedaż i odkrycie</p>
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2">
                   <Field label="Kanał zawarcia rezerwacji"><select className={inputClass} value={form.platform} onChange={(e) => setForm({ ...form, platform: e.target.value as Channel })}>{bookingChannels.map((item) => <option key={item}>{item}</option>)}</select></Field>
                   <Field label="Jak gość odkrył obiekt?"><select className={inputClass} value={form.discoveryChannel} onChange={(e) => setForm((current) => ({ ...current, discoveryChannel: e.target.value }))}>{discoveryChannels.map((item) => <option key={item}>{item}</option>)}</select></Field>
                   {isOta ? <Field label="Numer rezerwacji OTA" hint="Numer z panelu Booking, Airbnb lub innej platformy."><input className={inputClass} placeholder="np. BKG-12345" value={form.externalNo} onChange={(e) => setForm({ ...form, externalNo: e.target.value })} /></Field> : null}
@@ -319,9 +319,9 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
                 </div>
               </div> : null}
 
-              {step === 3 ? <div className="grid gap-5">
+              {step === 3 ? <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5">
                 <DialogSection title="Cena i płatność" />
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2">
                   <Field label="Cena za dobę"><MoneyInput suffix={moneySuffix} value={form.pricingMode === "rate-card" ? suggestedNightPrice : form.pricePerNight} onChange={(value) => setForm({ ...form, pricePerNight: value, pricingMode: "manual" })} /></Field>
                   <Field label="Cena za pobyt"><MoneyInput suffix={moneySuffix} value={form.pricingMode === "rate-card" ? String(rateQuote.total || "") : form.totalPrice} onChange={(value) => setForm({ ...form, totalPrice: value, pricingMode: "manual" })} /></Field>
                   <Field label="Status płatności"><select className={inputClass} value={form.paymentStatus} onChange={(e) => setForm({ ...form, paymentStatus: e.target.value })}>{["Oczekiwanie na zadatek", "Brak wpłaty", "Wpłacony zadatek", "Częściowo opłacone", "Wpłacona całość", "Anulowane"].map((item) => <option key={item}>{item}</option>)}</select></Field>

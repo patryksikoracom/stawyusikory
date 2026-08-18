@@ -1152,6 +1152,20 @@ describe("AppStoreProvider w trybie chmurowym", () => {
         }),
       })
       .mockImplementation(async (_url: string, options?: RequestInit) => {
+        if (!options?.method) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              data: {
+                bookings: [{ ...booking, checkOut: "2099-08-14", grossPrice: 2300, version: 4 }],
+                consents: [{ ...contact, phone: "+48 700 000 000", version: 3 }],
+                tasks: [{ ...task, dueDate: "2099-08-14", version: 6 }],
+              },
+              version: 21,
+            }),
+          };
+        }
         const body = JSON.parse(String(options?.body));
         return {
           ok: true,

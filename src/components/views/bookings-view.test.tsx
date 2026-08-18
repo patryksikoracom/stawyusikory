@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initialData } from "@/lib/demo-data";
 import type { AppData, Booking } from "@/lib/types";
@@ -54,6 +54,7 @@ describe("BookingsView — fundament UX", () => {
     store.data = initialData;
     sessionStorage.clear();
     vi.clearAllMocks();
+    store.cancelBooking.mockResolvedValue({ ok: true });
   });
 
   afterEach(() => {
@@ -80,7 +81,7 @@ describe("BookingsView — fundament UX", () => {
     expect(screen.getByText("Strona 2 z 25")).toBeInTheDocument();
   });
 
-  it("anuluje rezerwację przez opisany alertdialog bez window.confirm", () => {
+  it("anuluje rezerwację przez opisany alertdialog bez window.confirm", async () => {
     const nativeConfirm = vi.spyOn(window, "confirm");
     render(<BookingsView initialId={initialData.bookings[0]!.id} />);
 
@@ -92,7 +93,20 @@ describe("BookingsView — fundament UX", () => {
     fireEvent.click(screen.getByRole("button", { name: "Tak, anuluj" }));
 
     expect(store.cancelBooking).toHaveBeenCalledWith(initialData.bookings[0]!.id);
+    await waitFor(() => expect(screen.queryByRole("alertdialog", { name: "Anulować rezerwację?" })).not.toBeInTheDocument());
     expect(nativeConfirm).not.toHaveBeenCalled();
+  });
+
+  it("pozostawia dialog otwarty i pokazuje błąd, gdy anulowanie nie zostało zapisane", async () => {
+    store.cancelBooking.mockResolvedValue({ ok: false, message: "Nie udało się pobrać najnowszej wersji rezerwacji." });
+    render(<BookingsView initialId={initialData.bookings[0]!.id} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Akcje" }));
+    fireEvent.click(screen.getByRole("button", { name: "Anuluj rezerwację" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tak, anuluj" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Nie udało się pobrać najnowszej wersji rezerwacji.");
+    expect(screen.getByRole("alertdialog", { name: "Anulować rezerwację?" })).toBeInTheDocument();
   });
 
   it("zachowuje filtry i udostępnia mobilny powrót do listy", () => {

@@ -72,8 +72,12 @@ describe("CalendarView — potwierdzane blokady", () => {
     render(<CalendarView />);
 
     const timeline = screen.getByText("Domek").closest(".min-w-max")?.parentElement?.parentElement;
+    const timelineRegion = screen.getByRole("region", { name: /Oś czasu rezerwacji/ });
+    const legend = screen.getByText("Legenda i obsługa").closest("details");
     expect(timeline).toBeTruthy();
     expect(timeline).toHaveClass("order-[-1]");
+    expect(legend).toBeTruthy();
+    expect(timelineRegion.compareDocumentPosition(legend as Node) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByText("Praca z kalendarzem")).toBeInTheDocument();
   });
 

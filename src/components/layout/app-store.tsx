@@ -848,6 +848,36 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const applyCloudPayload = useCallback((payload: CloudStatePayload) => {
+    const loadedData = payload.data ? normalizeData(payload.data, emptyCloudData()) : emptyCloudData();
+    stateVersion.current = payload.version ?? 0;
+    batchRecordVersions.current = new Map(Object.entries(payload.recordVersions ?? {}));
+    bookingRecordVersions.current = new Map(loadedData.bookings.map((booking) => [booking.id, booking.version ?? 1]));
+    consentRecordVersions.current = new Map(loadedData.consents.map((consent) => [consent.bookingId, consent.version ?? 1]));
+    taskRecordVersions.current = new Map(loadedData.tasks.map((task) => [task.id, task.version ?? 1]));
+    checklistRecordVersions.current = new Map(loadedData.checklistItems.map((item) => [item.id, item.version ?? 1]));
+    paymentRecordVersions.current = new Map(loadedData.payments.map((payment) => [payment.id, payment.version ?? 1]));
+    scheduledMessageRecordVersions.current = new Map(
+      loadedData.scheduledMessages.map((message) => [message.id, message.version ?? 1]),
+    );
+    blockRecordVersions.current = new Map(
+      loadedData.blocks.map((block) => [block.id, block.version ?? 1]),
+    );
+    settingsRecordVersion.current = loadedData.settings.version ?? 0;
+    conflictGeneration.current += 1;
+    baseData.current = loadedData;
+    latestData.current = loadedData;
+    localRevision.current = 0;
+    savedRevision.current = 0;
+    setData(loadedData);
+    cloudReady.current = true;
+    dataReady.current = true;
+    setDataStatus("ready");
+    setSyncMode("cloud");
+    setSyncConflict(undefined);
+    setLastSavedAt(payload.updatedAt);
+  }, []);
+
   useEffect(() => {
     latestData.current = data;
   }, [data]);
@@ -933,32 +963,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         if (!active) return;
         if (response.ok) {
           const payload = await response.json() as CloudStatePayload;
-          const loadedData = payload.data ? normalizeData(payload.data, emptyCloudData()) : emptyCloudData();
-          stateVersion.current = payload.version ?? 0;
-          batchRecordVersions.current = new Map(Object.entries(payload.recordVersions ?? {}));
-          bookingRecordVersions.current = new Map(loadedData.bookings.map((booking) => [booking.id, booking.version ?? 1]));
-          consentRecordVersions.current = new Map(loadedData.consents.map((consent) => [consent.bookingId, consent.version ?? 1]));
-          taskRecordVersions.current = new Map(loadedData.tasks.map((task) => [task.id, task.version ?? 1]));
-          checklistRecordVersions.current = new Map(loadedData.checklistItems.map((item) => [item.id, item.version ?? 1]));
-          paymentRecordVersions.current = new Map(loadedData.payments.map((payment) => [payment.id, payment.version ?? 1]));
-          scheduledMessageRecordVersions.current = new Map(
-            loadedData.scheduledMessages.map((message) => [message.id, message.version ?? 1]),
-          );
-          blockRecordVersions.current = new Map(
-            loadedData.blocks.map((block) => [block.id, block.version ?? 1]),
-          );
-          settingsRecordVersion.current = loadedData.settings.version ?? 0;
-          conflictGeneration.current += 1;
-          baseData.current = loadedData;
-          localRevision.current = 0;
-          savedRevision.current = 0;
-          setData(loadedData);
-          cloudReady.current = true;
-          dataReady.current = true;
-          setDataStatus("ready");
-          setSyncMode("cloud");
-          setSyncConflict(undefined);
-          setLastSavedAt(payload.updatedAt);
+          applyCloudPayload(payload);
           return;
         }
         cloudReady.current = false;
@@ -976,7 +981,21 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     }
     void loadCloud();
     return () => { active = false; };
-  }, [hydrated, loadRequest]);
+  }, [applyCloudPayload, hydrated, loadRequest]);
+
+  const refreshCloudSnapshot = useCallback(async () => {
+    if (!cloudConfigured) return true;
+    if (pendingRecordCommands.current > 0 || localRevision.current !== savedRevision.current) return false;
+    try {
+      const response = await fetch("/api/state", { cache: "no-store" });
+      if (!response.ok) return false;
+      const payload = await response.json() as CloudStatePayload;
+      applyCloudPayload(payload);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [applyCloudPayload]);
 
   useEffect(() => {
     if (!hydrated || dataStatus !== "ready") return;
@@ -2328,6 +2347,24 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     }
   }, [syncConflict]);
 
+  const cancelBooking = useCallback(async (bookingId: string): Promise<BookingCommandResult> => {
+    if (cloudConfigured) {
+      const refreshed = await refreshCloudSnapshot();
+      if (!refreshed) {
+        return { ok: false, message: "Nie udało się pobrać najnowszej wersji rezerwacji. Sprawdź połączenie i spróbuj ponownie." };
+      }
+    }
+    const booking = latestData.current.bookings.find((item) => item.id === bookingId);
+    if (!booking) return { ok: false, message: "Nie znaleziono tej rezerwacji." };
+    if (booking.workflowStatus === "Anulowana") return { ok: true };
+    const contact = latestData.current.consents.find((item) => item.bookingId === bookingId);
+    return commitBookingMutation(
+      { ...booking, workflowStatus: "Anulowana" },
+      contact,
+      "cancel",
+    );
+  }, [commitBookingMutation, refreshCloudSnapshot]);
+
   const value = useMemo<AppStore>(() => ({
     data,
     dataStatus,
@@ -2339,16 +2376,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     reloadAfterConflict,
     addBooking: createBooking,
     updateBooking: (booking, contact) => commitBookingMutation(booking, contact, "update"),
-    cancelBooking: async (bookingId) => {
-      const booking = latestData.current.bookings.find((item) => item.id === bookingId);
-      if (!booking) return { ok: false, message: "Nie znaleziono tej rezerwacji." };
-      const contact = latestData.current.consents.find((item) => item.bookingId === bookingId);
-      return commitBookingMutation(
-        { ...booking, workflowStatus: "Anulowana" },
-        contact,
-        "cancel",
-      );
-    },
+    cancelBooking,
     deleteBooking: async (bookingId) => {
       const booking = latestData.current.bookings.find((item) => item.id === bookingId);
       if (!booking || booking.deletedAt) return { ok: false, message: "Rezerwacja jest już w koszu albo nie istnieje." };
@@ -2677,6 +2705,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     },
   }), [
     batchMutate,
+    cancelBooking,
     copyConflictChanges,
     commitBookingMutation,
     createBooking,

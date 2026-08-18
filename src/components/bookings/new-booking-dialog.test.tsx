@@ -70,6 +70,9 @@ describe("NewBookingDialog — PR-10c", () => {
     expect(dialog).toHaveClass("mobile-dialog-surface");
     expect(form).toHaveClass("mobile-dialog-form");
     expect(content).toHaveClass("mobile-dialog-scroll");
+    expect(content).toHaveClass("grid-cols-[minmax(0,1fr)]");
+    expect(screen.getByLabelText("Przyjazd")).toHaveClass("min-w-0", "max-w-full");
+    expect(screen.getByLabelText("Przyjazd").closest("label")).toHaveClass("grid-cols-[minmax(0,1fr)]");
     expect(timeline).toHaveClass("overflow-x-auto");
     expect(timeline).toHaveClass("max-w-full");
   });
