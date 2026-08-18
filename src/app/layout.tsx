@@ -1,9 +1,15 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Stawy OS — operacje, rezerwacje i wzrost",
   description: "System operacyjny Stawów u Sikory: rezerwacje, kalendarz, sprzątanie, finanse i marketing.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

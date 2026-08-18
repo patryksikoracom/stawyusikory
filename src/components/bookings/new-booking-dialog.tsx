@@ -219,33 +219,33 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
   return (
     <Dialog
       ariaLabelledby="new-booking-title"
-      className="mx-auto my-2 w-full max-w-5xl overflow-hidden rounded-[24px] bg-[#fffdf8] shadow-[0_30px_90px_rgba(8,29,22,.35)] sm:my-5"
+      className="mobile-dialog-surface mx-auto w-full max-w-5xl overflow-hidden bg-[#fffdf8] shadow-[0_30px_90px_rgba(8,29,22,.35)] sm:my-5 sm:rounded-[24px]"
       onClose={onClose}
-      overlayClassName="overflow-y-auto p-2 sm:p-5"
+      overlayClassName="overflow-y-auto !p-0 sm:!p-5"
       returnFocusRef={returnFocusRef}
     >
-        <div className="border-b border-[#e3dccf] bg-[radial-gradient(circle_at_85%_-30%,#dce7bd_0,transparent_38%)] px-5 pb-5 pt-5 sm:px-7 sm:pt-6">
+        <div className="mobile-dialog-header border-b border-[#e3dccf] bg-[#fffdf8] bg-[radial-gradient(circle_at_85%_-30%,#dce7bd_0,transparent_38%)] px-3 pb-3 pt-[max(.75rem,env(safe-area-inset-top))] sm:static sm:px-7 sm:pb-5 sm:pt-6">
           <div className="flex items-start justify-between gap-4">
-            <div><p className="text-[10px] font-black uppercase tracking-[.2em] text-[#81904e]">{booking ? "Edycja pobytu" : "Nowy pobyt"}</p><h2 className="font-display text-3xl font-semibold tracking-[-.03em]" id="new-booking-title">{booking ? "Edytuj rezerwację" : "Dodaj rezerwację"}</h2></div>
+            <div className="min-w-0"><p className="text-[10px] font-black uppercase tracking-[.12em] text-[#81904e] sm:tracking-[.2em]">{booking ? "Edycja pobytu" : "Nowy pobyt"}</p><h2 className="font-display text-2xl font-semibold leading-tight tracking-[-.03em] sm:text-3xl" id="new-booking-title">{booking ? "Edytuj rezerwację" : "Dodaj rezerwację"}</h2></div>
             <button aria-label="Zamknij" className="grid size-10 shrink-0 place-items-center rounded-xl border border-[#ddd6c9] bg-white/80 transition hover:bg-white" onClick={onClose}><Icon className="size-5" name="close" /></button>
           </div>
-          <ol className="mt-5 grid grid-cols-3 gap-2">
+          <ol className="mt-3 grid grid-cols-3 gap-2 sm:mt-5">
             {stepLabels.map((label, index) => {
               const number = index + 1;
               const available = number <= step + 1;
-              return <li key={label}><button type="button" disabled={!available} className={`flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs font-black transition sm:px-3 ${step === number ? "bg-[#174d3b] text-white shadow-lg" : step > number ? "bg-[#e2ecdc] text-[#285642]" : available ? "bg-white/80 text-[#5d6d65] hover:bg-white" : "cursor-not-allowed bg-white/45 text-[#9aa19d]"}`} onClick={() => { setError(""); if (number <= step) setStep(number); else goNext(); }}><span className={`grid size-6 shrink-0 place-items-center rounded-full text-[10px] ${step === number ? "bg-white text-[#174d3b]" : "bg-[#f2efe7]"}`}>{step > number ? "✓" : number}</span><span className="truncate">{label}</span></button></li>;
+              return <li key={label}><button aria-label={`Krok ${number}: ${label}`} type="button" disabled={!available} className={`flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-2 py-2 text-left text-xs font-black transition min-[380px]:justify-start sm:px-3 ${step === number ? "bg-[#174d3b] text-white shadow-lg" : step > number ? "bg-[#e2ecdc] text-[#285642]" : available ? "bg-white/80 text-[#5d6d65] hover:bg-white" : "cursor-not-allowed bg-white/45 text-[#9aa19d]"}`} onClick={() => { setError(""); if (number <= step) setStep(number); else goNext(); }}><span className={`grid size-6 shrink-0 place-items-center rounded-full text-[10px] ${step === number ? "bg-white text-[#174d3b]" : "bg-[#f2efe7]"}`}>{step > number ? "✓" : number}</span><span className="hidden min-[380px]:block">{label}</span></button></li>;
             })}
           </ol>
           {error ? <p aria-live="polite" className="mt-3 rounded-xl border border-[#efb8a8] bg-[#f9dfd7] px-4 py-3 text-sm font-bold text-[#963c27]">{error}</p> : null}
         </div>
 
-        <form onSubmit={submit}>
-          <div className="grid min-h-[440px] lg:grid-cols-[minmax(0,1fr)_300px]">
-            <div className="p-5 sm:p-7">
+        <form className="mobile-dialog-form" onSubmit={submit}>
+          <div className="mobile-dialog-scroll grid lg:grid-cols-[minmax(0,1fr)_300px]">
+            <div className="min-w-0 max-w-full p-3 sm:p-7">
               {step === 1 ? <div className="grid gap-5">
                 <DialogSection title="Domek i termin" />
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <fieldset className="grid grid-cols-2 gap-2 sm:col-span-2">
+                  <fieldset className="grid min-w-0 max-w-full grid-cols-1 gap-2 min-[380px]:grid-cols-2 sm:col-span-2">
                     <legend className="mb-2 text-[10px] font-black uppercase tracking-[.13em] text-[#6c7871]">Domek</legend>
                     {data.units.map((unit) => {
                       const selected = unit.id === form.unitId;
@@ -253,10 +253,12 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
                       return <button autoFocus={selected} aria-label={`Wybierz domek ${bird ? "Czapla" : "Rybak"}`} aria-pressed={selected} className={`min-h-20 rounded-2xl border px-4 text-left transition ${selected ? "border-[#174d3b] bg-[#174d3b] text-white shadow-lg" : "border-[#d8d0c2] bg-white text-[#355248] hover:border-[#79927d]"}`} key={unit.id} onClick={() => setForm({ ...form, unitId: unit.id })} type="button"><span aria-hidden="true" className="mr-2 text-2xl">{bird ? "🐦" : "🐟"}</span><span className="text-base font-black">{bird ? "Czapla" : "Rybak"}</span><span className={`mt-1 block text-xs ${selected ? "text-white/75" : "text-[#6d7972]"}`}>do {unit.maxPeople} osób</span></button>;
                     })}
                   </fieldset>
-                  <div className={`rounded-xl border px-4 py-3 ${conflicts.length ? "border-[#efb7a8] bg-[#fbe7e1] text-[#8f3b27]" : cleaningBuffers.length ? "border-[#e4c46f] bg-[#fbf0d3] text-[#745815]" : "border-[#bdd7c3] bg-[#e9f2e7] text-[#275e3f]"}`}><p className="text-[10px] font-black uppercase tracking-[.14em]">Dostępność</p><p className="mt-1 text-sm font-black">{conflicts.length ? "Termin zajęty" : cleaningBuffers.length ? "Termin dostępny warunkowo · bufor sprzątania" : nights > 0 ? sameDayTurnovers.length ? "Termin wolny · turnover tego samego dnia" : "Termin wolny" : "Wybierz poprawne daty"}</p><p className="mt-0.5 text-xs">{conflicts[0] ?? (cleaningBuffers.length ? "Możesz zapisać pobyt po wskazaniu, jak zapewnicie sprzątanie." : turnoverSummary[0]) ?? (nights > 0 ? `${nights} ${nights === 1 ? "noc" : "nocy"} · sprawdzono rezerwacje i blokady` : "Wyjazd musi być po przyjeździe")}</p></div>
+                  <div className="booking-status-strip grid min-w-0 max-w-full grid-cols-2 gap-2 sm:contents">
+                    <div className={`rounded-xl border px-3 py-2.5 sm:px-4 sm:py-3 ${conflicts.length ? "border-[#efb7a8] bg-[#fbe7e1] text-[#8f3b27]" : cleaningBuffers.length ? "border-[#e4c46f] bg-[#fbf0d3] text-[#745815]" : "border-[#bdd7c3] bg-[#e9f2e7] text-[#275e3f]"}`}><p className="text-[10px] font-black uppercase tracking-[.1em] sm:tracking-[.14em]">Dostępność</p><p className="mt-1 text-sm font-black">{conflicts.length ? "Termin zajęty" : cleaningBuffers.length ? <><span className="sm:hidden">Dostępny warunkowo</span><span className="hidden sm:inline">Termin dostępny warunkowo · bufor sprzątania</span></> : nights > 0 ? sameDayTurnovers.length ? "Wolny · turnover" : "Termin wolny" : "Sprawdź daty"}</p><p className="mt-0.5 hidden text-xs sm:block">{conflicts[0] ?? (cleaningBuffers.length ? "Możesz zapisać pobyt po wskazaniu, jak zapewnicie sprzątanie." : turnoverSummary[0]) ?? (nights > 0 ? `${nights} ${nights === 1 ? "noc" : "nocy"} · sprawdzono rezerwacje i blokady` : "Wyjazd musi być po przyjeździe")}</p></div>
+                    <div className="rounded-xl border border-[#c8d8bd] bg-[#f1f5e9] px-3 py-2.5 sm:px-4 sm:py-3"><p className="text-[10px] font-black uppercase tracking-[.1em] text-[#66794f] sm:tracking-[.14em]">Wycena</p><p className="mt-1 font-display text-xl font-semibold text-[#214f3d] sm:text-2xl">{calculatedTotal ? calculatedTotal.toLocaleString("pl-PL") : "—"} {calculatedTotal ? moneySuffix : ""}</p><p className="mt-0.5 text-xs font-bold text-[#647267]">{nights > 0 ? `${nights} ${nights === 1 ? "noc" : "nocy"}${suggestedNightPrice ? ` · ${Number(suggestedNightPrice).toLocaleString("pl-PL")} zł/noc` : ""}` : "Wybierz daty"}</p></div>
+                  </div>
                   {cleaningBuffers.length && !conflicts.length ? <fieldset className="sm:col-span-2 rounded-2xl border border-[#dfc16e] bg-[#fff8e8] p-4"><legend className="px-1 text-sm font-black text-[#654d16]">Jak obsłużycie sprzątanie?</legend><p className="mt-1 text-xs leading-5 text-[#756238]">To jest wyłącznie bufor techniczny. Rezerwacja gościa nadal zawsze blokuje termin.</p><div className="mt-3 grid gap-2 sm:grid-cols-2"><label className="flex min-h-12 items-center gap-3 rounded-xl border border-[#dfd1aa] bg-white px-3 text-sm font-bold"><input checked={cleaningPlan === "self-cleaning"} name="cleaning-plan" onChange={() => setCleaningPlan("self-cleaning")} type="radio"/>Posprzątamy samodzielnie</label><label className="flex min-h-12 items-center gap-3 rounded-xl border border-[#dfd1aa] bg-white px-3 text-sm font-bold"><input checked={cleaningPlan === "arranged-cleaning"} name="cleaning-plan" onChange={() => setCleaningPlan("arranged-cleaning")} type="radio"/>Umówię osobę sprzątającą</label></div><label className="mt-3 flex items-start gap-3 text-sm font-bold text-[#5f4b1d]"><input checked={cleaningBufferConfirmed} className="mt-1" onChange={(event) => setConfirmedCleaningBufferKey(event.target.checked ? cleaningBufferKey : "")} type="checkbox"/>Potwierdzam, że sprawdziłem termin i świadomie zastępuję bufor własnym planem sprzątania.</label></fieldset> : null}
-                  <div className="rounded-xl border border-[#c8d8bd] bg-[#f1f5e9] px-4 py-3"><p className="text-[10px] font-black uppercase tracking-[.14em] text-[#66794f]">Wycena</p><p className="mt-1 font-display text-2xl font-semibold text-[#214f3d]">{calculatedTotal ? calculatedTotal.toLocaleString("pl-PL") : "—"} {calculatedTotal ? moneySuffix : ""}</p><p className="mt-0.5 text-xs font-bold text-[#647267]">{nights > 0 ? `${nights} ${nights === 1 ? "noc" : "nocy"}${suggestedNightPrice ? ` · śr. ${Number(suggestedNightPrice).toLocaleString("pl-PL")} zł/noc` : ""}` : "Wybierz daty"}</p></div>
-                  <div className="sm:col-span-2">
+                  <div className="min-w-0 max-w-full sm:col-span-2">
                     <StayDateTimeline
                       blocks={availabilityBlocks}
                       bookings={data.bookings}
@@ -353,14 +355,14 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
             </aside>
           </div>
 
-          <div className="flex flex-col-reverse gap-2 border-t border-[#e3dccf] bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
-            <div className="flex items-center gap-2">
-              {booking ? <Button type="button" variant="danger" onClick={() => setConfirmDeletion(true)}>Usuń do kosza</Button> : null}
-              <Button type="button" variant="ghost" onClick={onClose}>Anuluj</Button>
+          <div className="mobile-dialog-footer flex gap-2 border-t border-[#e3dccf] bg-white px-3 py-2 sm:static sm:items-center sm:justify-between sm:px-7 sm:py-4">
+            <div className="grid grid-cols-2 items-center gap-2 sm:flex">
+              {booking ? <Button className="w-full" type="button" variant="danger" onClick={() => setConfirmDeletion(true)}>Usuń do kosza</Button> : null}
+              <Button className="w-full" type="button" variant="ghost" onClick={onClose}>Anuluj</Button>
             </div>
-            <div className="flex gap-2">
-              {step > 1 ? <Button type="button" variant="secondary" onClick={() => { setError(""); setStep((current) => current - 1); }}><Icon className="size-4 rotate-180" name="arrow" />Wstecz</Button> : null}
-              {step < 3 ? <Button type="button" onClick={goNext}>Dalej <Icon className="size-4" name="arrow" /></Button> : <Button disabled={saving} type="submit"><Icon className="size-4" name={saving ? "clock" : "check"} />{saving ? "Zapisywanie…" : booking ? "Zapisz zmiany" : "Dodaj rezerwację"}</Button>}
+            <div className="grid grid-cols-2 gap-2 sm:flex">
+              {step > 1 ? <Button className="w-full" type="button" variant="secondary" onClick={() => { setError(""); setStep((current) => current - 1); }}><Icon className="size-4 rotate-180" name="arrow" />Wstecz</Button> : <span aria-hidden="true" />}
+              {step < 3 ? <Button className="w-full" type="button" onClick={goNext}>Dalej <Icon className="size-4" name="arrow" /></Button> : <Button className="w-full" disabled={saving} type="submit"><Icon className="size-4" name={saving ? "clock" : "check"} />{saving ? "Zapisywanie…" : booking ? "Zapisz zmiany" : "Dodaj rezerwację"}</Button>}
             </div>
           </div>
         </form>
@@ -424,7 +426,7 @@ function StayDateTimeline({
   );
 
   return (
-    <section aria-label="Wizualny wybór terminu pobytu" className="overflow-hidden rounded-2xl border border-[#d8d0c2] bg-[#f7f4ed]">
+    <section aria-label="Wizualny wybór terminu pobytu" className="min-w-0 max-w-full overflow-hidden rounded-2xl border border-[#d8d0c2] bg-[#f7f4ed]">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#ddd6c9] px-3 py-3">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[.15em] text-[#75824e]">Oś pobytu · {selection === "checkIn" ? "wybierz przyjazd" : "teraz wybierz wyjazd"}</p>
@@ -436,7 +438,7 @@ function StayDateTimeline({
           <button aria-label="Pokaż późniejsze daty" className="grid size-9 place-items-center rounded-xl border border-[#d2cabb] bg-white text-[#355248]" onClick={() => setAnchor((current) => shiftDate(current, 14))} type="button"><Icon className="size-4" name="chevron"/></button>
         </div>
       </header>
-      <div className="scrollbar-thin overflow-x-auto">
+      <div aria-label="Daty pobytu. Przesuń poziomo, aby zobaczyć kolejne dni." className="scrollbar-thin w-full max-w-full overflow-x-auto overscroll-x-contain" role="region" tabIndex={0}>
         <div className="grid min-w-[840px] grid-cols-[repeat(21,minmax(40px,1fr))]">
           {dates.map((date) => {
             const parsed = new Date(`${date}T12:00:00`);

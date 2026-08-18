@@ -193,13 +193,13 @@ function ShellInner({ children, identity }: { children: React.ReactNode; identit
 
       <div className="min-w-0 lg:col-start-2">
         <header className="app-header sticky top-0 z-30 border-b border-[#d9d1c1]/85 bg-[#f5f1e7]/88 backdrop-blur-xl">
-          <div className="flex h-[70px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
-            <Link className="flex items-center gap-2 lg:hidden" href={homeHref}><span className="grid size-9 place-items-center rounded-xl bg-[#174d3b] font-display font-semibold text-white">SU</span><span className="font-display font-semibold">Stawy OS</span></Link>
+          <div className="flex min-h-[70px] items-center justify-between gap-2 px-2.5 py-2 sm:px-6 lg:px-8">
+            <Link aria-label="Stawy OS — strona główna" className="flex min-w-0 items-center gap-2 lg:hidden" href={homeHref}><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#174d3b] font-display font-semibold text-white">SU</span><span className="hidden font-display font-semibold min-[360px]:block">Stawy OS</span></Link>
             <div className="hidden items-center gap-2 text-sm font-semibold text-[#64726b] sm:flex"><Icon className="size-4" name="calendar" /><span className="capitalize">{date}</span></div>
-            <div className="ml-auto flex items-center gap-2">
-              <button aria-label="Szukaj" className="grid size-10 place-items-center rounded-xl border border-[#d5cebf] bg-white text-[#53655d] transition hover:border-[#317a78] hover:text-[#174d3b] disabled:cursor-not-allowed disabled:opacity-45" disabled={!dataReady} onClick={() => setShowSearch(true)}><Icon className="size-[18px]" name="search" /></button>
+            <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
+              <button aria-label="Szukaj" className="grid size-11 place-items-center rounded-xl border border-[#d5cebf] bg-white text-[#53655d] transition hover:border-[#317a78] hover:text-[#174d3b] disabled:cursor-not-allowed disabled:opacity-45" disabled={!dataReady} onClick={() => setShowSearch(true)}><Icon className="size-[18px]" name="search" /></button>
               <div className="relative">
-                <button aria-expanded={showAlerts} aria-haspopup="dialog" aria-label={alerts.length ? `Powiadomienia: ${alerts.length}` : "Powiadomienia: brak"} className="relative grid size-10 place-items-center rounded-xl border border-[#d5cebf] bg-white text-[#53655d] transition hover:border-[#317a78] disabled:cursor-not-allowed disabled:opacity-45" disabled={!dataReady} onClick={() => setShowAlerts((value) => !value)}><Icon className="size-[18px]" name="bell" />{dataReady && alerts.length ? <span className="absolute right-2 top-2 size-2 rounded-full border-2 border-white bg-[#e86e4e]" /> : null}</button>
+                <button aria-expanded={showAlerts} aria-haspopup="dialog" aria-label={alerts.length ? `Powiadomienia: ${alerts.length}` : "Powiadomienia: brak"} className="relative grid size-11 place-items-center rounded-xl border border-[#d5cebf] bg-white text-[#53655d] transition hover:border-[#317a78] disabled:cursor-not-allowed disabled:opacity-45" disabled={!dataReady} onClick={() => setShowAlerts((value) => !value)}><Icon className="size-[18px]" name="bell" />{dataReady && alerts.length ? <span className="absolute right-2 top-2 size-2 rounded-full border-2 border-white bg-[#e86e4e]" /> : null}</button>
                 {showAlerts ? <div aria-label="Alerty operacyjne" className="absolute right-[-3rem] top-12 w-[min(360px,calc(100vw-2rem))] rounded-2xl border border-[#d7cfc0] bg-[#fffdf8] p-3 shadow-2xl sm:right-0" role="dialog"><div className="flex items-center justify-between gap-3 px-2 py-1"><p className="text-xs font-black uppercase tracking-[.15em] text-[#74814d]">Wymaga uwagi</p>{alerts.length ? <span className="rounded-full bg-[#f6e8c9] px-2 py-0.5 text-[10px] font-black text-[#7a5b19]">{alerts.length}</span> : null}</div>{alerts.map((alert) => <AlertMini key={alert.id} {...alert} />)}{!alerts.length ? <div className="mx-1 mt-2 rounded-xl bg-[#e9f1e3] px-4 py-5 text-center"><span className="mx-auto grid size-9 place-items-center rounded-full bg-[#4d986b] text-white"><Icon className="size-4" name="check" /></span><p className="mt-2 text-sm font-black">Brak spraw wymagających uwagi</p><p className="mt-1 text-xs leading-5 text-[#607069]">Aktualne dane nie tworzą żadnego alertu.</p></div> : null}</div> : null}
               </div>
               <span className="hidden sm:block"><Button disabled={!dataReady} onClick={openNewBooking}><Icon className="size-4" name="plus" />Nowa rezerwacja</Button></span>
@@ -208,7 +208,7 @@ function ShellInner({ children, identity }: { children: React.ReactNode; identit
           </div>
         </header>
 
-        <main className="app-main px-4 pb-28 pt-7 sm:px-6 lg:px-8 lg:pb-12">
+        <main className="app-main px-2.5 pb-[calc(6.5rem+env(safe-area-inset-bottom))] pt-4 sm:px-6 sm:pt-7 lg:px-8 lg:pb-12">
           <div className="mx-auto max-w-[1460px]">
             <AppDataGate onRetry={retryDataLoad} status={dataStatus}>
               <div className={`animate-rise mb-6 flex-col gap-4 sm:flex sm:flex-row sm:items-end sm:justify-between ${pathname === "/dashboard" || pathname === "/calendar" ? "hidden" : "flex"}`}>

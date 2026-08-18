@@ -59,6 +59,21 @@ describe("NewBookingDialog — PR-10c", () => {
     expect(screen.getAllByText(/2 nocy/).length).toBeGreaterThan(0);
   });
 
+  it("izoluje poziome przewijanie wyłącznie do osi dat", () => {
+    renderDialog();
+
+    const dialog = screen.getByRole("dialog", { name: "Dodaj rezerwację" });
+    const form = dialog.querySelector("form");
+    const content = dialog.querySelector(".mobile-dialog-scroll");
+    const timeline = screen.getByRole("region", { name: /Daty pobytu/ });
+
+    expect(dialog).toHaveClass("mobile-dialog-surface");
+    expect(form).toHaveClass("mobile-dialog-form");
+    expect(content).toHaveClass("mobile-dialog-scroll");
+    expect(timeline).toHaveClass("overflow-x-auto");
+    expect(timeline).toHaveClass("max-w-full");
+  });
+
   it("czeka na potwierdzenie serwera przed zamknięciem formularza", async () => {
     let confirmSave!: (value: { ok: true }) => void;
     store.addBooking.mockReturnValue(new Promise((resolve) => { confirmSave = resolve; }));

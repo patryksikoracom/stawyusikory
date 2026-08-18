@@ -47,6 +47,7 @@ export function BookingsView({ initialId, initialView = "list", initialTab = "Po
   const [viewMode, setViewMode] = useState<"list" | "sheet">(initialView);
   const [selectedId, setSelectedId] = useState(initialId ?? "");
   const [showTrash, setShowTrash] = useState(false);
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [page, setPage] = useState(() => {
     if (typeof window === "undefined") return 1;
     return Math.max(1, Number(sessionStorage.getItem(`${bookingListStorageKey}:page`) ?? 1));
@@ -104,11 +105,12 @@ export function BookingsView({ initialId, initialView = "list", initialTab = "Po
   }
 
   return <div className="grid gap-5">
-    <section className={`animate-rise-2 gap-3 sm:grid-cols-3 ${initialId ? "hidden xl:grid" : "grid"}`}>
+    <section className={`animate-rise-2 gap-3 sm:grid-cols-3 ${initialId ? "hidden xl:grid" : "hidden sm:grid"}`}>
       <Summary label="Operacyjne pobyty" value={operationalRows.length} note="trwające i nadchodzące" icon="booking" />
       <Summary label="Do rozliczenia" value={unsettled} note="wymagają sprawdzenia" icon="wallet" warn={unsettled > 0} />
       <Summary label="Dane do uzupełnienia" value={incomplete} note="bez udawania wyniku finansowego" icon="warning" warn={incomplete > 0} />
     </section>
+    {!initialId ? <details className="animate-rise-2 rounded-2xl border border-[#d9d1c1] bg-[#fffdf8] p-3 sm:hidden"><summary className="cursor-pointer text-sm font-black text-[#355248]">Podsumowanie rezerwacji</summary><div className="mt-3 grid gap-2"><Summary label="Operacyjne pobyty" value={operationalRows.length} note="trwające i nadchodzące" icon="booking"/><Summary label="Do rozliczenia" value={unsettled} note="wymagają sprawdzenia" icon="wallet" warn={unsettled > 0}/><Summary label="Dane do uzupełnienia" value={incomplete} note="bez udawania wyniku finansowego" icon="warning" warn={incomplete > 0}/></div></details> : null}
 
     <Card className="animate-rise-3 overflow-hidden">
       <div className={`border-b border-[#e2dbce] p-4 ${initialId ? "hidden xl:block" : "block"}`}>
@@ -119,7 +121,8 @@ export function BookingsView({ initialId, initialView = "list", initialTab = "Po
           </div>
           <div className="flex flex-wrap gap-2"><div className="flex rounded-xl bg-[#ebe7de] p-1"><button className={`rounded-lg px-3 text-xs font-black ${viewMode === "list" ? "bg-white shadow-sm" : "text-[#6d7972]"}`} onClick={() => changeView("list")}>Lista</button><button className={`rounded-lg px-3 text-xs font-black ${viewMode === "sheet" ? "bg-white shadow-sm" : "text-[#6d7972]"}`} onClick={() => changeView("sheet")}>Arkusz</button></div>{role !== "manager" ? <><Button variant="secondary" onClick={() => setShowTrash(true)}>Kosz{trashedBookings.length ? ` (${trashedBookings.length})` : ""}</Button><Button variant="secondary" onClick={downloadCsv}><Icon className="size-4" name="download"/>Eksport</Button></> : null}</div>
         </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <button aria-expanded={showMobileFilters} className="mt-4 flex min-h-11 w-full items-center justify-between rounded-xl border border-[#cec6b7] bg-white px-3 text-sm font-black text-[#355248] sm:hidden" onClick={() => setShowMobileFilters((current) => !current)}><span className="inline-flex items-center gap-2"><Icon className="size-4" name="search"/>Filtry i wyszukiwanie</span><Icon className={`size-4 transition ${showMobileFilters ? "rotate-90" : ""}`} name="chevron"/></button>
+        <div className={`mt-4 gap-3 sm:grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 ${showMobileFilters ? "grid" : "hidden"}`}>
           <Field label="Szukaj"><div className="relative"><Icon className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[#7b867f]" name="search"/><input className={`${inputClass} pl-10`} placeholder="Gość, numer lub domek" value={filters.search} onChange={(event) => updateFilter("search", event.target.value)} /></div></Field>
           <Field label="Okres przyjazdu"><select className={inputClass} value={filters.period} onChange={(event) => updateFilter("period", event.target.value as BookingListFilters["period"])}><option value="all">Bez ograniczenia</option><option value="30">Najbliższe 30 dni</option><option value="90">Najbliższe 90 dni</option></select></Field>
           <Field label="Domek"><select className={inputClass} value={filters.unitId} onChange={(event) => updateFilter("unitId", event.target.value)}><option value="all">Wszystkie domki</option>{data.units.map((unit) => <option key={unit.id} value={unit.id}>{unit.name}</option>)}</select></Field>
@@ -171,7 +174,7 @@ function Summary({ label, value, note, icon, warn = false }: { label: string; va
 
 function BookingRow({ booking, unit, nextAction, active, onClick }: { booking: Booking; unit: string; nextAction: string; active: boolean; onClick: () => void }) {
   const paymentTone = booking.paymentStatus === "Opłacone" ? "good" : booking.paymentStatus === "Do uzupełnienia" ? "bad" : "warn";
-  return <button className={`w-full rounded-2xl border p-3.5 text-left transition ${active ? "border-[#b9c8a4] bg-white shadow-[0_8px_22px_rgba(38,53,45,.07)]" : "border-transparent hover:border-[#ddd5c7] hover:bg-white/70"}`} onClick={onClick}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-black">{booking.guestLabel}</p><p className="mt-0.5 truncate text-xs text-[#6e7973]">{unit} · {booking.importRef ? booking.platform : booking.id}</p></div><Badge tone={paymentTone}>{booking.paymentStatus}</Badge></div><div className="mt-3 flex items-center justify-between gap-3"><span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#50645b]"><Icon className="size-3.5" name="calendar"/>{shortDate(booking.checkIn)} – {shortDate(booking.checkOut)}</span><span className="font-display text-sm font-semibold">{money(booking.grossPrice, booking.currency)}</span></div><p className="mt-2 truncate border-t border-[#eee8dd] pt-2 text-[11px] font-semibold text-[#7a847e]">Następnie: {nextAction}</p></button>;
+  return <button className={`w-full rounded-2xl border p-3.5 text-left transition ${active ? "border-[#b9c8a4] bg-white shadow-[0_8px_22px_rgba(38,53,45,.07)]" : "border-transparent hover:border-[#ddd5c7] hover:bg-white/70"}`} onClick={onClick}><div className="flex flex-col gap-2 min-[380px]:flex-row min-[380px]:items-start min-[380px]:justify-between"><div className="min-w-0"><p className="text-sm font-black">{booking.guestLabel}</p><p className="mt-0.5 text-xs text-[#6e7973]">{unit} · {booking.importRef ? booking.platform : booking.id}</p></div><Badge className="self-start" tone={paymentTone}>{booking.paymentStatus}</Badge></div><div className="mt-3 grid gap-2 min-[380px]:grid-cols-[minmax(0,1fr)_auto] min-[380px]:items-center"><span className="inline-flex min-w-0 items-start gap-1.5 text-xs font-bold leading-5 text-[#50645b]"><Icon className="mt-0.5 size-3.5 shrink-0" name="calendar"/><span>{shortDate(booking.checkIn)} – {shortDate(booking.checkOut)}</span></span><span className="font-display text-sm font-semibold">{money(booking.grossPrice, booking.currency)}</span></div><p className="mt-2 border-t border-[#eee8dd] pt-2 text-[11px] font-semibold leading-5 text-[#7a847e]">Następnie: {nextAction}</p></button>;
 }
 
 function BookingCommandCenter({ booking, initialTab, onBack, role }: { booking: Booking; initialTab: Tab; onBack: () => void; role?: UserRole | null }) {
