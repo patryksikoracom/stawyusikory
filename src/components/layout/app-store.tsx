@@ -1334,6 +1334,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     operation: BookingMutationOperation,
   ): Promise<BookingCommandResult> => {
     if (!dataReady.current) return { ok: false, message: "Dane aplikacji nie są jeszcze gotowe. Spróbuj ponownie." };
+    const previousData = latestData.current;
     const currentBooking = latestData.current.bookings.find((item) => item.id === booking.id);
     if (!currentBooking) return { ok: false, message: "Nie znaleziono tej rezerwacji." };
 
@@ -1464,11 +1465,39 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         });
         if (response.status === 409) {
           const payload = await response.json().catch(() => ({})) as {
+            error?: string;
             currentRecordVersion?: number;
+            conflictType?: "booking" | "block";
+            conflictId?: string;
             detectedAt?: string;
             requestId?: string;
           };
-          if (operation === "cancel") {
+          if (payload.conflictType) {
+            bookingRecordVersions.current.set(booking.id, expectedRecordVersion);
+            if (aggregate.contact) {
+              if ((versions.contact ?? 0) > 0) {
+                consentRecordVersions.current.set(booking.id, versions.contact!);
+              } else {
+                consentRecordVersions.current.delete(booking.id);
+              }
+            }
+            for (const task of aggregate.tasks) {
+              const previousVersion = versions.tasks.get(task.id);
+              if (previousVersion) taskRecordVersions.current.set(task.id, previousVersion);
+              else taskRecordVersions.current.delete(task.id);
+            }
+            for (const message of aggregate.scheduledMessages) {
+              const previousVersion = versions.scheduledMessages.get(message.id);
+              if (previousVersion) scheduledMessageRecordVersions.current.set(message.id, previousVersion);
+              else scheduledMessageRecordVersions.current.delete(message.id);
+            }
+            latestData.current = previousData;
+            setData(previousData);
+            outcome = {
+              ok: false,
+              message: payload.error ?? "Termin koliduje z inną rezerwacją lub blokadą.",
+            };
+          } else if (operation === "cancel") {
             // Anulowanie jest idempotentne. Wyższa wersja nie wymaga ekranu
             // konfliktu całej aplikacji: caller pobierze najnowszy agregat,
             // zmieni wyłącznie status i bezpiecznie ponowi komendę raz.

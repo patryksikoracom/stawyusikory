@@ -1,5 +1,5 @@
 {
-  "releaseId": "stawy-os-email-hotfix-2026-08-17",
-  "schemaVersion": "2026-08-17.1",
-  "requiredMigration": "20260817164427_fix_resend_webhook_service_role_auth.sql"
+  "releaseId": "stawy-os-booking-status-hotfix-2026-08-19",
+  "schemaVersion": "2026-08-19.1",
+  "requiredMigration": "20260819150720_allow_booking_status_updates_without_rechecking_availability.sql"
 }

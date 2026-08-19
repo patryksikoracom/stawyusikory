@@ -1331,6 +1331,89 @@ describe("AppStoreProvider w trybie chmurowym", () => {
     expect(store?.syncConflict).toBeUndefined();
   });
 
+  it("cofa lokalną zmianę po kolizji dostępności bez fałszywego konfliktu kart", async () => {
+    vi.useFakeTimers();
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "test-anon-key");
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        clear: vi.fn(), getItem: vi.fn(() => null), key: vi.fn(() => null), length: 0,
+        removeItem: vi.fn(), setItem: vi.fn(),
+      },
+    });
+
+    const booking = {
+      id: "BOOKING-STATUS-1",
+      bookingDate: "2099-07-25",
+      source: "Mobile Calendar · Booking.com",
+      platform: "Booking" as const,
+      unitId: "domek-4",
+      checkIn: "2099-08-10",
+      checkOut: "2099-08-13",
+      adults: 2,
+      children: 0,
+      guestLabel: "Gość testowy",
+      paymentStatus: "Do dopłaty" as const,
+      workflowStatus: "Potwierdzona" as const,
+      createdBy: "Import Mobile Calendar",
+      version: 1,
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: { bookings: [booking] }, version: 10 }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        json: async () => ({
+          error: "Termin koliduje z aktywną blokadą domku.",
+          conflictType: "block",
+          conflictId: "ICAL-CLOSED",
+          currentRecordVersion: 1,
+          requestId: "request-availability-conflict",
+        }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { AppStoreProvider, useAppStore } = await import("./app-store");
+    let store: ReturnType<typeof useAppStore> | undefined;
+    function Probe() {
+      store = useAppStore();
+      return null;
+    }
+
+    render(<AppStoreProvider><Probe /></AppStoreProvider>);
+    await act(async () => {
+      vi.advanceTimersByTime(0);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const result = await act(async () => store!.updateBooking({
+      ...store!.data.bookings[0]!,
+      workflowStatus: "Po pobycie",
+    }));
+
+    expect(result).toEqual({
+      ok: false,
+      message: "Termin koliduje z aktywną blokadą domku.",
+    });
+    expect(store?.data.bookings[0]).toMatchObject({
+      workflowStatus: "Potwierdzona",
+      version: 1,
+    });
+    expect(store?.syncMode).toBe("cloud");
+    expect(store?.syncConflict).toBeUndefined();
+    const commandBody = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(commandBody).toMatchObject({
+      expectedRecordVersion: 1,
+      aggregate: { booking: { workflowStatus: "Po pobycie", version: 2 } },
+    });
+  });
+
   it("przenosi rezerwację do kosza i przywraca ją bez pełnego PUT oraz bez utraty statusów", async () => {
     vi.useFakeTimers();
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
