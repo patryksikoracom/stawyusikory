@@ -86,6 +86,7 @@ describe("CalendarView — potwierdzane blokady", () => {
 
     expect(screen.getByRole("link", { name: "Arkusz rezerwacji" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Import danych" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Dodaj blokadę" })).not.toBeInTheDocument();
   });
 
   it("filtruje wyłącznie po kanałach rezerwacji, bez źródeł odkrycia", () => {
@@ -323,14 +324,40 @@ describe("CalendarView — potwierdzane blokady", () => {
     };
     render(<CalendarView />);
 
-    expect(screen.getByLabelText(/Bufor sprzątania · Booking/)).toHaveClass("bg-[#f5e8c5]/95");
+    expect(screen.getByRole("button", { name: /Bufor sprzątania · Booking, sprawdź lub zastąp rezerwacją/ })).toHaveClass("bg-[#f5e8c5]/95");
     expect(screen.getByRole("button", { name: /Airbnb · nowa rezerwacja, uzupełnij szczegóły/ })).toHaveClass("bg-[#f8ddd5]/95");
     expect(screen.queryByText("Inne")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Airbnb · nowa rezerwacja, uzupełnij szczegóły/ }));
     expect(screen.getByRole("dialog", { name: "Dodaj rezerwację" })).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText(/Zastąp tę blokadę rezerwacją/));
     fireEvent.click(screen.getByRole("button", { name: /Dalej/ }));
     expect(screen.getByRole("combobox", { name: "Kanał zawarcia rezerwacji" })).toHaveValue("Airbnb");
+  });
+
+  it("pozwala otworzyć także szarą blokadę iCal do ręcznego zastąpienia", () => {
+    const today = todayInPoland();
+    mocks.store.current = {
+      ...createStore(),
+      data: {
+        ...createStore().data,
+        blocks: [{
+          id: "ICAL-SRC-AIRBNB-CLOSED",
+          unitId: initialData.units[1]!.id,
+          dateFrom: today,
+          dateTo: addLocalDays(today, 4),
+          blockType: "Inne" as const,
+          reason: "[Airbnb] Airbnb (Not available)",
+          status: "Aktywna" as const,
+        }],
+      },
+    };
+    render(<CalendarView role="manager" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Airbnb · zamknięte, sprawdź lub zastąp rezerwacją/ }));
+
+    expect(screen.getByRole("dialog", { name: "Dodaj rezerwację" })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Zastąp tę blokadę rezerwacją/)).toBeInTheDocument();
   });
 
   it("nie rozpycha wiersza domku przy wielu blokach iCal", () => {
@@ -352,7 +379,7 @@ describe("CalendarView — potwierdzane blokady", () => {
     };
     render(<CalendarView />);
 
-    expect(screen.getAllByLabelText(/Bufor sprzątania · Booking/).map((bar) => bar.style.marginBottom))
+    expect(screen.getAllByRole("button", { name: /Bufor sprzątania · Booking/ }).map((bar) => bar.style.marginBottom))
       .toEqual(["8px", "32px", "8px", "32px", "8px"]);
   });
 

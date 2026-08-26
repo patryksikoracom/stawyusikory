@@ -13,6 +13,10 @@ export function isBookingOperator(role: unknown): role is "owner" | "admin" | "m
   return role === "owner" || role === "admin" || role === "manager";
 }
 
+export function isCalendarBlockOperator(role: unknown): role is "owner" | "admin" | "manager" {
+  return isBookingOperator(role);
+}
+
 export async function requireOrganization(request?: Request) {
   const supabase = await createClient();
   if (!supabase) {

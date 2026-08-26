@@ -34,6 +34,7 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
   const [depositOverride, setDepositOverride] = useState(Boolean(booking?.depositAmount));
   const [dateSelection, setDateSelection] = useState<"checkIn" | "checkOut">("checkIn");
   const [confirmedCleaningBufferKey, setConfirmedCleaningBufferKey] = useState("");
+  const [confirmedImportedBlockKey, setConfirmedImportedBlockKey] = useState("");
   const [cleaningPlan, setCleaningPlan] = useState<"self-cleaning" | "arranged-cleaning" | "">("");
   const [draftId] = useState(() => `SUS-${Date.now().toString().slice(-6)}`);
   const [defaultDates] = useState(() => {
@@ -84,6 +85,11 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
   const ignoredIcalBlockId = booking?.importRef?.source === "ical"
     ? booking.importRef.key
     : defaults?.importRef?.source === "ical" ? defaults.importRef.key : undefined;
+  const importedBlockToReplace = ignoredIcalBlockId
+    ? data.blocks.find((block) => block.id === ignoredIcalBlockId)
+    : undefined;
+  const importedBlockConfirmed = Boolean(importedBlockToReplace)
+    && confirmedImportedBlockKey === importedBlockToReplace?.id;
   const availabilityBlocks = data.blocks.filter((block) => {
     if (block.id === ignoredIcalBlockId) return false;
     if (booking && importedReservationBlockMatchesBooking(block, booking)) return false;
@@ -120,6 +126,7 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
       if (Number(form.adults) < 1) return "Rezerwacja musi mieć co najmniej jedną osobę dorosłą.";
       if (selectedUnit && guestCount > selectedUnit.maxPeople) return `${selectedUnit.name} mieści maksymalnie ${selectedUnit.maxPeople} osób.`;
       if (conflicts.length) return `Ten termin jest zajęty: ${conflicts[0]}.`;
+      if (importedBlockToReplace && !importedBlockConfirmed) return "Potwierdź, że chcesz zastąpić wskazaną blokadę rezerwacją.";
       if (cleaningBuffers.length && (!cleaningBufferConfirmed || !cleaningPlan)) return "Wybierz sposób sprzątania i potwierdź świadome obejście buforu.";
     }
     if (targetStep === 2) return validateGuestStep(form.firstName, form.lastName);
@@ -226,16 +233,16 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
       overlayClassName="overflow-y-auto !p-0 sm:!p-5"
       returnFocusRef={returnFocusRef}
     >
-        <div className="mobile-dialog-header border-b border-[#e3dccf] bg-[#fffdf8] bg-[radial-gradient(circle_at_85%_-30%,#dce7bd_0,transparent_38%)] px-3 pb-3 pt-[max(.75rem,env(safe-area-inset-top))] sm:static sm:px-7 sm:pb-5 sm:pt-6">
+        <div className="mobile-dialog-header border-b border-[#e3dccf] bg-[#fffdf8] bg-[radial-gradient(circle_at_85%_-30%,#dce7bd_0,transparent_38%)] px-3 pb-2 pt-[max(.5rem,env(safe-area-inset-top))] sm:static sm:px-7 sm:pb-5 sm:pt-6">
           <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0"><p className="text-[10px] font-black uppercase tracking-[.12em] text-[#81904e] sm:tracking-[.2em]">{booking ? "Edycja pobytu" : "Nowy pobyt"}</p><h2 className="font-display text-2xl font-semibold leading-tight tracking-[-.03em] sm:text-3xl" id="new-booking-title">{booking ? "Edytuj rezerwację" : "Dodaj rezerwację"}</h2></div>
-            <button aria-label="Zamknij" className="grid size-10 shrink-0 place-items-center rounded-xl border border-[#ddd6c9] bg-white/80 transition hover:bg-white" onClick={onClose}><Icon className="size-5" name="close" /></button>
+            <div className="min-w-0"><p className="text-[9px] font-black uppercase tracking-[.1em] text-[#81904e] sm:text-[10px] sm:tracking-[.2em]">{booking ? "Edycja pobytu" : "Nowy pobyt"}</p><h2 className="font-display text-xl font-semibold leading-none tracking-[-.03em] sm:text-3xl" id="new-booking-title">{booking ? "Edytuj rezerwację" : "Dodaj rezerwację"}</h2></div>
+            <button aria-label="Zamknij" className="grid size-9 shrink-0 place-items-center rounded-xl border border-[#ddd6c9] bg-white/80 transition hover:bg-white sm:size-10" onClick={onClose}><Icon className="size-5" name="close" /></button>
           </div>
-          <ol className="mt-3 grid grid-cols-3 gap-2 sm:mt-5">
+          <ol className="booking-stepper mt-2 grid grid-cols-3 gap-1 sm:mt-5 sm:gap-2">
             {stepLabels.map((label, index) => {
               const number = index + 1;
               const available = number <= step + 1;
-              return <li key={label}><button aria-label={`Krok ${number}: ${label}`} type="button" disabled={!available} className={`flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-2 py-2 text-left text-xs font-black transition min-[380px]:justify-start sm:px-3 ${step === number ? "bg-[#174d3b] text-white shadow-lg" : step > number ? "bg-[#e2ecdc] text-[#285642]" : available ? "bg-white/80 text-[#5d6d65] hover:bg-white" : "cursor-not-allowed bg-white/45 text-[#9aa19d]"}`} onClick={() => { setError(""); if (number <= step) setStep(number); else goNext(); }}><span className={`grid size-6 shrink-0 place-items-center rounded-full text-[10px] ${step === number ? "bg-white text-[#174d3b]" : "bg-[#f2efe7]"}`}>{step > number ? "✓" : number}</span><span className="hidden min-[380px]:block">{label}</span></button></li>;
+              return <li key={label}><button aria-label={`Krok ${number}: ${label}`} type="button" disabled={!available} className={`flex min-h-8 w-full items-center justify-center gap-1 rounded-lg px-1 py-1 text-left text-[10px] font-black transition sm:min-h-11 sm:justify-start sm:gap-2 sm:rounded-xl sm:px-3 sm:py-2 sm:text-xs ${step === number ? "text-[#174d3b] sm:bg-[#174d3b] sm:text-white sm:shadow-lg" : step > number ? "text-[#285642] sm:bg-[#e2ecdc]" : available ? "text-[#5d6d65] sm:bg-white/80 sm:hover:bg-white" : "cursor-not-allowed text-[#9aa19d] sm:bg-white/45"}`} onClick={() => { setError(""); if (number <= step) setStep(number); else goNext(); }}><span className={`grid size-6 shrink-0 place-items-center rounded-full text-[10px] ${step === number ? "bg-[#174d3b] text-white sm:bg-white sm:text-[#174d3b]" : "bg-[#f2efe7]"}`}>{step > number ? "✓" : number}</span><span className="hidden sm:block">{label}</span></button></li>;
             })}
           </ol>
           {error ? <p aria-live="polite" className="mt-3 rounded-xl border border-[#efb8a8] bg-[#f9dfd7] px-4 py-3 text-sm font-bold text-[#963c27]">{error}</p> : null}
@@ -260,6 +267,7 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
                     <div className="rounded-xl border border-[#c8d8bd] bg-[#f1f5e9] px-3 py-2.5 sm:px-4 sm:py-3"><p className="text-[10px] font-black uppercase tracking-[.1em] text-[#66794f] sm:tracking-[.14em]">Wycena</p><p className="mt-1 font-display text-xl font-semibold text-[#214f3d] sm:text-2xl">{calculatedTotal ? calculatedTotal.toLocaleString("pl-PL") : "—"} {calculatedTotal ? moneySuffix : ""}</p><p className="mt-0.5 text-xs font-bold text-[#647267]">{nights > 0 ? `${nights} ${nights === 1 ? "noc" : "nocy"}${suggestedNightPrice ? ` · ${Number(suggestedNightPrice).toLocaleString("pl-PL")} zł/noc` : ""}` : "Wybierz daty"}</p></div>
                   </div>
                   {cleaningBuffers.length && !conflicts.length ? <fieldset className="sm:col-span-2 rounded-2xl border border-[#dfc16e] bg-[#fff8e8] p-4"><legend className="px-1 text-sm font-black text-[#654d16]">Jak obsłużycie sprzątanie?</legend><p className="mt-1 text-xs leading-5 text-[#756238]">To jest wyłącznie bufor techniczny. Rezerwacja gościa nadal zawsze blokuje termin.</p><div className="mt-3 grid gap-2 sm:grid-cols-2"><label className="flex min-h-12 items-center gap-3 rounded-xl border border-[#dfd1aa] bg-white px-3 text-sm font-bold"><input checked={cleaningPlan === "self-cleaning"} name="cleaning-plan" onChange={() => setCleaningPlan("self-cleaning")} type="radio"/>Posprzątamy samodzielnie</label><label className="flex min-h-12 items-center gap-3 rounded-xl border border-[#dfd1aa] bg-white px-3 text-sm font-bold"><input checked={cleaningPlan === "arranged-cleaning"} name="cleaning-plan" onChange={() => setCleaningPlan("arranged-cleaning")} type="radio"/>Umówię osobę sprzątającą</label></div><label className="mt-3 flex items-start gap-3 text-sm font-bold text-[#5f4b1d]"><input checked={cleaningBufferConfirmed} className="mt-1" onChange={(event) => setConfirmedCleaningBufferKey(event.target.checked ? cleaningBufferKey : "")} type="checkbox"/>Potwierdzam, że sprawdziłem termin i świadomie zastępuję bufor własnym planem sprzątania.</label></fieldset> : null}
+                  {importedBlockToReplace ? <fieldset className="sm:col-span-2 rounded-xl border border-[#dfaa9c] bg-[#fff0eb] p-3"><legend className="px-1 text-sm font-black text-[#7f3424]">Blokada z {form.platform}</legend><p className="mt-1 text-xs leading-5 text-[#704d44]">{importedBlockToReplace.reason}. Zapis rezerwacji usunie dokładnie tę blokadę i zastąpi ją pobytem.</p><label className="mt-2 flex items-start gap-2 text-sm font-bold text-[#6f3022]"><input checked={importedBlockConfirmed} className="mt-1" onChange={(event) => setConfirmedImportedBlockKey(event.target.checked ? importedBlockToReplace.id : "")} type="checkbox"/>Sprawdziłem domek i daty. Zastąp tę blokadę rezerwacją.</label></fieldset> : null}
                   <div className="min-w-0 max-w-full sm:col-span-2">
                     <StayDateTimeline
                       blocks={availabilityBlocks}

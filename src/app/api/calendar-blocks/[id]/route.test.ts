@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/supabase/auth-context", () => ({
-  isOrganizationEditor: (role: unknown) => role === "owner" || role === "admin",
+  isCalendarBlockOperator: (role: unknown) => role === "owner" || role === "admin" || role === "manager",
   requireOrganization: vi.fn(async () => mocks.context),
 }));
 
@@ -86,6 +86,18 @@ describe("PATCH /api/calendar-blocks/:id", () => {
       block: { status: "Anulowana", version: 4 },
       recordVersion: 4,
     });
+  });
+
+  it("pozwala managerowi anulować istniejącą blokadę", async () => {
+    mocks.context.role = "manager";
+
+    const response = await PATCH(request(), routeContext);
+
+    expect(response.status).toBe(200);
+    expect(mocks.context.supabase.rpc).toHaveBeenCalledWith(
+      "mutate_operational_calendar_block",
+      expect.objectContaining({ p_operation: "update", p_block_id: "BLOCK-1" }),
+    );
   });
 
   it("zwraca 409 z bieżącą wersją rekordu", async () => {

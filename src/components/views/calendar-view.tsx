@@ -248,7 +248,7 @@ export function CalendarView({ role = "owner" }: { role?: UserRole }) {
           <Link className="calendar-secondary-action hidden min-h-11 items-center justify-center gap-2 rounded-xl border border-[#cec6b7] bg-white px-3 text-sm font-black text-[#355248] sm:inline-flex" href="/calendar/year"><Icon className="size-4" name="calendar"/>Przegląd roku</Link>
           <select aria-label="Filtr kanału rezerwacji" className="calendar-secondary-action min-h-11 min-w-0 rounded-xl border border-[#cec6b7] bg-white px-3 text-sm font-bold outline-none" value={channel} onChange={(event) => setChannel(event.target.value)}><option value="Wszystkie">Wszystkie kanały</option>{availableChannels.map((item) => <option key={item}>{item}</option>)}</select>
           <div className="calendar-mobile-mode-toggle grid grid-cols-2 rounded-xl bg-[#ebe7de] p-1 sm:hidden"><button className={`min-h-10 rounded-lg px-2 py-1.5 text-xs font-black ${mobileMode === "agenda" ? "bg-white shadow-sm" : "text-[#6f7a74]"}`} onClick={() => setMobileMode("agenda")}>Agenda</button><button className={`min-h-10 rounded-lg px-2 py-1.5 text-xs font-black ${mobileMode === "timeline" ? "bg-white shadow-sm" : "text-[#6f7a74]"}`} onClick={() => setMobileMode("timeline")}>Oś czasu</button></div>
-          <Button className="w-full min-[380px]:col-span-2 sm:w-auto" onClick={(event) => { blockTriggerRef.current = event.currentTarget; setBlockStatus(null); setBlockForm({ unitId: data.units[0]?.id ?? "", dateFrom: today, dateTo: addLocalDays(today, 1), reason: "", blockType: "Właściciel" }); }}><Icon className="size-4" name="plus"/>Dodaj blokadę</Button>
+          {role !== "manager" ? <Button className="w-full min-[380px]:col-span-2 sm:w-auto" onClick={(event) => { blockTriggerRef.current = event.currentTarget; setBlockStatus(null); setBlockForm({ unitId: data.units[0]?.id ?? "", dateFrom: today, dateTo: addLocalDays(today, 1), reason: "", blockType: "Właściciel" }); }}><Icon className="size-4" name="plus"/>Dodaj blokadę</Button> : null}
         </div>
       </section>
 
@@ -345,10 +345,8 @@ function CalendarBlockBar({ anchor, block, daysCount, index, onCancel, onMateria
   if (imported) {
     const className = `z-[3] mx-1 self-end overflow-hidden rounded-lg border border-dashed px-2 py-1 text-left text-[10px] font-black ${imported.styles}`;
     const title = `${imported.label}: ${block.reason.replace(/^\[(Booking|Airbnb)\]\s*/i, "")}`;
-    if (imported.kind === "reservation") {
-      return <button aria-label={`${imported.label}, uzupełnij szczegóły, ${formatPolishDate(block.dateFrom)}–${formatPolishDate(block.dateTo)}`} className={`${className} cursor-pointer transition hover:-translate-y-0.5 hover:shadow-md focus-visible:ring-2 focus-visible:ring-[#174d3b]`} style={placement} title={`${title} · kliknij, aby uzupełnić`} onClick={(event) => onMaterialize(event.currentTarget, imported.platform)}><span className="truncate">＋ {imported.label}</span></button>;
-    }
-    return <div aria-label={`${imported.label}, ${formatPolishDate(block.dateFrom)}–${formatPolishDate(block.dateTo)}`} className={className} style={placement} title={title}><span className="truncate">{imported.label}</span></div>;
+    const action = imported.kind === "reservation" ? "uzupełnij szczegóły" : "sprawdź lub zastąp rezerwacją";
+    return <button aria-label={`${imported.label}, ${action}, ${formatPolishDate(block.dateFrom)}–${formatPolishDate(block.dateTo)}`} className={`${className} cursor-pointer transition hover:-translate-y-0.5 hover:shadow-md focus-visible:ring-2 focus-visible:ring-[#174d3b]`} style={placement} title={`${title} · kliknij, aby ${action}`} onClick={(event) => onMaterialize(event.currentTarget, imported.platform)}><span className="truncate">＋ {imported.label}</span></button>;
   }
   return <button className="z-[3] mx-1 self-end overflow-hidden rounded-lg border border-dashed border-[#9a927b] bg-[#eee8dc]/95 px-2 py-1 text-left text-[10px] font-black text-[#6d6758]" style={placement} title={`${block.reason} · kliknij, aby anulować`} onClick={(event) => onCancel(event.currentTarget)}>{block.blockType}</button>;
 }

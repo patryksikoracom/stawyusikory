@@ -1,5 +1,5 @@
 {
-  "releaseId": "stawy-os-booking-status-hotfix-2026-08-19",
-  "schemaVersion": "2026-08-19.1",
-  "requiredMigration": "20260819150720_allow_booking_status_updates_without_rechecking_availability.sql"
+  "releaseId": "stawy-os-manager-booking-flow-2026-08-26",
+  "schemaVersion": "2026-08-26.1",
+  "requiredMigration": "20260826182629_restore_manager_booking_permissions.sql"
 }

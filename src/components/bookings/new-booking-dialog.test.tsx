@@ -197,6 +197,10 @@ describe("NewBookingDialog — PR-10c", () => {
     );
 
     expect(screen.getByText("Termin wolny")).toBeInTheDocument();
+    expect(screen.getByLabelText(/Zastąp tę blokadę rezerwacją/)).not.toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: /Dalej/ }));
+    expect(screen.getByText("Potwierdź, że chcesz zastąpić wskazaną blokadę rezerwacją.")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText(/Zastąp tę blokadę rezerwacją/));
     fireEvent.click(screen.getByRole("button", { name: /Dalej/ }));
     expect(screen.getByLabelText("Kanał zawarcia rezerwacji")).toHaveValue("Airbnb");
     fireEvent.change(screen.getByLabelText("Imię"), { target: { value: "Anna" } });

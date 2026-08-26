@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import {
   updateCalendarBlockCommandSchema,
 } from "@/lib/domain/calendar-block-command";
-import { isOrganizationEditor, requireOrganization } from "@/lib/supabase/auth-context";
+import { isCalendarBlockOperator, requireOrganization } from "@/lib/supabase/auth-context";
 import { calendarBlockResponse } from "../response";
 
 const maxPayloadBytes = 24_000;
@@ -13,7 +13,7 @@ export async function PATCH(
 ) {
   const context = await requireOrganization(request);
   if (context.error) return context.error;
-  if (!isOrganizationEditor(context.role)) {
+  if (!isCalendarBlockOperator(context.role)) {
     return NextResponse.json(
       { error: "Konto nie ma dostępu do zmiany blokad kalendarza." },
       { status: 403 },
