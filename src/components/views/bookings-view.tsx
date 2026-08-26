@@ -24,6 +24,7 @@ import {
 const statuses: WorkflowStatus[] = ["Nowa", "Potwierdzona", "Przed przyjazdem", "W trakcie", "Po pobycie", "Zamknięta", "Anulowana"];
 const tabs = ["Podsumowanie", "Płatności", "Wiadomości", "Zadania", "Historia"] as const;
 type Tab = (typeof tabs)[number];
+type StatusFeedback = { tone: "success" | "error"; message: string };
 const bookingsPageSize = 40;
 const bookingListStorageKey = "stawy-os:booking-list-v1";
 
@@ -187,7 +188,8 @@ function BookingCommandCenter({ booking, initialTab, onBack, role }: { booking: 
   const [cancelling, setCancelling] = useState(false);
   const [cancellationError, setCancellationError] = useState("");
   const [showDebrief, setShowDebrief] = useState(false);
-  const [statusError, setStatusError] = useState("");
+  const [pendingStatus, setPendingStatus] = useState<WorkflowStatus>();
+  const [statusFeedback, setStatusFeedback] = useState<StatusFeedback>();
   const profile = data.guests.find((item) => item.bookingId === booking.id);
   const consent = data.consents.find((item) => item.bookingId === booking.id);
   const importMatch = data.imports.find((item) => item.matchedBookingId === booking.id);
@@ -207,11 +209,23 @@ function BookingCommandCenter({ booking, initialTab, onBack, role }: { booking: 
     ? bookingFinance.overpayment
     : bookingFinance.amountDue;
 
-  function changeStatus(status: WorkflowStatus) {
-    setStatusError("");
-    if (status === "Potwierdzona" && !confirmState.ok) { setStatusError(`Nie można potwierdzić: ${confirmState.missing.join(", ")}.`); return; }
-    if (status === "Zamknięta" && !closeState.ok) { setStatusError(`Najpierw zamknij zadania: ${closeState.blockingTasks.map((task) => task.type).join(", ")}.`); return; }
-    updateBooking({ ...booking, workflowStatus: status });
+  async function changeStatus(status: WorkflowStatus) {
+    if (pendingStatus || status === booking.workflowStatus) return;
+    setStatusFeedback(undefined);
+    if (status === "Potwierdzona" && !confirmState.ok) {
+      setStatusFeedback({ tone: "error", message: `Nie można potwierdzić: ${confirmState.missing.join(", ")}.` });
+      return;
+    }
+    if (status === "Zamknięta" && !closeState.ok) {
+      setStatusFeedback({ tone: "error", message: `Najpierw zamknij zadania: ${closeState.blockingTasks.map((task) => task.type).join(", ")}.` });
+      return;
+    }
+    setPendingStatus(status);
+    const result = await updateBooking({ ...booking, workflowStatus: status });
+    setPendingStatus(undefined);
+    setStatusFeedback(result.ok
+      ? { tone: "success", message: `Zapisano status: ${status}.` }
+      : { tone: "error", message: result.message ?? "Nie udało się zapisać statusu." });
   }
 
   async function confirmBookingCancellation() {
@@ -236,9 +250,9 @@ function BookingCommandCenter({ booking, initialTab, onBack, role }: { booking: 
     <div className="overflow-x-auto border-b border-[#e3dccf] px-4 sm:px-6"><nav className="flex min-w-max gap-1">{availableTabs.map((item) => <button className={`border-b-2 px-3 py-3.5 text-sm font-black transition ${tab === item ? "border-[#174d3b] text-[#174d3b]" : "border-transparent text-[#737e77] hover:text-[#314b41]"}`} key={item} onClick={() => setTab(item)}>{item}{item === "Zadania" && tasks.length ? <span className="ml-2 rounded-full bg-[#ece7dd] px-2 py-0.5 text-[10px]">{tasks.length}</span> : null}</button>)}</nav></div>
 
     <div className="p-5 sm:p-6">
-      {conflicts.length ? <div className="mb-5 flex gap-3 rounded-2xl border border-[#efc1b3] bg-[#fbe9e2] p-4 text-[#8e3c27]"><Icon className="mt-0.5 size-5 shrink-0" name="warning"/><div><p className="text-sm font-black">Nie można potwierdzić tej rezerwacji</p><p className="mt-0.5 text-xs leading-5">{conflicts.join(" · ")}</p></div></div> : null}
-      {statusError ? <p aria-live="polite" className="mb-5 rounded-xl bg-[#f9dfd7] p-3 text-sm font-bold text-[#963c27]">{statusError}</p> : null}
-      {tab === "Podsumowanie" ? <Overview booking={booking} profile={profile} consent={consent} debrief={debrief} issues={issues} importMatch={importMatch} nextAction={getNextAction(data, booking)} changeStatus={changeStatus} onOpenDebrief={() => setShowDebrief(true)} /> : null}
+      {conflicts.length ? <div className="mb-5 flex gap-3 rounded-2xl border border-[#efc1b3] bg-[#fbe9e2] p-4 text-[#8e3c27]"><Icon className="mt-0.5 size-5 shrink-0" name="warning"/><div><p className="text-sm font-black">Konflikt kalendarza do sprawdzenia</p><p className="mt-0.5 text-xs leading-5">{conflicts.join(" · ")}</p></div></div> : null}
+      {statusFeedback ? <p aria-live="polite" className={`mb-5 rounded-xl border p-3 text-sm font-bold ${statusFeedback.tone === "success" ? "border-[#bfd5b8] bg-[#e5efe2] text-[#326045]" : "border-[#efb8a8] bg-[#f9dfd7] text-[#963c27]"}`} role={statusFeedback.tone === "error" ? "alert" : "status"}>{statusFeedback.message}</p> : null}
+      {tab === "Podsumowanie" ? <Overview booking={booking} profile={profile} consent={consent} debrief={debrief} issues={issues} importMatch={importMatch} nextAction={getNextAction(data, booking)} changeStatus={changeStatus} pendingStatus={pendingStatus} onOpenDebrief={() => setShowDebrief(true)} /> : null}
       {tab === "Płatności" ? <Payments booking={booking} commission={commission} guestPaidTotal={importMatch?.guestPaidTotal ?? booking.guestPaidTotal} guestServiceFee={importMatch?.guestServiceFee ?? booking.guestServiceFee} paymentProcessingFee={paymentProcessingFee} payout={payout} priceAdjustment={importMatch?.priceAdjustment ?? booking.priceAdjustment} /> : null}
       {tab === "Wiadomości" ? <Messages booking={booking} /> : null}
       {tab === "Zadania" ? <Tasks tasks={tasks} updateTask={updateTask} /> : null}
@@ -250,9 +264,9 @@ function BookingCommandCenter({ booking, initialTab, onBack, role }: { booking: 
   </div>;
 }
 
-function Overview({ booking, profile, consent, debrief, issues, importMatch, nextAction, changeStatus, onOpenDebrief }: { booking: Booking; profile: ReturnType<typeof useAppStore>["data"]["guests"][number] | undefined; consent: ReturnType<typeof useAppStore>["data"]["consents"][number] | undefined; debrief?: DepartureDebrief; issues: string[]; importMatch: ReturnType<typeof useAppStore>["data"]["imports"][number] | undefined; nextAction: string; changeStatus: (status: WorkflowStatus) => void; onOpenDebrief: () => void }) {
+function Overview({ booking, profile, consent, debrief, issues, importMatch, nextAction, changeStatus, pendingStatus, onOpenDebrief }: { booking: Booking; profile: ReturnType<typeof useAppStore>["data"]["guests"][number] | undefined; consent: ReturnType<typeof useAppStore>["data"]["consents"][number] | undefined; debrief?: DepartureDebrief; issues: string[]; importMatch: ReturnType<typeof useAppStore>["data"]["imports"][number] | undefined; nextAction: string; changeStatus: (status: WorkflowStatus) => void; pendingStatus?: WorkflowStatus; onOpenDebrief: () => void }) {
   const canDebrief = booking.checkOut <= todayInPoland();
-  return <div className="grid gap-5 xl:grid-cols-[1.15fr_.85fr]"><div className="grid gap-5"><Panel title="Status pobytu" eyebrow="Workflow"><div className="flex flex-wrap gap-2">{statuses.map((status) => <button className={`rounded-full border px-3 py-2 text-xs font-black transition ${booking.workflowStatus === status ? "border-[#174d3b] bg-[#174d3b] text-white" : "border-[#d6cfc1] bg-white text-[#596a62] hover:border-[#729079]"}`} key={status} onClick={() => changeStatus(status)}>{status}</button>)}</div></Panel><Panel title="Gość i potrzeby" eyebrow="CRM"><div className="grid gap-3 sm:grid-cols-2"><Info label="Segment" value={profile?.segment}/><Info label="Motywacja" value={profile?.motivation}/><Info label="Decydent" value={profile?.decisionMaker}/><Info label="Źródło odkrycia" value={profile?.discoveryChannel}/><Info wide label="Pierwsze pytanie / prompt" value={profile?.searchPhraseOrAiPrompt}/><Info wide label="Prośby specjalne" value={booking.specialRequests}/></div></Panel>{canDebrief || debrief ? <DepartureSummary debrief={debrief} onOpen={onOpenDebrief}/> : null}<Panel title="Dane kontaktowe i zgody" eyebrow="Relacja"><div className="grid gap-3 sm:grid-cols-2"><Info label="E-mail" value={consent?.email}/><Info label="Telefon" value={consent?.phone}/><Info label="Marketing" value={consent?.marketingConsent}/><Info label="Zdjęcia Facebook" value={consent?.photoFbConsent}/></div></Panel></div><aside className="grid content-start gap-5"><Panel title="Następna akcja" eyebrow="Stawy OS"><div className="rounded-xl bg-[#edf1e3] p-4"><p className="text-sm font-black">{nextAction}</p><p className="mt-1 text-xs leading-5 text-[#67736d]">System ustala kolejność na podstawie terminu pobytu, płatności, podsumowania wyjazdu i otwartych zadań.</p></div></Panel><Panel title="Źródło i jakość" eyebrow="Synchronizacja"><div className="grid gap-3"><StatusLine label="Połączenie" value={importMatch ? `${importMatch.platform} / ${importMatch.syncSource}` : "Ręcznie"} ok={Boolean(importMatch)}/><StatusLine label="Nr zewnętrzny" value={importMatch?.reservationNo || booking.platformReservationNo || "brak"} ok={Boolean(importMatch?.reservationNo || booking.platformReservationNo)}/><StatusLine label="Kompletność operacyjna" value={`${Math.max(0, 100 - issues.length * 8)}%`} ok={issues.length < 3}/></div>{issues.length ? <div className="mt-4 rounded-xl bg-[#faf0d5] p-3"><p className="text-xs font-black text-[#725710]">Do uzupełnienia</p><p className="mt-1 text-xs leading-5 text-[#7b6a3e]">{issues.slice(0, 5).join(" · ")}</p></div> : <p className="mt-4 rounded-xl bg-[#e5efe2] p-3 text-xs font-bold text-[#326045]">Dane potrzebne do obsługi pobytu są kompletne.</p>}</Panel></aside></div>;
+  return <div className="grid gap-5 xl:grid-cols-[1.15fr_.85fr]"><div className="grid gap-5"><Panel title="Status pobytu" eyebrow="Workflow"><div className="flex flex-wrap gap-2">{statuses.map((status) => <button aria-pressed={booking.workflowStatus === status} className={`rounded-full border px-3 py-2 text-xs font-black transition disabled:cursor-wait disabled:opacity-60 ${booking.workflowStatus === status ? "border-[#174d3b] bg-[#174d3b] text-white" : "border-[#d6cfc1] bg-white text-[#596a62] hover:border-[#729079]"}`} disabled={Boolean(pendingStatus)} key={status} onClick={() => void changeStatus(status)}>{pendingStatus === status ? "Zapisuję…" : status}</button>)}</div></Panel><Panel title="Gość i potrzeby" eyebrow="CRM"><div className="grid gap-3 sm:grid-cols-2"><Info label="Segment" value={profile?.segment}/><Info label="Motywacja" value={profile?.motivation}/><Info label="Decydent" value={profile?.decisionMaker}/><Info label="Źródło odkrycia" value={profile?.discoveryChannel}/><Info wide label="Pierwsze pytanie / prompt" value={profile?.searchPhraseOrAiPrompt}/><Info wide label="Prośby specjalne" value={booking.specialRequests}/></div></Panel>{canDebrief || debrief ? <DepartureSummary debrief={debrief} onOpen={onOpenDebrief}/> : null}<Panel title="Dane kontaktowe i zgody" eyebrow="Relacja"><div className="grid gap-3 sm:grid-cols-2"><Info label="E-mail" value={consent?.email}/><Info label="Telefon" value={consent?.phone}/><Info label="Marketing" value={consent?.marketingConsent}/><Info label="Zdjęcia Facebook" value={consent?.photoFbConsent}/></div></Panel></div><aside className="grid content-start gap-5"><Panel title="Następna akcja" eyebrow="Stawy OS"><div className="rounded-xl bg-[#edf1e3] p-4"><p className="text-sm font-black">{nextAction}</p><p className="mt-1 text-xs leading-5 text-[#67736d]">System ustala kolejność na podstawie terminu pobytu, płatności, podsumowania wyjazdu i otwartych zadań.</p></div></Panel><Panel title="Źródło i jakość" eyebrow="Synchronizacja"><div className="grid gap-3"><StatusLine label="Połączenie" value={importMatch ? `${importMatch.platform} / ${importMatch.syncSource}` : "Ręcznie"} ok={Boolean(importMatch)}/><StatusLine label="Nr zewnętrzny" value={importMatch?.reservationNo || booking.platformReservationNo || "brak"} ok={Boolean(importMatch?.reservationNo || booking.platformReservationNo)}/><StatusLine label="Kompletność operacyjna" value={`${Math.max(0, 100 - issues.length * 8)}%`} ok={issues.length < 3}/></div>{issues.length ? <div className="mt-4 rounded-xl bg-[#faf0d5] p-3"><p className="text-xs font-black text-[#725710]">Do uzupełnienia</p><p className="mt-1 text-xs leading-5 text-[#7b6a3e]">{issues.slice(0, 5).join(" · ")}</p></div> : <p className="mt-4 rounded-xl bg-[#e5efe2] p-3 text-xs font-bold text-[#326045]">Dane potrzebne do obsługi pobytu są kompletne.</p>}</Panel></aside></div>;
 }
 
 function DepartureSummary({ debrief, onOpen }: { debrief?: DepartureDebrief; onOpen: () => void }) {

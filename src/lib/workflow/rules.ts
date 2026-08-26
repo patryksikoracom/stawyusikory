@@ -8,6 +8,7 @@ import type {
 } from "../types";
 import { addLocalDays, dateDiffDays, todayInPoland } from "../date";
 import { createMinorProtectionTask, requiresMinorProtection } from "../compliance/minor-protection";
+import { importedReservationBlockMatchesBooking } from "../integrations/ical-block-classification";
 
 export function nightsBetween(checkIn?: string, checkOut?: string) {
   if (!checkIn || !checkOut) return 0;
@@ -69,6 +70,7 @@ export function getBookingConflicts(bookings: Booking[], blocks: CalendarBlock[]
     .filter((block) => block.unitId === booking.unitId)
     .filter((block) => block.status !== "Anulowana" && block.status !== "Zakończona")
     .filter((block) => !booking.availabilityOverride?.blockIds.includes(block.id))
+    .filter((block) => !importedReservationBlockMatchesBooking(block, booking))
     .filter((block) => overlaps(booking.checkIn, booking.checkOut, block.dateFrom, block.dateTo))
     .map((block) => `Blokada: ${block.reason}`);
 

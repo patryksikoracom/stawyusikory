@@ -55,6 +55,7 @@ describe("BookingsView — fundament UX", () => {
     sessionStorage.clear();
     vi.clearAllMocks();
     store.cancelBooking.mockResolvedValue({ ok: true });
+    store.updateBooking.mockResolvedValue({ ok: true });
   });
 
   afterEach(() => {
@@ -136,5 +137,23 @@ describe("BookingsView — fundament UX", () => {
     expect(screen.queryByRole("button", { name: "Wiadomości" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Eksport" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Napisz" })).not.toBeInTheDocument();
+  });
+
+  it("czeka na zapis statusu i potwierdza operatorowi wynik", async () => {
+    render(<BookingsView initialId={initialData.bookings[0]!.id} role="manager" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Po pobycie" }));
+
+    expect(store.updateBooking).toHaveBeenCalledWith(expect.objectContaining({ workflowStatus: "Po pobycie" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Zapisano status: Po pobycie.");
+  });
+
+  it("pokazuje błąd, gdy serwer nie zapisze statusu", async () => {
+    store.updateBooking.mockResolvedValue({ ok: false, message: "Konto nie ma dostępu do zapisu rezerwacji." });
+    render(<BookingsView initialId={initialData.bookings[0]!.id} role="manager" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Po pobycie" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Konto nie ma dostępu do zapisu rezerwacji.");
   });
 });

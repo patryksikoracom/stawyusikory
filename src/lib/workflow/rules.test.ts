@@ -39,6 +39,27 @@ describe("availability rules", () => {
     expect(getBookingConflicts([base],[block],base)).toEqual(["Blokada: Pompa"]);
   });
 
+  it("nie traktuje odpowiadającej rezerwacji blokady OTA jako obcego konfliktu", () => {
+    const airbnbBooking = {
+      ...base,
+      platform: "Airbnb" as const,
+      checkIn: "2026-08-20",
+      checkOut: "2026-08-24",
+    };
+    const matchingBlock: CalendarBlock = {
+      id: "ICAL-SRC-AIRBNB-RESERVED",
+      unitId: "u1",
+      dateFrom: "2026-08-20",
+      dateTo: "2026-08-24",
+      blockType: "Inne",
+      reason: "[Airbnb] Reserved",
+      status: "Aktywna",
+    };
+
+    expect(getBookingConflicts([airbnbBooking], [matchingBlock], airbnbBooking)).toEqual([]);
+    expect(getBookingConflicts([airbnbBooking], [{ ...matchingBlock, reason: "Serwis pompy" }], airbnbBooking)).toEqual(["Blokada: Serwis pompy"]);
+  });
+
   it("reschedules open operational tasks but preserves repairs and completed work", () => {
     const tasks: OpsTask[] = [
       { id: "clean", bookingId: base.id, type: "Sprzątanie", priority: "Wysoki", status: "Do zrobienia", dueDate: "2026-07-12", owner: "Ewa", title: "Sprzątanie", assignmentStatus: "Przyjęte", acceptedAt: "2026-07-10T10:00:00.000Z", proposedStartTime: "12:00" },
