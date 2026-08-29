@@ -98,6 +98,17 @@ export async function POST(request: Request) {
     || !committedAggregate.success
     || typeof result.stateVersion !== "number"
   ) {
+    console.error("[api/bookings] invalid committed aggregate", {
+      commandType: command,
+      resultStatus: result.status,
+      stateVersionType: typeof result.stateVersion,
+      issues: committedAggregate.success
+        ? []
+        : committedAggregate.error.issues.map((issue) => ({
+          code: issue.code,
+          path: issue.path.join("."),
+        })),
+    });
     return NextResponse.json({ error: "Baza zwróciła niepełny wynik zapisu." }, { status: 500 });
   }
 

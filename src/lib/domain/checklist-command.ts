@@ -10,7 +10,7 @@ export const operationalChecklistItemSchema = z.object({
   templateId: z.string().trim().min(1).max(128).optional(),
   templateVersion: z.number().int().positive().optional(),
   version: z.number().int().positive().optional(),
-  updatedAt: z.iso.datetime().optional(),
+  updatedAt: z.iso.datetime({ offset: true }).optional(),
 });
 
 export const updateChecklistItemCommandSchema = z.object({

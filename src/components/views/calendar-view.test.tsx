@@ -71,7 +71,7 @@ describe("CalendarView — potwierdzane blokady", () => {
   it("pokazuje oś kalendarza przed instrukcjami i statystykami", () => {
     render(<CalendarView />);
 
-    const timeline = screen.getByText("Domek").closest(".min-w-max")?.parentElement?.parentElement;
+    const timeline = screen.getByText("Domki").closest(".min-w-max")?.parentElement?.parentElement;
     const timelineRegion = screen.getByRole("region", { name: /Oś czasu rezerwacji/ });
     const legend = screen.getByText("Legenda i obsługa").closest("details");
     expect(timeline).toBeTruthy();
@@ -79,6 +79,22 @@ describe("CalendarView — potwierdzane blokady", () => {
     expect(legend).toBeTruthy();
     expect(timelineRegion.compareDocumentPosition(legend as Node) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByText("Praca z kalendarzem")).toBeInTheDocument();
+  });
+
+  it("oszczędza szerokość krótką nazwą i odróżnia domki kolorem", () => {
+    render(<CalendarView />);
+
+    const compactName = screen.getByText("Rybaka");
+    expect(compactName).toHaveClass("sm:hidden");
+    expect(screen.getByText("6 os.")).toHaveClass("sm:hidden");
+    expect(compactName.closest(".calendar-unit-label")?.querySelector(".calendar-unit-marker")).toBeInTheDocument();
+  });
+
+  it("utrzymuje nazwę miesiąca przy lewej krawędzi osi", () => {
+    render(<CalendarView />);
+
+    const monthLabel = screen.getAllByText(/\p{L}+\s+\d{4}/u)[0];
+    expect(monthLabel).toHaveClass("sticky", "left-[80px]", "sm:left-[146px]", "whitespace-nowrap");
   });
 
   it("ukrywa skrót do importów przed Operatorem", () => {

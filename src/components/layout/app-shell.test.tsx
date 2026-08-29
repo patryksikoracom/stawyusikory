@@ -6,14 +6,16 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { initialData } from "@/lib/demo-data";
 import type { AppIdentity } from "@/lib/auth/identity";
+import { readInterfaceDensity, writeInterfaceDensity } from "@/lib/interface-density";
 import { AppShell } from "./app-shell";
 
 const mocks = vi.hoisted(() => ({
   store: { current: null as unknown },
+  pathname: "/dashboard",
 }));
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/dashboard",
+  usePathname: () => mocks.pathname,
 }));
 
 vi.mock("./app-store", () => ({
@@ -38,6 +40,8 @@ const identity: AppIdentity = {
 describe("AppShell przed zakończeniem ładowania", () => {
   afterEach(() => {
     cleanup();
+    mocks.pathname = "/dashboard";
+    writeInterfaceDensity("comfortable");
     vi.restoreAllMocks();
   });
 
@@ -152,5 +156,23 @@ describe("AppShell przed zakończeniem ładowania", () => {
     expect(screen.queryByRole("link", { name: /Finanse/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Integracje/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Więcej/ })).not.toBeInTheDocument();
+  });
+
+  it("pozwala włączyć kompaktowy widok kalendarza tylko na tym urządzeniu", () => {
+    mocks.pathname = "/calendar";
+    mocks.store.current = {
+      data: initialData,
+      dataStatus: "ready" as const,
+      syncMode: "cloud" as const,
+      retryDataLoad: vi.fn(),
+    };
+    render(<AppShell identity={identity}><div>Treść aplikacji</div></AppShell>);
+
+    const toggle = screen.getByRole("button", { name: "Widok kompaktowy kalendarza" });
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    expect(readInterfaceDensity()).toBe("compact");
   });
 });

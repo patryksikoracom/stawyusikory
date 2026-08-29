@@ -70,7 +70,7 @@ describe("NewBookingDialog — PR-10c", () => {
     expect(dialog).toHaveClass("mobile-dialog-surface");
     expect(form).toHaveClass("mobile-dialog-form");
     expect(content).toHaveClass("mobile-dialog-scroll");
-    expect(content).toHaveClass("grid-cols-[minmax(0,1fr)]");
+    expect(content).toHaveClass("mobile-dialog-scroll");
     expect(screen.getByRole("button", { name: "Anuluj" })).toHaveClass("mobile-dialog-cancel");
     expect(screen.getByLabelText("Przyjazd")).toHaveClass("min-w-0", "max-w-full");
     expect(screen.getByLabelText("Przyjazd").closest("label")).toHaveClass("grid-cols-[minmax(0,1fr)]");
@@ -156,7 +156,7 @@ describe("NewBookingDialog — PR-10c", () => {
 
     expect(screen.getByLabelText(/Numer rezerwacji OTA/)).toBeInTheDocument();
     expect(screen.getByLabelText(/Prowizja OTA/)).toBeInTheDocument();
-    expect(screen.getByText(/Zwierzęta: zasada i dopłata nie są jeszcze zatwierdzone/)).toBeInTheDocument();
+    expect(screen.queryByText(/Zwierzęta: zasada i dopłata nie są jeszcze zatwierdzone/)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Dalej/ }));
 
@@ -165,6 +165,27 @@ describe("NewBookingDialog — PR-10c", () => {
     fireEvent.click(screen.getByRole("button", { name: "Ustaw wyjątek" }));
     expect(screen.getByLabelText(/Wyjątkowa kwota zadatku/)).toBeInTheDocument();
     expect(screen.getByText("Dane opcjonalne: faktura i adres")).toBeInTheDocument();
+  });
+
+  it("przewija treść na górę przy przejściu do następnego kroku", () => {
+    renderDialog();
+    const content = screen.getByRole("dialog", { name: "Dodaj rezerwację" })
+      .querySelector(".mobile-dialog-scroll") as HTMLDivElement;
+    content.scrollTop = 480;
+
+    fireEvent.click(screen.getByRole("button", { name: /Dalej/ }));
+
+    expect(content.scrollTop).toBe(0);
+    expect(screen.getByRole("heading", { name: "Gość i kontakt" })).toBeInTheDocument();
+  });
+
+  it("pokazuje cienki pasek etapów bez bocznego podsumowania", () => {
+    renderDialog();
+
+    expect(screen.getByRole("list", { name: "Postęp formularza" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Krok 1: Termin" })).toHaveAttribute("aria-current", "step");
+    expect(screen.queryByText("Po zapisaniu powstaną wyłącznie zadania operacyjne")).not.toBeInTheDocument();
+    expect(screen.queryByText("Podsumowanie")).not.toBeInTheDocument();
   });
 
   it("materializuje wskazany wpis iCal bez konfliktu z nim samym", async () => {

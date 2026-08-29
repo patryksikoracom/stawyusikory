@@ -15,6 +15,7 @@ import { deriveShellAlerts } from "@/lib/workflow/shell-alerts";
 import { unitName } from "@/lib/workflow/rules";
 import { Dialog } from "@/components/ui/dialog";
 import { canAccessAppPath } from "@/lib/auth/route-access";
+import { InterfaceDensityProvider, useInterfaceDensity } from "./interface-density-provider";
 
 const primaryNav: { href: string; label: string; icon: IconName }[] = [
   { href: "/dashboard", label: "Dzisiaj", icon: "today" },
@@ -113,6 +114,7 @@ function ShellInner({ children, identity }: { children: React.ReactNode; identit
   useEffect(() => {
     if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") void navigator.serviceWorker.register("/sw.js");
   }, []);
+  const { density: interfaceDensity, setDensity: setInterfaceDensity } = useInterfaceDensity();
   const searchResults = useMemo(() => {
     const value = query.trim().toLowerCase();
     if (value.length < 2) return [];
@@ -172,7 +174,7 @@ function ShellInner({ children, identity }: { children: React.ReactNode; identit
   }
 
   return (
-    <div className={`min-h-screen text-[#18332c] lg:grid lg:grid-cols-[252px_minmax(0,1fr)] ${pathname === "/calendar" ? "calendar-route" : ""}`}>
+    <div className={`min-h-screen text-[#18332c] lg:grid lg:grid-cols-[252px_minmax(0,1fr)] ${pathname === "/calendar" ? "calendar-route" : ""} ${interfaceDensity === "compact" ? "ui-density-compact" : ""}`}>
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-[252px] flex-col border-r border-[#d5cebf] bg-[#f7f3ea]/95 px-3 py-4 backdrop-blur lg:flex">
         <Link className="mb-6 flex items-center gap-3 px-2 py-1" href={homeHref}>
           <span className="grid size-11 place-items-center rounded-[14px] bg-[#174d3b] font-display text-lg font-semibold text-white shadow-[0_9px_24px_rgba(23,77,59,.24)]">SU</span>
@@ -203,6 +205,7 @@ function ShellInner({ children, identity }: { children: React.ReactNode; identit
                 {showAlerts ? <div aria-label="Alerty operacyjne" className="absolute right-[-3rem] top-12 w-[min(360px,calc(100vw-2rem))] rounded-2xl border border-[#d7cfc0] bg-[#fffdf8] p-3 shadow-2xl sm:right-0" role="dialog"><div className="flex items-center justify-between gap-3 px-2 py-1"><p className="text-xs font-black uppercase tracking-[.15em] text-[#74814d]">Wymaga uwagi</p>{alerts.length ? <span className="rounded-full bg-[#f6e8c9] px-2 py-0.5 text-[10px] font-black text-[#7a5b19]">{alerts.length}</span> : null}</div>{alerts.map((alert) => <AlertMini key={alert.id} {...alert} />)}{!alerts.length ? <div className="mx-1 mt-2 rounded-xl bg-[#e9f1e3] px-4 py-5 text-center"><span className="mx-auto grid size-9 place-items-center rounded-full bg-[#4d986b] text-white"><Icon className="size-4" name="check" /></span><p className="mt-2 text-sm font-black">Brak spraw wymagających uwagi</p><p className="mt-1 text-xs leading-5 text-[#607069]">Aktualne dane nie tworzą żadnego alertu.</p></div> : null}</div> : null}
               </div>
               <span className="hidden sm:block"><Button disabled={!dataReady} onClick={openNewBooking}><Icon className="size-4" name="plus" />Nowa rezerwacja</Button></span>
+              {pathname === "/calendar" ? <button aria-label="Widok kompaktowy kalendarza" aria-pressed={interfaceDensity === "compact"} className={`grid size-10 place-items-center rounded-xl border transition ${interfaceDensity === "compact" ? "border-[#174d3b] bg-[#174d3b] text-white" : "border-[#d5cebf] bg-white text-[#53655d]"}`} onClick={() => setInterfaceDensity(interfaceDensity === "compact" ? "comfortable" : "compact")} title="Widok kompaktowy kalendarza"><Icon className="size-4" name="settings" /></button> : null}
               <div className="relative"><button aria-expanded={showAccount} aria-label={`Konto: ${identity.displayName}`} className="grid size-10 place-items-center rounded-xl bg-[#18332c] text-xs font-black text-white" onClick={() => setShowAccount((value) => !value)}>{identity.initials}</button>{showAccount ? <div className="absolute right-0 top-12 w-[min(290px,calc(100vw-2rem))] rounded-2xl border border-[#d7cfc0] bg-[#fffdf8] p-2 shadow-2xl"><div className="border-b border-[#e8e1d5] px-3 pb-3 pt-2"><p className="truncate text-sm font-black">{identity.displayName}</p><p className="mt-0.5 truncate text-xs text-[#68766f]">{identity.email ?? "Brak adresu e-mail"}</p>{identity.availableOrganizations.length > 1 ? <label className="mt-3 grid gap-1 text-[10px] font-black uppercase tracking-[.12em] text-[#68766f]">Aktywna organizacja<select aria-label="Aktywna organizacja" className="min-h-10 rounded-xl border border-[#d5cebf] bg-white px-2 text-xs font-bold normal-case tracking-normal text-[#18332c]" disabled={organizationSwitching} onChange={(event) => void switchOrganization(event.target.value)} value={identity.organizationId ?? ""}><option disabled value="">Wybierz organizację</option>{identity.availableOrganizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}</select></label> : null}<div className="mt-2 flex flex-wrap gap-1.5"><span className="rounded-full bg-[#e5ead7] px-2 py-1 text-[10px] font-black text-[#315744]">{identity.roleLabel}</span>{identity.organizationName ? <span className="max-w-full truncate rounded-full bg-[#e5ecec] px-2 py-1 text-[10px] font-black text-[#315d61]">{identity.organizationName}</span> : null}</div></div>{!operatorMode ? <Link className="mt-1 block rounded-xl px-3 py-2 text-sm font-bold hover:bg-[#f1eee6]" href="/settings" onClick={() => setShowAccount(false)}>Ustawienia</Link> : null}<button className="w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-[#9b4029] hover:bg-[#f9dfd7]" onClick={signOut}>Wyloguj się</button></div> : null}</div>
             </div>
           </div>
@@ -246,5 +249,5 @@ function AlertMini({ icon, title, body }: { icon: IconName; title: string; body:
 }
 
 export function AppShell({ children, identity }: { children: React.ReactNode; identity: AppIdentity }) {
-  return <AppStoreProvider><ShellInner identity={identity}>{children}</ShellInner></AppStoreProvider>;
+  return <InterfaceDensityProvider><AppStoreProvider><ShellInner identity={identity}>{children}</ShellInner></AppStoreProvider></InterfaceDensityProvider>;
 }

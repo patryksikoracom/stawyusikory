@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { useAppStore } from "@/components/layout/app-store";
 import { Badge, Button, Card, Field, inputClass } from "@/components/ui/primitives";
 import { Icon } from "@/components/ui/icons";
@@ -17,6 +17,7 @@ import {
   calendarWindowStart,
 } from "@/lib/workflow/calendar-draft";
 import { classifyImportedIcalBlock } from "@/lib/integrations/ical-block-classification";
+import { useInterfaceDensity } from "@/components/layout/interface-density-provider";
 
 const dayMs = 86_400_000;
 const calendarDays = 112;
@@ -33,6 +34,7 @@ const importedBlockStyles = {
   Booking: "border-[#4f8993] bg-[#d8e9eb]/95 text-[#174f58]",
   Airbnb: "border-[#d5826d] bg-[#f8ddd5]/95 text-[#873c2c]",
 } as const;
+const calendarUnitAccents = ["#27727d", "#b27a32", "#55835d", "#9b607c"];
 
 type ImportedBlockPresentation = {
   kind: "reservation" | "buffer" | "closed";
@@ -48,6 +50,7 @@ function diffDays(a: Date, b: Date) { return Math.round((a.getTime() - b.getTime
 function unitName(units: { id: string; name: string }[], unitId?: string) { return units.find((unit) => unit.id === unitId)?.name ?? "Domek"; }
 function monthMarker(date: Date) { return new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" }).format(date); }
 function shortMonth(date: Date) { return new Intl.DateTimeFormat("pl-PL", { month: "short" }).format(date).replace(".", ""); }
+function compactUnitName(name: string) { return name.replace(/^Domek\s+/i, ""); }
 
 function importedBlockPresentation(block: CalendarBlock): ImportedBlockPresentation | undefined {
   const classification = classifyImportedIcalBlock(block);
@@ -86,6 +89,7 @@ export function CalendarView({ role = "owner" }: { role?: UserRole }) {
   const [anchor, setAnchor] = useState(() => toDate(calendarWindowStart(todayInPoland())));
   const [channel, setChannel] = useState<string>("Wszystkie");
   const [mobileMode, setMobileMode] = useState<"agenda" | "timeline">("timeline");
+  const { density: interfaceDensity } = useInterfaceDensity();
   const [departureId, setDepartureId] = useState<string>();
   const [bookingDraft, setBookingDraft] = useState<BookingDefaults>();
   const [rangeStart, setRangeStart] = useState<{ unitId: string; date: string }>();
@@ -121,7 +125,7 @@ export function CalendarView({ role = "owner" }: { role?: UserRole }) {
       .filter((booking) => booking.workflowStatus !== "Anulowana" && !booking.deletedAt)
       .flatMap((booking) => booking.availabilityOverride?.blockIds ?? []),
   );
-  const dayWidth = 44;
+  const dayWidth = interfaceDensity === "compact" ? 36 : 44;
   const availableChannels = bookingChannels.filter((item) => data.bookings.some((booking) => booking.platform === item));
 
   useEffect(() => {
@@ -133,7 +137,7 @@ export function CalendarView({ role = "owner" }: { role?: UserRole }) {
       todayIndex * dayWidth - timelineRef.current.clientWidth * 0.28,
     );
     focusTodayRef.current = false;
-  }, [dates, today]);
+  }, [dates, dayWidth, today]);
 
   function showToday() {
     focusTodayRef.current = true;
@@ -237,18 +241,19 @@ export function CalendarView({ role = "owner" }: { role?: UserRole }) {
   return (
     <div className="calendar-workspace flex flex-col gap-5">
       <section className="calendar-toolbar order-[-2] animate-rise-2 flex flex-col gap-3 rounded-[20px] border border-[#d8d0c2] bg-[#fffdf8] p-3 shadow-[0_14px_40px_rgba(38,53,45,.05)] xl:flex-row xl:items-center xl:justify-between">
-        <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:items-center">
+        <div className="calendar-date-nav grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:items-center">
           <Button aria-label="Przesuń kalendarz wstecz" variant="secondary" onClick={() => moveCalendar(-calendarStep)}><Icon className="size-4 rotate-180" name="chevron" /></Button>
           <Button variant="secondary" onClick={showToday}>Dzisiaj</Button>
           <Button aria-label="Przesuń kalendarz dalej" variant="secondary" onClick={() => moveCalendar(calendarStep)}><Icon className="size-4" name="chevron" /></Button>
           <span className="mx-1 hidden h-7 w-px bg-[#ddd6c9] sm:block" />
           <div className="calendar-desktop-legend hidden flex-wrap items-center gap-2 sm:flex"><Legend color="bg-[#27727d]" label="Booking"/><Legend color="bg-[#df735a]" label="Airbnb"/><Legend color="bg-[#55835d]" label="Direct"/><Legend color="bg-[#d9ad4f]" label="Telefon"/><Legend color="border border-dashed border-[#8d866f] bg-[#f0eadc]" label="Blokada ręczna"/></div>
         </div>
-        <div className="grid grid-cols-1 gap-2 min-[380px]:grid-cols-2 sm:flex sm:flex-wrap sm:items-center">
+        <div className="calendar-toolbar-actions grid grid-cols-1 gap-2 min-[380px]:grid-cols-2 sm:flex sm:flex-wrap sm:items-center">
           <Link className="calendar-secondary-action hidden min-h-11 items-center justify-center gap-2 rounded-xl border border-[#cec6b7] bg-white px-3 text-sm font-black text-[#355248] sm:inline-flex" href="/calendar/year"><Icon className="size-4" name="calendar"/>Przegląd roku</Link>
-          <select aria-label="Filtr kanału rezerwacji" className="calendar-secondary-action min-h-11 min-w-0 rounded-xl border border-[#cec6b7] bg-white px-3 text-sm font-bold outline-none" value={channel} onChange={(event) => setChannel(event.target.value)}><option value="Wszystkie">Wszystkie kanały</option>{availableChannels.map((item) => <option key={item}>{item}</option>)}</select>
+          <select aria-label="Filtr kanału rezerwacji" className="calendar-secondary-action hidden min-h-11 min-w-0 rounded-xl border border-[#cec6b7] bg-white px-3 text-sm font-bold outline-none sm:block" value={channel} onChange={(event) => setChannel(event.target.value)}><option value="Wszystkie">Wszystkie kanały</option>{availableChannels.map((item) => <option key={item}>{item}</option>)}</select>
+          <label aria-label={channel === "Wszystkie" ? "Filtr kanałów: wszystkie" : `Filtr kanałów: ${channel}`} className="calendar-channel-filter relative grid size-10 shrink-0 place-items-center rounded-[.65rem] border border-[#cec6b7] bg-white text-[#38544a] sm:hidden"><Icon className="size-4" name="filter"/>{channel !== "Wszystkie" ? <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-[#e86e4e]"/> : null}<select aria-label="Filtr kanału rezerwacji na telefonie" className="absolute inset-0 size-full cursor-pointer opacity-0" value={channel} onChange={(event) => setChannel(event.target.value)}><option value="Wszystkie">Wszystkie kanały</option>{availableChannels.map((item) => <option key={item}>{item}</option>)}</select></label>
           <div className="calendar-mobile-mode-toggle grid grid-cols-2 rounded-xl bg-[#ebe7de] p-1 sm:hidden"><button className={`min-h-10 rounded-lg px-2 py-1.5 text-xs font-black ${mobileMode === "agenda" ? "bg-white shadow-sm" : "text-[#6f7a74]"}`} onClick={() => setMobileMode("agenda")}>Agenda</button><button className={`min-h-10 rounded-lg px-2 py-1.5 text-xs font-black ${mobileMode === "timeline" ? "bg-white shadow-sm" : "text-[#6f7a74]"}`} onClick={() => setMobileMode("timeline")}>Oś czasu</button></div>
-          {role !== "manager" ? <Button className="w-full min-[380px]:col-span-2 sm:w-auto" onClick={(event) => { blockTriggerRef.current = event.currentTarget; setBlockStatus(null); setBlockForm({ unitId: data.units[0]?.id ?? "", dateFrom: today, dateTo: addLocalDays(today, 1), reason: "", blockType: "Właściciel" }); }}><Icon className="size-4" name="plus"/>Dodaj blokadę</Button> : null}
+          {role !== "manager" ? <Button aria-label="Dodaj blokadę" className="calendar-add-block w-full min-[380px]:col-span-2 sm:w-auto" onClick={(event) => { blockTriggerRef.current = event.currentTarget; setBlockStatus(null); setBlockForm({ unitId: data.units[0]?.id ?? "", dateFrom: today, dateTo: addLocalDays(today, 1), reason: "", blockType: "Właściciel" }); }}><Icon className="size-4" name="plus"/><span>Dodaj blokadę</span></Button> : null}
         </div>
       </section>
 
@@ -270,20 +275,20 @@ export function CalendarView({ role = "owner" }: { role?: UserRole }) {
       <Card className={`calendar-timeline order-[-1] animate-rise-3 overflow-hidden ${mobileMode === "agenda" ? "hidden sm:block" : "block"}`}>
         <div aria-label="Oś czasu rezerwacji. Przesuń poziomo, aby zobaczyć kolejne daty." className="scrollbar-thin overflow-x-auto overscroll-x-contain scroll-smooth" ref={timelineRef} role="region" tabIndex={0}>
           <div className="min-w-max">
-            <div className="grid grid-cols-[104px_auto] border-b border-[#ded7ca] bg-[#f7f4ed] sm:grid-cols-[138px_auto]">
-              <div className="sticky left-0 z-20 row-span-2 flex items-end border-r border-[#ded7ca] bg-[#f7f4ed] p-3 text-[9px] font-black uppercase tracking-[.15em] text-[#78847d]">Domek</div>
+            <div className="calendar-grid-header grid grid-cols-[72px_auto] border-b border-[#ded7ca] bg-[#f7f4ed] sm:grid-cols-[138px_auto]">
+              <div className="sticky left-0 z-20 row-span-2 flex items-end border-r border-[#ded7ca] bg-[#f7f4ed] px-2 py-3 text-[9px] font-black uppercase tracking-[.12em] text-[#78847d] sm:p-3 sm:tracking-[.15em]">Domki</div>
               <div className="grid border-b border-[#d5d2ca] bg-[#efeee9]" style={{ gridTemplateColumns: `repeat(${daysCount}, ${dayWidth}px)` }}>
-                {monthSegments.map((segment, index) => <div className={`flex h-7 items-center px-2 ${index ? "border-l-2 border-[#b9b6ad]" : ""}`} key={`${segment.start}-${iso(segment.date)}`} style={{ gridColumn: `${segment.start + 1} / span ${segment.span}` }}><p className="text-[9px] font-black uppercase tracking-[.13em] text-[#536158]">{monthMarker(segment.date)}</p></div>)}
+                {monthSegments.map((segment, index) => <div className={`flex h-7 items-center ${index ? "border-l-2 border-[#b9b6ad]" : ""}`} key={`${segment.start}-${iso(segment.date)}`} style={{ gridColumn: `${segment.start + 1} / span ${segment.span}` }}><p className="calendar-month-label sticky left-[80px] z-10 whitespace-nowrap px-2 text-[9px] font-black uppercase tracking-[.13em] text-[#536158] sm:left-[146px]">{monthMarker(segment.date)}</p></div>)}
               </div>
               <div className="grid" style={{ gridTemplateColumns: `repeat(${daysCount}, ${dayWidth}px)` }}>
-                {dates.map((date) => { const dateIso = iso(date); const weekend = [0,6].includes(date.getDay()); const beginsMonth = date.getDate() === 1; const background = dateIso === today ? "bg-[#e8efdf]" : weekend ? "bg-[#e9e9e6]" : "bg-[#faf9f6]"; return <div className={`min-h-[42px] border-l border-[#dedbd4] px-1 py-1.5 text-center ${beginsMonth ? "border-l-2 border-l-[#b9b6ad]" : ""} ${background}`} key={dateIso}><p className="text-[8px] font-black uppercase tracking-[.08em] text-[#7e8782]">{new Intl.DateTimeFormat("pl-PL", { weekday: "short" }).format(date).replace(".", "")}</p><p className={`mt-0.5 inline-flex items-baseline justify-center gap-0.5 font-display text-base font-semibold ${dateIso === today ? "mx-auto grid size-7 place-items-center rounded-full bg-[#174d3b] text-white" : ""}`}><span>{date.getDate()}</span>{beginsMonth && dateIso !== today ? <span className="font-sans text-[8px] font-black uppercase text-[#69736d]">{shortMonth(date)}</span> : null}</p></div>; })}
+                {dates.map((date) => { const dateIso = iso(date); const weekend = [0,6].includes(date.getDay()); const beginsMonth = date.getDate() === 1; const background = dateIso === today ? "bg-[#e8efdf]" : weekend ? "bg-[#e9e9e6]" : "bg-[#faf9f6]"; return <div className={`calendar-day-header min-h-[42px] border-l border-[#dedbd4] px-1 py-1.5 text-center ${beginsMonth ? "border-l-2 border-l-[#b9b6ad]" : ""} ${background}`} key={dateIso}><p className="text-[8px] font-black uppercase tracking-[.08em] text-[#7e8782]">{new Intl.DateTimeFormat("pl-PL", { weekday: "short" }).format(date).replace(".", "")}</p><p className={`mt-0.5 inline-flex items-baseline justify-center gap-0.5 font-display text-base font-semibold ${dateIso === today ? "mx-auto grid size-7 place-items-center rounded-full bg-[#174d3b] text-white" : ""}`}><span>{date.getDate()}</span>{beginsMonth && dateIso !== today ? <span className="font-sans text-[8px] font-black uppercase text-[#69736d]">{shortMonth(date)}</span> : null}</p></div>; })}
               </div>
             </div>
 
-            {data.units.map((unit) => {
+            {data.units.map((unit, unitIndex) => {
               const bookings = visibleBookings.filter((booking) => booking.unitId === unit.id);
               const blocks = data.blocks.filter((block) => block.unitId === unit.id && toDate(block.dateFrom) < end && toDate(block.dateTo) > anchor && block.status !== "Anulowana" && !overriddenCleaningBufferIds.has(block.id) && !matchingBookingForImportedBlock(block, data.bookings));
-              return <div className="grid min-h-[82px] grid-cols-[104px_auto] border-b border-[#ded7ca] last:border-0 sm:grid-cols-[138px_auto]" key={unit.id}><div className="sticky left-0 z-20 flex min-w-0 flex-col justify-center border-r border-[#ded7ca] bg-[#fffdf8] p-2 sm:p-3"><div className="flex min-w-0 items-center gap-1.5 sm:gap-2"><span className="grid size-7 shrink-0 place-items-center rounded-lg bg-[#e8eee1] text-[#41684f]"><Icon className="size-3.5" name="home"/></span><p className="min-w-0 font-display text-sm font-semibold leading-tight sm:text-[15px]">{unit.name}</p></div><p className="mt-1 text-[9px] font-bold uppercase tracking-normal text-[#818b85] sm:tracking-[.08em]">max {unit.maxPeople} osób</p></div><div className="relative grid overflow-hidden" style={{ gridTemplateColumns: `repeat(${daysCount}, ${dayWidth}px)` }}>
+              return <div className="calendar-unit-row grid min-h-[82px] grid-cols-[72px_auto] border-b border-[#ded7ca] last:border-0 sm:grid-cols-[138px_auto]" key={unit.id} style={{ "--calendar-unit-accent": calendarUnitAccents[unitIndex % calendarUnitAccents.length] } as CSSProperties}><div className="calendar-unit-label sticky left-0 z-20 flex min-w-0 flex-col justify-center border-r border-[#ded7ca] bg-[#fffdf8] py-2 pl-3 pr-1.5 sm:p-3"><span aria-hidden="true" className="calendar-unit-marker absolute bottom-2 left-0 top-2 w-1 rounded-r-full"/><div className="flex min-w-0 items-center gap-1.5 sm:gap-2"><span className="calendar-unit-icon hidden size-7 shrink-0 place-items-center rounded-lg bg-[#e8eee1] text-[#41684f] sm:grid"><Icon className="size-3.5" name="home"/></span><p className="min-w-0 font-display text-[12px] font-semibold leading-tight sm:text-[15px]"><span className="sm:hidden">{compactUnitName(unit.name)}</span><span className="hidden sm:inline">{unit.name}</span></p></div><p className="mt-1 text-[9px] font-bold uppercase tracking-normal text-[#818b85] sm:tracking-[.08em]"><span className="sm:hidden">{unit.maxPeople} os.</span><span className="hidden sm:inline">max {unit.maxPeople} osób</span></p></div><div className="relative grid overflow-hidden" style={{ gridTemplateColumns: `repeat(${daysCount}, ${dayWidth}px)` }}>
                 {dates.map((date, index) => { const dateIso = iso(date); const beginsMonth = date.getDate() === 1; const weekend = [0,6].includes(date.getDay()); const selectedStart = rangeStart?.unitId === unit.id && rangeStart.date === dateIso; const previewStart = rangeStart?.date && rangeHover ? [rangeStart.date, rangeHover].sort()[0] : undefined; const previewEnd = rangeStart?.date && rangeHover ? [rangeStart.date, rangeHover].sort()[1] : undefined; const inPreview = rangeStart?.unitId === unit.id && previewStart && previewEnd && dateIso >= previewStart && dateIso <= previewEnd; const background = selectedStart ? "bg-[#cdddbf]" : inPreview ? "bg-[#e0ead8]" : dateIso === today ? "bg-[#edf3e8]" : weekend ? "bg-[#eeeeeb]" : "bg-[#fffdf8]"; return <button aria-label={`${rangeStart?.unitId === unit.id ? "Wybierz datę wyjazdu" : "Wybierz datę przyjazdu"} ${unit.name}, ${formatPolishDate(date)}`} className={`group relative border-r border-[#e4e2dc] text-left hover:bg-[#e3eadf] focus-visible:z-20 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#174d3b] ${beginsMonth ? "border-l-2 border-l-[#b9b6ad]" : ""} ${background}`} key={dateIso} style={{ gridColumn: index + 1, gridRow: 1 }} onClick={() => selectDay(unit.id, dateIso)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); selectDay(unit.id, dateIso); } }} onPointerDown={() => startPointerRange(unit.id, dateIso)} onPointerEnter={() => enterPointerRange(unit.id, dateIso)} onPointerMove={() => enterPointerRange(unit.id, dateIso)} onPointerUp={() => finishPointerRange(unit.id, dateIso)}><span className="pointer-events-none absolute bottom-1 right-1 hidden size-4 place-items-center rounded-full bg-[#174d3b] text-white group-hover:grid"><Icon className="size-2.5" name="plus"/></span></button>; })}
                 {bookings.map((booking, index) => <BookingBar anchor={anchor} booking={booking} compact dayWidth={dayWidth} daysCount={daysCount} index={index} key={booking.id} conflicts={getBookingConflicts(data.bookings, data.blocks.filter((block) => !block.id.startsWith("ICAL-")), booking)} />)}
                 {blocks.map((block, index) => <CalendarBlockBar anchor={anchor} block={block} daysCount={daysCount} index={index} key={block.id} onCancel={(trigger) => { blockTriggerRef.current = trigger; setBlockStatus(null); setBlockToCancel(block); }} onMaterialize={(trigger, platform) => { blockTriggerRef.current = trigger; setBookingDraft({ unitId: block.unitId, checkIn: block.dateFrom, checkOut: block.dateTo, arrivalTime: data.settings.defaultCheckIn, departureTime: data.settings.defaultCheckOut, platform, importRef: { source: "ical", key: block.id } }); }} />)}

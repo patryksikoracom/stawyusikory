@@ -111,7 +111,7 @@ describe("POST /api/bookings", () => {
             ...aggregate,
             booking: { ...booking, version: 1, updatedAt: "2026-07-25T20:00:01.000Z" },
             tasks: [{ ...task, version: 1, updatedAt: "2026-07-25T20:00:01.000Z" }],
-            checklistItems: [{ ...checklistItem, version: 1, updatedAt: "2026-07-25T20:00:01.000Z" }],
+            checklistItems: [{ ...checklistItem, version: 1, updatedAt: "2026-07-25T20:00:01.123456+00:00" }],
           },
           stateVersion: 8,
           savedAt: "2026-07-25T20:00:01.000Z",
@@ -157,6 +157,20 @@ describe("POST /api/bookings", () => {
       "create_operational_booking",
       expect.objectContaining({ p_booking_id: booking.id }),
     );
+  });
+
+  it("akceptuje postgresowy offset czasu w zapisanej checkliście", async () => {
+    const response = await POST(request());
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      aggregate: {
+        checklistItems: [{
+          id: checklistItem.id,
+          updatedAt: "2026-07-25T20:00:01.123456+00:00",
+        }],
+      },
+    });
   });
 
   it("materializuje kandydaturę iCal przez zawężoną funkcję transakcyjną", async () => {

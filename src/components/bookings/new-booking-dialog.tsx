@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent, type RefObject } from "react";
+import { useRef, useState, type FormEvent, type RefObject } from "react";
 import { useAppStore } from "@/components/layout/app-store";
 import { Icon } from "@/components/ui/icons";
 import { Button, Field, inputClass } from "@/components/ui/primitives";
@@ -21,6 +21,7 @@ const discoveryChannels = ["Nie wiadomo", "Google", "Facebook", "Instagram", "Po
 export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFocusRef }: { onClose: () => void; onAdded: () => void; booking?: Booking; defaults?: BookingDefaults; returnFocusRef?: RefObject<HTMLElement | null> }) {
   const { data, addBooking, updateBooking, deleteBooking, saveGuestProfile } = useAppStore();
   const [step, setStep] = useState(1);
+  const contentRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [confirmDeletion, setConfirmDeletion] = useState(false);
@@ -132,19 +133,24 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
     if (targetStep === 2) return validateGuestStep(form.firstName, form.lastName);
   }
 
+  function moveToStep(nextStep: number) {
+    setStep(nextStep);
+    if (contentRef.current) contentRef.current.scrollTop = 0;
+  }
+
   function goNext() {
     setError("");
     const message = validationError(step);
     if (message) { setError(message); return; }
-    setStep((current) => Math.min(3, current + 1));
+    moveToStep(Math.min(3, step + 1));
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (saving) return;
     if (step < 3) { goNext(); return; }
-    if (conflicts.length) { setError(`Ten termin jest zajęty: ${conflicts[0]}.`); setStep(1); return; }
-    if (cleaningBuffers.length && (!cleaningBufferConfirmed || !cleaningPlan)) { setError("Potwierdź sposób obsługi buforu sprzątania."); setStep(1); return; }
+    if (conflicts.length) { setError(`Ten termin jest zajęty: ${conflicts[0]}.`); moveToStep(1); return; }
+    if (cleaningBuffers.length && (!cleaningBufferConfirmed || !cleaningPlan)) { setError("Potwierdź sposób obsługi buforu sprzątania."); moveToStep(1); return; }
     if (depositValue > calculatedTotal && calculatedTotal > 0) { setError("Zadatek nie może być większy niż suma rezerwacji."); return; }
     const guestLabel = guestDisplayName(form.firstName, form.lastName);
     const savedBooking: Booking = {
@@ -228,7 +234,7 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
   return (
     <Dialog
       ariaLabelledby="new-booking-title"
-      className="mobile-dialog-surface mx-auto w-full max-w-5xl overflow-hidden bg-[#fffdf8] shadow-[0_30px_90px_rgba(8,29,22,.35)] sm:my-5 sm:rounded-[24px]"
+      className="mobile-dialog-surface mx-auto w-full max-w-3xl overflow-hidden bg-[#fffdf8] shadow-[0_30px_90px_rgba(8,29,22,.35)] sm:my-5 sm:rounded-[24px]"
       onClose={onClose}
       overlayClassName="overflow-y-auto !p-0 sm:!p-5"
       returnFocusRef={returnFocusRef}
@@ -238,19 +244,19 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
             <div className="min-w-0"><p className="text-[9px] font-black uppercase tracking-[.1em] text-[#81904e] sm:text-[10px] sm:tracking-[.2em]">{booking ? "Edycja pobytu" : "Nowy pobyt"}</p><h2 className="font-display text-xl font-semibold leading-none tracking-[-.03em] sm:text-3xl" id="new-booking-title">{booking ? "Edytuj rezerwację" : "Dodaj rezerwację"}</h2></div>
             <button aria-label="Zamknij" className="grid size-9 shrink-0 place-items-center rounded-xl border border-[#ddd6c9] bg-white/80 transition hover:bg-white sm:size-10" onClick={onClose}><Icon className="size-5" name="close" /></button>
           </div>
-          <ol className="booking-stepper mt-2 grid grid-cols-3 gap-1 sm:mt-5 sm:gap-2">
+          <ol aria-label="Postęp formularza" className="booking-stepper mt-2 grid grid-cols-3 gap-1.5 sm:mt-4">
             {stepLabels.map((label, index) => {
               const number = index + 1;
               const available = number <= step + 1;
-              return <li key={label}><button aria-label={`Krok ${number}: ${label}`} type="button" disabled={!available} className={`flex min-h-8 w-full items-center justify-center gap-1 rounded-lg px-1 py-1 text-left text-[10px] font-black transition sm:min-h-11 sm:justify-start sm:gap-2 sm:rounded-xl sm:px-3 sm:py-2 sm:text-xs ${step === number ? "text-[#174d3b] sm:bg-[#174d3b] sm:text-white sm:shadow-lg" : step > number ? "text-[#285642] sm:bg-[#e2ecdc]" : available ? "text-[#5d6d65] sm:bg-white/80 sm:hover:bg-white" : "cursor-not-allowed text-[#9aa19d] sm:bg-white/45"}`} onClick={() => { setError(""); if (number <= step) setStep(number); else goNext(); }}><span className={`grid size-6 shrink-0 place-items-center rounded-full text-[10px] ${step === number ? "bg-[#174d3b] text-white sm:bg-white sm:text-[#174d3b]" : "bg-[#f2efe7]"}`}>{step > number ? "✓" : number}</span><span className="hidden sm:block">{label}</span></button></li>;
+              return <li key={label}><button aria-current={step === number ? "step" : undefined} aria-label={`Krok ${number}: ${label}`} type="button" disabled={!available} className="block w-full rounded-full py-1" onClick={() => { setError(""); if (number <= step) moveToStep(number); else goNext(); }}><span aria-hidden="true" className={`block h-1 rounded-full transition ${step === number ? "bg-[#174d3b]" : step > number ? "bg-[#8fae82]" : "bg-[#ddd9cf]"}`} /><span className="sr-only">{number}. {label}</span></button></li>;
             })}
           </ol>
           {error ? <p aria-live="polite" className="mt-3 rounded-xl border border-[#efb8a8] bg-[#f9dfd7] px-4 py-3 text-sm font-bold text-[#963c27]">{error}</p> : null}
         </div>
 
         <form className="mobile-dialog-form" onSubmit={submit}>
-          <div className="mobile-dialog-scroll grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_300px]">
-            <div className="min-w-0 w-full max-w-full p-3 sm:p-7">
+          <div className="mobile-dialog-scroll" ref={contentRef}>
+            <div className="mx-auto min-w-0 w-full max-w-3xl p-3 sm:p-7">
               {step === 1 ? <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5">
                 <DialogSection title="Domek i termin" />
                 <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2">
@@ -325,7 +331,6 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
                   {isOta ? <Field label="Numer rezerwacji OTA" hint="Numer z panelu Booking, Airbnb lub innej platformy."><input className={inputClass} placeholder="np. BKG-12345" value={form.externalNo} onChange={(e) => setForm({ ...form, externalNo: e.target.value })} /></Field> : null}
                   {isOta ? <Field label="Prowizja OTA"><MoneyInput suffix={form.currency} value={form.commission} onChange={(value) => setForm({ ...form, commission: value })} /></Field> : null}
                   <div className="sm:col-span-2"><Field label="Informacje dodatkowe"><textarea className={`${inputClass} min-h-24 resize-y`} placeholder="Życzenia i ustalenia dotyczące pobytu…" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field></div>
-                  <p className="sm:col-span-2 rounded-xl bg-[#f4f1e9] p-3 text-xs leading-5 text-[#68756e]">Zwierzęta: zasada i dopłata nie są jeszcze zatwierdzone. Uzgodnij wyjątek ręcznie i zapisz go w informacjach dodatkowych — system nie dolicza opłaty automatycznie.</p>
                 </div>
               </div> : null}
 
@@ -348,21 +353,6 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
               </div> : null}
             </div>
 
-            <aside className="border-t border-[#e3dccf] bg-[#f1eee5] p-5 sm:p-6 lg:border-l lg:border-t-0">
-              <p className="text-[10px] font-black uppercase tracking-[.16em] text-[#7d8b4d]">Podsumowanie</p>
-              <h3 className="mt-1 font-display text-2xl font-semibold">{selectedUnit?.name ?? "Wybierz domek"}</h3>
-              <div className="mt-5 grid gap-3 text-sm">
-                <SummaryLine label="Termin" value={form.checkIn && form.checkOut ? `${formatPolishDate(form.checkIn)} – ${formatPolishDate(form.checkOut)}` : "—"} />
-                <SummaryLine label="Pobyt" value={nights > 0 ? `${nights} ${nights === 1 ? "noc" : "nocy"}` : "—"} />
-                <SummaryLine label="Goście" value={`${guestCount} os. (${form.adults || 0}+${form.children || 0})`} />
-                <SummaryLine label="Klient" value={[form.firstName, form.lastName].filter(Boolean).join(" ") || "Do uzupełnienia"} />
-                <SummaryLine label="Kanał rezerwacji" value={form.platform} />
-                <SummaryLine label="Odkrycie" value={form.discoveryChannel} />
-              </div>
-              <div className="my-5 h-px bg-[#d7d0c3]" />
-              <div className="flex items-end justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[.14em] text-[#7a857f]">Suma pobytu</p><p className="mt-1 font-display text-3xl font-semibold">{calculatedTotal ? calculatedTotal.toLocaleString("pl-PL") : "0"} <span className="text-base">{moneySuffix}</span></p></div><span className={`rounded-full px-2.5 py-1 text-[10px] font-black ${conflicts.length ? "bg-[#f6d8cf] text-[#963c27]" : "bg-[#dbead8] text-[#2d6242]"}`}>{conflicts.length ? "Konflikt" : "Termin OK"}</span></div>
-              <p className="mt-4 text-xs leading-5 text-[#68756e]">Po zapisaniu powstaną wyłącznie zadania operacyjne dotyczące płatności, przygotowania domku, sprzątania i opinii. Content pozostaje ręczną okazją.</p>
-            </aside>
           </div>
 
           <div className="mobile-dialog-footer flex gap-2 border-t border-[#e3dccf] bg-white px-3 py-2 sm:static sm:items-center sm:justify-between sm:px-7 sm:py-4">
@@ -371,7 +361,7 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
               <Button className="mobile-dialog-cancel w-full" type="button" variant="ghost" onClick={onClose}>Anuluj</Button>
             </div>
             <div className="grid grid-cols-2 gap-2 sm:flex">
-              {step > 1 ? <Button className="w-full" type="button" variant="secondary" onClick={() => { setError(""); setStep((current) => current - 1); }}><Icon className="size-4 rotate-180" name="arrow" />Wstecz</Button> : <span aria-hidden="true" />}
+              {step > 1 ? <Button className="w-full" type="button" variant="secondary" onClick={() => { setError(""); moveToStep(step - 1); }}><Icon className="size-4 rotate-180" name="arrow" />Wstecz</Button> : <span aria-hidden="true" />}
               {step < 3 ? <Button className="w-full" type="button" onClick={goNext}>Dalej <Icon className="size-4" name="arrow" /></Button> : <Button aria-label={saving ? "Zapisywanie…" : booking ? "Zapisz zmiany" : "Dodaj rezerwację"} className="w-full" disabled={saving} type="submit"><Icon className="size-4" name={saving ? "clock" : "check"} /><span className="sm:hidden">{saving ? "Zapisuję…" : "Zapisz"}</span><span className="hidden sm:inline">{saving ? "Zapisywanie…" : booking ? "Zapisz zmiany" : "Dodaj rezerwację"}</span></Button>}
             </div>
           </div>
@@ -484,10 +474,6 @@ function StayDateTimeline({
 
 function MoneyInput({ suffix, value, onChange }: { suffix: string; value: string; onChange: (value: string) => void }) {
   return <div className="relative"><input className={`${inputClass} pr-14`} inputMode="decimal" min="0" placeholder="0" type="number" value={value} onChange={(event) => onChange(event.target.value)} /><span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-black text-[#78827c]">{suffix}</span></div>;
-}
-
-function SummaryLine({ label, value }: { label: string; value: string }) {
-  return <div className="flex items-start justify-between gap-3"><span className="text-[#748078]">{label}</span><span className="text-right font-black text-[#29453a]">{value}</span></div>;
 }
 
 function localDateValue(date: Date) {
