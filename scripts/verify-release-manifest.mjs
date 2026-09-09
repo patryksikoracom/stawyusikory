@@ -6,15 +6,19 @@ const manifest = JSON.parse(readFileSync(join(root, "release-manifest.json"), "u
 const migrations = readdirSync(join(root, "supabase", "migrations"))
   .filter((name) => name.endsWith(".sql"))
   .sort();
-const latestMigration = migrations.at(-1);
 
 if (!manifest.releaseId || !manifest.schemaVersion || !manifest.requiredMigration) {
   throw new Error("release-manifest.json nie zawiera releaseId, schemaVersion lub requiredMigration.");
 }
-if (latestMigration !== manifest.requiredMigration) {
+// Additive policies can be deployed without changing the data schema marker.
+// Every migration after that marker must be explicitly reviewed as compatible.
+const compatibleMigrations = manifest.compatibleMigrations ?? [];
+const laterMigrations = migrations.filter((name) => name > manifest.requiredMigration);
+if (!migrations.includes(manifest.requiredMigration)
+  || JSON.stringify(laterMigrations) !== JSON.stringify(compatibleMigrations)) {
   throw new Error(
-    `Manifest wymaga ${manifest.requiredMigration}, ale najnowsza migracja to ${latestMigration ?? "brak"}. `
-      + "Zaktualizuj migrację znacznika i release-manifest.json przed buildem.",
+    `Migracje nie odpowiadają znacznikowi ${manifest.requiredMigration} i liście compatibleMigrations. `
+      + "Zaktualizuj znacznik schematu lub jawnie potwierdź zgodność dodatkowych migracji przed buildem.",
   );
 }
 

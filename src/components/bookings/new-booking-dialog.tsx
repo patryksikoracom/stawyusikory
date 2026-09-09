@@ -11,7 +11,7 @@ import { guestDisplayName, validateGuestStep } from "@/lib/workflow/booking-form
 import { quoteStay } from "@/lib/workflow/pricing";
 import { formatPolishDate } from "@/lib/date";
 import { importedReservationBlockMatchesBooking, isOverridableCleaningBuffer } from "@/lib/integrations/ical-block-classification";
-import { guestPersonId, normalizeGuestEmail, normalizeGuestPhone } from "@/lib/crm/guest-identity";
+import { bookingLanguage } from "@/lib/crm/guest-identity";
 
 export type BookingDefaults = Partial<Pick<Booking, "unitId" | "checkIn" | "checkOut" | "arrivalTime" | "departureTime" | "platform" | "importRef">>;
 const bookingChannels: Channel[] = ["Telefon", "E-mail", "Bezpośrednio", "Strona www", "Booking", "Airbnb", "Slowhop", "Aloha Camp", "Agoda", "Expedia", "VRBO", "Inne"];
@@ -19,11 +19,12 @@ const otaChannels: Channel[] = ["Booking", "Airbnb", "Slowhop", "Aloha Camp", "A
 const discoveryChannels = ["Nie wiadomo", "Google", "Facebook", "Instagram", "Polecenie", "Booking", "Airbnb", "Aloha Camp", "Strona www", "Inne"];
 
 export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFocusRef }: { onClose: () => void; onAdded: () => void; booking?: Booking; defaults?: BookingDefaults; returnFocusRef?: RefObject<HTMLElement | null> }) {
-  const { data, addBooking, updateBooking, deleteBooking, saveGuestProfile } = useAppStore();
+  const { data, addBooking, updateBooking, deleteBooking } = useAppStore();
   const [step, setStep] = useState(1);
   const contentRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const saveInFlight = useRef(false);
   const [confirmDeletion, setConfirmDeletion] = useState(false);
   const [showTimeExceptions, setShowTimeExceptions] = useState(
     Boolean(booking && (
@@ -37,7 +38,7 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
   const [confirmedCleaningBufferKey, setConfirmedCleaningBufferKey] = useState("");
   const [confirmedImportedBlockKey, setConfirmedImportedBlockKey] = useState("");
   const [cleaningPlan, setCleaningPlan] = useState<"self-cleaning" | "arranged-cleaning" | "">("");
-  const [draftId] = useState(() => `SUS-${Date.now().toString().slice(-6)}`);
+  const [draftId] = useState(() => `SUS-${crypto.randomUUID()}`);
   const [defaultDates] = useState(() => {
     const start = new Date();
     const end = new Date(start);
@@ -47,15 +48,13 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
   const { today, tomorrow } = defaultDates;
   const [form, setForm] = useState(() => {
     const contact = booking ? data.consents.find((item) => item.bookingId === booking.id) : undefined;
-    const profile = booking ? data.guests.find((item) => item.bookingId === booking.id) : undefined;
-    const person = data.people.find((item) => item.id === profile?.personId);
     const name = booking?.guestLabel.trim().split(/\s+/) ?? [];
     return {
-      firstName: name.length > 1 ? name.shift() ?? "" : "", lastName: name.join(" ") || booking?.guestLabel || "", phone: contact?.phone ?? "", email: contact?.email ?? "", preferredLanguage: person?.preferredLanguage ?? "pl" as NonNullable<GuestPerson["preferredLanguage"]>,
+      firstName: name.length > 1 ? name.shift() ?? "" : "", lastName: name.join(" ") || booking?.guestLabel || "", phone: contact?.phone ?? "", email: contact?.email ?? "", preferredLanguage: (booking ? bookingLanguage(data, booking.id) : undefined) ?? "pl" as NonNullable<GuestPerson["preferredLanguage"]>,
       unitId: booking?.unitId ?? defaults?.unitId ?? data.units[0]?.id ?? "", checkIn: booking?.checkIn ?? defaults?.checkIn ?? today, checkOut: booking?.checkOut ?? defaults?.checkOut ?? tomorrow,
       arrivalTime: booking?.arrivalTime ?? defaults?.arrivalTime ?? data.settings.defaultCheckIn, departureTime: booking?.departureTime ?? defaults?.departureTime ?? data.settings.defaultCheckOut, adults: String(booking?.adults ?? 2), children: String(booking?.children ?? 0),
-      platform: booking?.platform ?? defaults?.platform ?? "Telefon", discoveryChannel: discoveryChannels.includes(booking?.source ?? "") ? booking!.source : "Nie wiadomo", externalNo: booking?.platformReservationNo ?? "", commission: booking?.commission ? String(booking.commission) : "", pricePerNight: booking?.pricePerNight ? String(booking.pricePerNight) : "", totalPrice: booking?.grossPrice ? String(booking.grossPrice) : "",
-      pricingMode: booking?.pricingMode ?? (booking?.grossPrice ? "manual" as const : "rate-card" as const),
+      platform: booking?.platform ?? defaults?.platform ?? "Telefon", discoveryChannel: discoveryChannels.includes(booking?.source ?? "") ? booking!.source : "Nie wiadomo", externalNo: booking?.platformReservationNo ?? "", commission: booking?.commission ? String(booking.commission) : "", pricePerNight: booking?.pricePerNight != null ? String(booking.pricePerNight) : "", totalPrice: booking?.grossPrice != null ? String(booking.grossPrice) : "",
+      pricingMode: booking?.pricingMode ?? (booking?.grossPrice != null ? "manual" as const : "rate-card" as const),
       paymentStatus: booking?.paymentStatus === "Opłacone" ? "Wpłacona całość" : booking?.paymentStatus === "Zaliczka" ? "Wpłacony zadatek" : booking?.paymentStatus === "Częściowo" ? "Częściowo opłacone" : "Oczekiwanie na zadatek", depositAmount: booking?.depositAmount ? String(booking.depositAmount) : "", depositDueDate: booking?.depositDueDate ?? "",
       paymentMethod: booking?.paymentMethod ?? "Brak", currency: booking?.currency ?? "PLN", notes: booking?.specialRequests ?? "",
     };
@@ -147,10 +146,12 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (saving) return;
+    if (saveInFlight.current) return;
     if (step < 3) { goNext(); return; }
-    if (conflicts.length) { setError(`Ten termin jest zajęty: ${conflicts[0]}.`); moveToStep(1); return; }
-    if (cleaningBuffers.length && (!cleaningBufferConfirmed || !cleaningPlan)) { setError("Potwierdź sposób obsługi buforu sprzątania."); moveToStep(1); return; }
+    for (const requiredStep of [1, 2]) {
+      const message = validationError(requiredStep);
+      if (message) { setError(message); moveToStep(requiredStep); return; }
+    }
     if (depositValue > calculatedTotal && calculatedTotal > 0) { setError("Zadatek nie może być większy niż suma rezerwacji."); return; }
     const guestLabel = guestDisplayName(form.firstName, form.lastName);
     const savedBooking: Booking = {
@@ -168,8 +169,8 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
       adults: Number(form.adults),
       children: Number(form.children),
       guestLabel,
-      grossPrice: calculatedTotal || undefined,
-      pricePerNight: form.pricingMode === "rate-card" ? rateQuote.averagePerNight || undefined : Number(form.pricePerNight) || (form.totalPrice && nights ? calculatedTotal / nights : undefined),
+      grossPrice: form.pricingMode === "manual" && (form.totalPrice !== "" || form.pricePerNight !== "") ? calculatedTotal : calculatedTotal || undefined,
+      pricePerNight: nights > 0 ? calculatedTotal / nights : undefined,
       pricingMode: form.pricingMode,
       commission: isOta ? Number(form.commission) || undefined : undefined,
       depositAmount: depositValue || undefined,
@@ -196,37 +197,25 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
         photoSiteAdsConsent: "Do dopytania",
       }),
       bookingId: savedBooking.id,
+      preferredLanguage: form.preferredLanguage,
       phone: form.phone.trim() || undefined,
       email: form.email.trim() || undefined,
     };
+    saveInFlight.current = true;
     setSaving(true);
     setError("");
-    const result = booking
-      ? await updateBooking(savedBooking, contact)
-      : await addBooking(savedBooking, contact);
-    setSaving(false);
-    if (!result.ok) {
-      setError(result.message);
-      return;
+    try {
+      const result = booking
+        ? await updateBooking(savedBooking, contact)
+        : await addBooking(savedBooking, contact);
+      if (!result.ok) { setError(result.message); return; }
+      onAdded();
+    } catch {
+      setError("Nie udało się potwierdzić zapisu. Sprawdź połączenie i spróbuj ponownie.");
+    } finally {
+      saveInFlight.current = false;
+      setSaving(false);
     }
-    const currentProfile = data.guests.find((item) => item.bookingId === savedBooking.id);
-    const currentPerson = data.people.find((item) => item.id === currentProfile?.personId);
-    const personId = currentPerson?.id ?? currentProfile?.personId ?? guestPersonId(savedBooking.id);
-    await saveGuestProfile(
-      { ...currentProfile, bookingId: savedBooking.id, personId },
-      contact,
-      {
-        ...currentPerson,
-        id: personId,
-        displayName: savedBooking.guestLabel,
-        phone: normalizeGuestPhone(contact.phone),
-        email: normalizeGuestEmail(contact.email),
-        preferredLanguage: form.preferredLanguage,
-        createdAt: currentPerson?.createdAt ?? new Date().toISOString(),
-        createdBy: currentPerson?.createdBy ?? "Stawy OS",
-      },
-    );
-    onAdded();
   }
 
   const stepLabels = ["Termin", "Gość", "Finanse"];
@@ -236,25 +225,27 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
       ariaLabelledby="new-booking-title"
       className="mobile-dialog-surface mx-auto w-full max-w-3xl overflow-hidden bg-[#fffdf8] shadow-[0_30px_90px_rgba(8,29,22,.35)] sm:my-5 sm:rounded-[24px]"
       onClose={onClose}
+      closeDisabled={saving}
       overlayClassName="overflow-y-auto !p-0 sm:!p-5"
       returnFocusRef={returnFocusRef}
     >
         <div className="mobile-dialog-header border-b border-[#e3dccf] bg-[#fffdf8] bg-[radial-gradient(circle_at_85%_-30%,#dce7bd_0,transparent_38%)] px-3 pb-2 pt-[max(.5rem,env(safe-area-inset-top))] sm:static sm:px-7 sm:pb-5 sm:pt-6">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0"><p className="text-[9px] font-black uppercase tracking-[.1em] text-[#81904e] sm:text-[10px] sm:tracking-[.2em]">{booking ? "Edycja pobytu" : "Nowy pobyt"}</p><h2 className="font-display text-xl font-semibold leading-none tracking-[-.03em] sm:text-3xl" id="new-booking-title">{booking ? "Edytuj rezerwację" : "Dodaj rezerwację"}</h2></div>
-            <button aria-label="Zamknij" className="grid size-9 shrink-0 place-items-center rounded-xl border border-[#ddd6c9] bg-white/80 transition hover:bg-white sm:size-10" onClick={onClose}><Icon className="size-5" name="close" /></button>
+            <button aria-label="Zamknij" disabled={saving} className="grid size-9 shrink-0 place-items-center rounded-xl border border-[#ddd6c9] bg-white/80 transition hover:bg-white sm:size-10" onClick={onClose}><Icon className="size-5" name="close" /></button>
           </div>
           <ol aria-label="Postęp formularza" className="booking-stepper mt-2 grid grid-cols-3 gap-1.5 sm:mt-4">
             {stepLabels.map((label, index) => {
               const number = index + 1;
               const available = number <= step + 1;
-              return <li key={label}><button aria-current={step === number ? "step" : undefined} aria-label={`Krok ${number}: ${label}`} type="button" disabled={!available} className="block w-full rounded-full py-1" onClick={() => { setError(""); if (number <= step) moveToStep(number); else goNext(); }}><span aria-hidden="true" className={`block h-1 rounded-full transition ${step === number ? "bg-[#174d3b]" : step > number ? "bg-[#8fae82]" : "bg-[#ddd9cf]"}`} /><span className="sr-only">{number}. {label}</span></button></li>;
+              return <li key={label}><button aria-current={step === number ? "step" : undefined} aria-label={`Krok ${number}: ${label}`} type="button" disabled={saving || !available} className="block w-full rounded-full py-1" onClick={() => { setError(""); if (number <= step) moveToStep(number); else goNext(); }}><span aria-hidden="true" className={`block h-1 rounded-full transition ${step === number ? "bg-[#174d3b]" : step > number ? "bg-[#8fae82]" : "bg-[#ddd9cf]"}`} /><span className="sr-only">{number}. {label}</span></button></li>;
             })}
           </ol>
           {error ? <p aria-live="polite" className="mt-3 rounded-xl border border-[#efb8a8] bg-[#f9dfd7] px-4 py-3 text-sm font-bold text-[#963c27]">{error}</p> : null}
         </div>
 
         <form className="mobile-dialog-form" onSubmit={submit}>
+          <fieldset disabled={saving} className="contents">
           <div className="mobile-dialog-scroll" ref={contentRef}>
             <div className="mx-auto min-w-0 w-full max-w-3xl p-3 sm:p-7">
               {step === 1 ? <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5">
@@ -270,7 +261,7 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
                   </fieldset>
                   <div className="booking-status-strip grid min-w-0 max-w-full grid-cols-2 gap-2 sm:contents">
                     <div className={`rounded-xl border px-3 py-2.5 sm:px-4 sm:py-3 ${conflicts.length ? "border-[#efb7a8] bg-[#fbe7e1] text-[#8f3b27]" : cleaningBuffers.length ? "border-[#e4c46f] bg-[#fbf0d3] text-[#745815]" : "border-[#bdd7c3] bg-[#e9f2e7] text-[#275e3f]"}`}><p className="text-[10px] font-black uppercase tracking-[.1em] sm:tracking-[.14em]">Dostępność</p><p className="mt-1 text-sm font-black">{conflicts.length ? "Termin zajęty" : cleaningBuffers.length ? <><span className="sm:hidden">Dostępny warunkowo</span><span className="hidden sm:inline">Termin dostępny warunkowo · bufor sprzątania</span></> : nights > 0 ? sameDayTurnovers.length ? "Wolny · turnover" : "Termin wolny" : "Sprawdź daty"}</p><p className="mt-0.5 hidden text-xs sm:block">{conflicts[0] ?? (cleaningBuffers.length ? "Możesz zapisać pobyt po wskazaniu, jak zapewnicie sprzątanie." : turnoverSummary[0]) ?? (nights > 0 ? `${nights} ${nights === 1 ? "noc" : "nocy"} · sprawdzono rezerwacje i blokady` : "Wyjazd musi być po przyjeździe")}</p></div>
-                    <div className="rounded-xl border border-[#c8d8bd] bg-[#f1f5e9] px-3 py-2.5 sm:px-4 sm:py-3"><p className="text-[10px] font-black uppercase tracking-[.1em] text-[#66794f] sm:tracking-[.14em]">Wycena</p><p className="mt-1 font-display text-xl font-semibold text-[#214f3d] sm:text-2xl">{calculatedTotal ? calculatedTotal.toLocaleString("pl-PL") : "—"} {calculatedTotal ? moneySuffix : ""}</p><p className="mt-0.5 text-xs font-bold text-[#647267]">{nights > 0 ? `${nights} ${nights === 1 ? "noc" : "nocy"}${suggestedNightPrice ? ` · ${Number(suggestedNightPrice).toLocaleString("pl-PL")} zł/noc` : ""}` : "Wybierz daty"}</p></div>
+                    <div className="rounded-xl border border-[#c8d8bd] bg-[#f1f5e9] px-3 py-2.5 sm:px-4 sm:py-3"><p className="text-[10px] font-black uppercase tracking-[.1em] text-[#66794f] sm:tracking-[.14em]">Wycena</p><p className="mt-1 font-display text-xl font-semibold text-[#214f3d] sm:text-2xl">{calculatedTotal ? calculatedTotal.toLocaleString("pl-PL") : "—"} {calculatedTotal ? moneySuffix : ""}</p><p className="mt-0.5 text-xs font-bold text-[#647267]">{nights > 0 ? `${nights} ${nights === 1 ? "noc" : "nocy"}${calculatedTotal ? ` · ${(calculatedTotal / nights).toLocaleString("pl-PL", { maximumFractionDigits: 2 })} ${moneySuffix}/noc` : ""}` : "Wybierz daty"}</p></div>
                   </div>
                   {cleaningBuffers.length && !conflicts.length ? <fieldset className="sm:col-span-2 rounded-2xl border border-[#dfc16e] bg-[#fff8e8] p-4"><legend className="px-1 text-sm font-black text-[#654d16]">Jak obsłużycie sprzątanie?</legend><p className="mt-1 text-xs leading-5 text-[#756238]">To jest wyłącznie bufor techniczny. Rezerwacja gościa nadal zawsze blokuje termin.</p><div className="mt-3 grid gap-2 sm:grid-cols-2"><label className="flex min-h-12 items-center gap-3 rounded-xl border border-[#dfd1aa] bg-white px-3 text-sm font-bold"><input checked={cleaningPlan === "self-cleaning"} name="cleaning-plan" onChange={() => setCleaningPlan("self-cleaning")} type="radio"/>Posprzątamy samodzielnie</label><label className="flex min-h-12 items-center gap-3 rounded-xl border border-[#dfd1aa] bg-white px-3 text-sm font-bold"><input checked={cleaningPlan === "arranged-cleaning"} name="cleaning-plan" onChange={() => setCleaningPlan("arranged-cleaning")} type="radio"/>Umówię osobę sprzątającą</label></div><label className="mt-3 flex items-start gap-3 text-sm font-bold text-[#5f4b1d]"><input checked={cleaningBufferConfirmed} className="mt-1" onChange={(event) => setConfirmedCleaningBufferKey(event.target.checked ? cleaningBufferKey : "")} type="checkbox"/>Potwierdzam, że sprawdziłem termin i świadomie zastępuję bufor własnym planem sprzątania.</label></fieldset> : null}
                   {importedBlockToReplace ? <fieldset className="sm:col-span-2 rounded-xl border border-[#dfaa9c] bg-[#fff0eb] p-3"><legend className="px-1 text-sm font-black text-[#7f3424]">Blokada z {form.platform}</legend><p className="mt-1 text-xs leading-5 text-[#704d44]">{importedBlockToReplace.reason}. Zapis rezerwacji usunie dokładnie tę blokadę i zastąpi ją pobytem.</p><label className="mt-2 flex items-start gap-2 text-sm font-bold text-[#6f3022]"><input checked={importedBlockConfirmed} className="mt-1" onChange={(event) => setConfirmedImportedBlockKey(event.target.checked ? importedBlockToReplace.id : "")} type="checkbox"/>Sprawdziłem domek i daty. Zastąp tę blokadę rezerwacją.</label></fieldset> : null}
@@ -337,8 +328,8 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
               {step === 3 ? <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5">
                 <DialogSection title="Cena i płatność" />
                 <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2">
-                  <Field label="Cena za dobę"><MoneyInput suffix={moneySuffix} value={form.pricingMode === "rate-card" ? suggestedNightPrice : form.pricePerNight} onChange={(value) => setForm({ ...form, pricePerNight: value, pricingMode: "manual" })} /></Field>
-                  <Field label="Cena za pobyt"><MoneyInput suffix={moneySuffix} value={form.pricingMode === "rate-card" ? String(rateQuote.total || "") : form.totalPrice} onChange={(value) => setForm({ ...form, totalPrice: value, pricingMode: "manual" })} /></Field>
+                  <Field label="Cena za dobę"><MoneyInput suffix={moneySuffix} value={form.pricingMode === "rate-card" ? suggestedNightPrice : form.pricePerNight || (form.totalPrice && nights ? String(Math.round(calculatedTotal / nights * 100) / 100) : "")} onChange={(value) => setForm({ ...form, pricePerNight: value, totalPrice: "", pricingMode: "manual" })} /></Field>
+                  <Field label="Cena za pobyt"><MoneyInput suffix={moneySuffix} value={form.pricingMode === "rate-card" ? String(rateQuote.total || "") : form.totalPrice || (form.pricePerNight ? String(calculatedTotal) : "")} onChange={(value) => setForm({ ...form, totalPrice: value, pricePerNight: "", pricingMode: "manual" })} /></Field>
                   <Field label="Status płatności"><select className={inputClass} value={form.paymentStatus} onChange={(e) => setForm({ ...form, paymentStatus: e.target.value })}>{["Oczekiwanie na zadatek", "Brak wpłaty", "Wpłacony zadatek", "Częściowo opłacone", "Wpłacona całość", "Anulowane"].map((item) => <option key={item}>{item}</option>)}</select></Field>
                   <Field label="Rodzaj płatności"><select className={inputClass} value={form.paymentMethod} onChange={(e) => setForm({ ...form, paymentMethod: e.target.value as NonNullable<Booking["paymentMethod"]> })}>{["Brak", "Przelew", "Gotówka", "Karta", "Online"].map((item) => <option key={item}>{item}</option>)}</select></Field>
                   <div className="rounded-xl border border-[#d8dfcc] bg-[#f7f8f2] p-3 sm:col-span-2">
@@ -362,9 +353,10 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
             </div>
             <div className="grid grid-cols-2 gap-2 sm:flex">
               {step > 1 ? <Button className="w-full" type="button" variant="secondary" onClick={() => { setError(""); moveToStep(step - 1); }}><Icon className="size-4 rotate-180" name="arrow" />Wstecz</Button> : <span aria-hidden="true" />}
-              {step < 3 ? <Button className="w-full" type="button" onClick={goNext}>Dalej <Icon className="size-4" name="arrow" /></Button> : <Button aria-label={saving ? "Zapisywanie…" : booking ? "Zapisz zmiany" : "Dodaj rezerwację"} className="w-full" disabled={saving} type="submit"><Icon className="size-4" name={saving ? "clock" : "check"} /><span className="sm:hidden">{saving ? "Zapisuję…" : "Zapisz"}</span><span className="hidden sm:inline">{saving ? "Zapisywanie…" : booking ? "Zapisz zmiany" : "Dodaj rezerwację"}</span></Button>}
+              {step < 3 ? <Button key="next" className="w-full" type="button" onClick={goNext}>Dalej <Icon className="size-4" name="arrow" /></Button> : <Button key="save" aria-label={saving ? "Zapisywanie…" : booking ? "Zapisz zmiany" : "Dodaj rezerwację"} className="w-full" disabled={saving} type="submit"><Icon className="size-4" name={saving ? "clock" : "check"} /><span className="sm:hidden">{saving ? "Zapisuję…" : "Zapisz"}</span><span className="hidden sm:inline">{saving ? "Zapisywanie…" : booking ? "Zapisz zmiany" : "Dodaj rezerwację"}</span></Button>}
             </div>
           </div>
+          </fieldset>
         </form>
       {confirmDeletion && booking ? (
         <Dialog

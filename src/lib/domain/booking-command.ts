@@ -96,6 +96,7 @@ export const operationalBookingSchema = z.object({
 });
 
 export const operationalContactConsentSchema = z.object({
+  preferredLanguage: z.enum(["pl", "de", "en"]).optional(),
   bookingId: z.string().trim().min(1).max(128),
   phone: optionalText(100),
   email: z.email().max(320).optional(),

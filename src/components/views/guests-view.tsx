@@ -80,7 +80,7 @@ function GuestDialog({bookingId,data,onClose,onSave,onMerge,onConsent}:{bookingI
   };
   const [profile,setProfile]=useState<GuestProfile>(current??{bookingId,personId:currentPerson.id});
   const [consent,setConsent]=useState<ContactConsent>(currentConsent??{bookingId,marketingConsent:"Do dopytania",photoFbConsent:"Do dopytania",photoSiteAdsConsent:"Do dopytania"});
-  const [preferredLanguage,setPreferredLanguage]=useState<GuestPerson["preferredLanguage"]>(currentPerson.preferredLanguage);
+  const [preferredLanguage,setPreferredLanguage]=useState<GuestPerson["preferredLanguage"]>(currentConsent?.preferredLanguage ?? currentPerson.preferredLanguage);
   const [consentPurpose,setConsentPurpose]=useState<ConsentPurpose>("marketing_email");
   const [consentDecision,setConsentDecision]=useState<ConsentRecord["decision"]>("granted");
   const [saving,setSaving]=useState(false);
@@ -89,7 +89,7 @@ function GuestDialog({bookingId,data,onClose,onSave,onMerge,onConsent}:{bookingI
   const stays=staysForPerson(data.guests,currentPerson.id).length;
   const person:GuestPerson={...currentPerson,displayName:booking.guestLabel,phone:normalizeGuestPhone(consent.phone),email:normalizeGuestEmail(consent.email),preferredLanguage};
   return <Dialog ariaLabel={`Profil gościa ${booking.guestLabel}`} className="my-6 w-full max-w-2xl rounded-[22px] bg-[#fffdf8] shadow-2xl" closeDisabled={saving} onClose={onClose} overlayClassName="grid place-items-center overflow-y-auto">
-    <form className="p-6" onSubmit={async(event)=>{event.preventDefault();setSaving(true);setSaveError("");const result=await onSave({...profile,personId:currentPerson.id},consent,person);setSaving(false);if(result.ok){onClose();return;}setSaveError(`${result.message}${result.requestId?` Identyfikator: ${result.requestId}.`:""}`);}}>
+    <form className="p-6" onSubmit={async(event)=>{event.preventDefault();setSaving(true);setSaveError("");const result=await onSave({...profile,personId:currentPerson.id},{...consent,preferredLanguage},person);setSaving(false);if(result.ok){onClose();return;}setSaveError(`${result.message}${result.requestId?` Identyfikator: ${result.requestId}.`:""}`);}}>
       <div className="flex items-start justify-between"><div><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#7d8b4d]">Osoba · {stays} {stays===1?"pobyt":"pobyty"}</p><h2 className="font-display text-2xl font-semibold">{booking.guestLabel}</h2></div><button aria-label="Zamknij" type="button" onClick={onClose}><Icon className="size-5" name="close"/></button></div>
       {candidates.length?<div className="mt-5 rounded-2xl border border-[#dfc986] bg-[#fbf2d8] p-4"><p className="text-sm font-black">Możliwa ta sama osoba</p><p className="mt-1 text-xs leading-5 text-[#75613a]">Dopasowanie telefonu lub e-maila jest tylko sugestią. Imię nigdy nie scala profili automatycznie.</p><div className="mt-3 grid gap-2">{candidates.map(({person:candidate,reasons})=><div className="flex items-center justify-between gap-3 rounded-xl bg-white p-3" key={candidate.id}><div><p className="text-sm font-black">{candidate.displayName}</p><p className="text-[10px] uppercase tracking-[.1em] text-[#716f63]">zgodny: {reasons.join(" i ")}</p></div><Button type="button" variant="secondary" onClick={()=>{onMerge(currentPerson.id,candidate.id);onClose();}}>Połącz po weryfikacji</Button></div>)}</div></div>:null}
       <div className="mt-5 grid gap-4 sm:grid-cols-2">

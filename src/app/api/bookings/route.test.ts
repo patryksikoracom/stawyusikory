@@ -41,6 +41,7 @@ const contact = {
   bookingId: booking.id,
   phone: "+48 600 000 000",
   email: "anna@example.com",
+  preferredLanguage: "de",
   marketingConsent: "Do dopytania",
   photoFbConsent: "Nie",
   photoSiteAdsConsent: "Nie",

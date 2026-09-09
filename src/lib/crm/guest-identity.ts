@@ -102,3 +102,11 @@ export function mergeGuestPeople(
 export function staysForPerson(guests: GuestProfile[], personId: string) {
   return guests.filter((profile) => profile.personId === personId).map((profile) => profile.bookingId);
 }
+
+// The language for this stay is saved atomically with its contact. Older records
+// can still use the preference from a linked guest profile.
+export function bookingLanguage(data: Pick<AppData, "consents" | "guests" | "people">, bookingId: string) {
+  const contact = data.consents.find((item) => item.bookingId === bookingId);
+  const profile = data.guests.find((item) => item.bookingId === bookingId);
+  return contact?.preferredLanguage ?? data.people.find((item) => item.id === profile?.personId)?.preferredLanguage;
+}

@@ -51,6 +51,49 @@ describe("NewBookingDialog — PR-10c", () => {
     fireEvent.click(screen.getByRole("button", { name: /Dalej/ }));
   }
 
+  it("Dalej nigdy nie zapisuje, a język i kontakt trafiają do jednej komendy", async () => {
+    renderDialog();
+    fireEvent.click(screen.getByRole("button", { name: /Dalej/ }));
+    fireEvent.change(screen.getByLabelText("Imię"), { target: { value: "Anna" } });
+    fireEvent.change(screen.getByLabelText("Język wiadomości"), { target: { value: "de" } });
+    const next = screen.getByRole("button", { name: /Dalej/ });
+    fireEvent.click(next);
+    expect(next).not.toBeInTheDocument();
+    expect(store.addBooking).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Dodaj rezerwację" }));
+    await waitFor(() => expect(store.addBooking).toHaveBeenCalledOnce());
+    expect(store.addBooking.mock.calls[0][1]).toMatchObject({ preferredLanguage: "de" });
+    expect(store.addBooking.mock.calls[0][0].id).toMatch(/^SUS-[0-9a-f-]{36}$/);
+    expect(store.saveGuestProfile).not.toHaveBeenCalled();
+  });
+
+  it("przelicza ręczną cenę istniejącego pobytu w obie strony", async () => {
+    const booking = { ...initialData.bookings[0], id: "EDIT-PRICE", checkIn: "2027-01-10", checkOut: "2027-01-12", grossPrice: 1000, pricePerNight: 500, pricingMode: "manual" as const, currency: "PLN" as const };
+    render(<NewBookingDialog booking={booking} onAdded={vi.fn()} onClose={vi.fn()}/>);
+    fireEvent.click(screen.getByRole("button", { name: /Dalej/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Dalej/ }));
+    fireEvent.change(screen.getByLabelText(/^Cena za dobę/), { target: { value: "600" } });
+    expect(screen.getByLabelText(/^Cena za pobyt/)).toHaveValue(1200);
+    fireEvent.change(screen.getByLabelText(/^Cena za pobyt/), { target: { value: "1500" } });
+    expect(screen.getByLabelText(/^Cena za dobę/)).toHaveValue(750);
+    fireEvent.click(screen.getByRole("button", { name: "Zapisz zmiany" }));
+    await waitFor(() => expect(store.updateBooking).toHaveBeenCalledOnce());
+    expect(store.updateBooking.mock.calls[0][0]).toMatchObject({ grossPrice: 1500, pricePerNight: 750 });
+  });
+
+  it("po odrzuceniu połączenia zachowuje dane i umożliwia ponowienie z tym samym ID", async () => {
+    store.addBooking.mockRejectedValueOnce(new Error("network"));
+    const onAdded = vi.fn();
+    renderDialog(onAdded);
+    goToFinances();
+    fireEvent.click(screen.getByRole("button", { name: "Dodaj rezerwację" }));
+    expect(await screen.findByText(/Nie udało się potwierdzić zapisu/)).toBeInTheDocument();
+    expect(onAdded).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Dodaj rezerwację" }));
+    await waitFor(() => expect(onAdded).toHaveBeenCalledOnce());
+    expect(store.addBooking.mock.calls[1][0].id).toBe(store.addBooking.mock.calls[0][0].id);
+  });
+
   it("pokazuje wycenę podczas wyboru terminu i domki jako proste kafelki", () => {
     renderDialog();
 
@@ -88,6 +131,11 @@ describe("NewBookingDialog — PR-10c", () => {
     fireEvent.click(screen.getByRole("button", { name: "Dodaj rezerwację" }));
 
     expect(screen.getByRole("button", { name: /Zapisywanie/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Zamknij" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Krok 1: Termin" })).toBeDisabled();
+    expect(screen.getByLabelText(/^Cena za pobyt/)).toBeDisabled();
+    fireEvent.submit(screen.getByRole("button", { name: /Zapisywanie/ }).closest("form")!);
+    expect(store.addBooking).toHaveBeenCalledOnce();
     expect(onAdded).not.toHaveBeenCalled();
     confirmSave({ ok: true });
     await waitFor(() => expect(onAdded).toHaveBeenCalledOnce());

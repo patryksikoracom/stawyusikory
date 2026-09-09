@@ -23,6 +23,16 @@ afterAll(() => {
 });
 
 describe("draft-first communication", () => {
+  it("uses the language saved with the booking contact without a CRM profile", () => {
+    const data = fixture({ guests: [], people: [] });
+    data.consents[0] = { ...data.consents[0], preferredLanguage: "de" };
+    const message = reconcileScheduledMessages(data).find((item) => item.ruleId === "RULE-PREARRIVAL")!;
+    const template = data.messageTemplates.find((item) => item.id === message.templateId);
+    expect(template?.language).toBe("de");
+    expect(message.renderedBody).toContain("Guten Tag");
+    expect(message.blockedReason ?? "").not.toContain("Brak jawnie wybranego języka");
+  });
+
   it("renders reservation variables and payment balance", () => {
     const rendered = renderTemplate(defaultMessageTemplates[0], booking, fixture({
       communicationConfigs: [{

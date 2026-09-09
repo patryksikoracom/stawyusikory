@@ -1,5 +1,6 @@
 {
-  "releaseId": "stawy-os-manager-booking-flow-2026-08-26",
+  "releaseId": "stawy-os-booking-safety-2026-09-09",
   "schemaVersion": "2026-08-26.1",
-  "requiredMigration": "20260826182629_restore_manager_booking_permissions.sql"
+  "requiredMigration": "20260826182629_restore_manager_booking_permissions.sql",
+  "compatibleMigrations": ["20260909123001_manager_booking_commit_receipts.sql"]
 }

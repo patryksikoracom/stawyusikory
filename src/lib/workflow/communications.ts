@@ -1,3 +1,4 @@
+import { bookingLanguage } from "@/lib/crm/guest-identity";
 import type {
   AppData,
   AutomationRule,
@@ -189,7 +190,7 @@ export function reconcileScheduledMessages(data: AppData): ScheduledMessage[] {
       if (!baseTemplate) continue;
       const profile = data.guests.find((item) => item.bookingId === booking.id);
       const person = data.people.find((item) => item.id === profile?.personId);
-      const language = person?.preferredLanguage;
+      const language = bookingLanguage(data, booking.id);
       const template = data.messageTemplates.find((item) => (
         item.active
         && item.family === (baseTemplate.family ?? baseTemplate.id)

@@ -1,6 +1,6 @@
 import type { AppData, ScheduledMessage } from "@/lib/types";
 import { hasActiveConsent } from "@/lib/compliance/consent-ledger";
-import { normalizeGuestPhone } from "@/lib/crm/guest-identity";
+import { bookingLanguage, normalizeGuestPhone } from "@/lib/crm/guest-identity";
 
 export type ProviderDeliveryStatus = "queued" | "sent" | "delivered" | "error" | "rejected";
 
@@ -58,7 +58,7 @@ export function preflightDelivery(data: AppData, message: ScheduledMessage) {
   const booking = data.bookings.find((item) => item.id === message.bookingId);
   const template = data.messageTemplates.find((item) => item.id === message.templateId);
   const profile = data.guests.find((item) => item.bookingId === message.bookingId);
-  const person = data.people.find((item) => item.id === profile?.personId);
+  const language = bookingLanguage(data, message.bookingId);
 
   if (!booking || booking.deletedAt || booking.workflowStatus === "Anulowana") blockers.push("rezerwacja nie jest aktywna");
   if (message.status !== "Zatwierdzona") blockers.push("wiadomość nie jest zatwierdzona");
@@ -71,7 +71,7 @@ export function preflightDelivery(data: AppData, message: ScheduledMessage) {
   if (message.channel === "SMS" && !normalizeE164(message.recipient)) blockers.push("telefon nie jest poprawnym E.164");
   if (message.channel === "E-mail" && !normalizeDeliveryEmail(message.recipient)) blockers.push("adres e-mail jest niepoprawny");
   if (message.channel === "OTA" && booking?.platform === "Bezpośrednio") blockers.push("rezerwacja direct nie ma kanału OTA");
-  if (template?.language && person?.preferredLanguage && template.language !== person.preferredLanguage) {
+  if (template?.language && language && template.language !== language) {
     blockers.push("język szablonu różni się od preferencji gościa");
   }
   if (template && ["Opinia publiczna", "Przypomnienie opinii"].includes(template.purpose)) {

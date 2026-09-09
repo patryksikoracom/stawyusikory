@@ -244,6 +244,7 @@ export type DepartureDebrief = {
 
 export type ContactConsent = {
   bookingId: string;
+  preferredLanguage?: "pl" | "de" | "en";
   phone?: string;
   email?: string;
   marketingConsent: "Tak" | "Nie" | "Do dopytania" | "Nie dotyczy";
