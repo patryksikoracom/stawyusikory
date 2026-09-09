@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boundaryTimesOverlap, calendarBarPlacement, cancelOpenStayTasks, createTasksForBooking, getBookingConflicts, getBookingDataIssues, getNextAction, nightsBetween, overlaps, rescheduleOpenTasksForBooking } from "./rules";
+import { boundaryTimesOverlap, calendarBarPlacement, canClose, cancelOpenStayTasks, createTasksForBooking, getBookingConflicts, getBookingDataIssues, getNextAction, nightsBetween, overlaps, rescheduleOpenTasksForBooking } from "./rules";
 import type { Booking, CalendarBlock, OpsTask } from "../types";
 import { initialData } from "../demo-data";
 import { todayInPoland } from "../date";
@@ -117,6 +117,58 @@ describe("availability rules", () => {
     const data = { ...initialData, bookings: [departed], blocks: [], tasks: [], departureDebriefs: [], imports: [], media: [], guests: [], consents: [] };
     expect(getNextAction(data, departed)).toBe("Uzupełnić podsumowanie wyjazdu");
     expect(getNextAction({ ...data, departureDebriefs: [{ id: `DEB-${departed.id}`, bookingId: departed.id, status: "Ukończony", keysSettled: true, urgentNextArrivalRisk: false, publicQuotePermission: "Nie" }] }, departed)).toBe("Gotowe do analizy");
+  });
+
+  it("ignores an old payment task when the server summary confirms settlement", () => {
+    const settled = {
+      ...base,
+      checkIn: "2099-07-10",
+      checkOut: "2099-07-12",
+      paymentStatus: "Częściowo" as const,
+      grossPrice: 3245.25,
+      currency: "PLN" as const,
+      operatorPaymentSummary: {
+        currency: "PLN" as const,
+        bookingValue: 3245.25,
+        paid: 3245.25,
+        balance: 0,
+        amountDue: 0,
+        overpayment: 0,
+        balanceStatus: "settled" as const,
+        completeness: "complete" as const,
+      },
+    };
+    const paymentTask: OpsTask = {
+      id: "A-payment",
+      bookingId: settled.id,
+      type: "Płatność",
+      priority: "Wysoki",
+      status: "Do zrobienia",
+      dueDate: "2099-07-07",
+      owner: "Patryk",
+      title: "Sprawdzić/uzupełnić płatność i zaliczkę.",
+    };
+    const data = {
+      ...initialData,
+      bookings: [settled],
+      blocks: [],
+      tasks: [paymentTask],
+      payments: [],
+      departureDebriefs: [],
+      imports: [],
+      media: [],
+      guests: [],
+      consents: [{
+        bookingId: settled.id,
+        phone: "+48123456789",
+        marketingConsent: "Nie dotyczy" as const,
+        photoFbConsent: "Nie dotyczy" as const,
+        photoSiteAdsConsent: "Nie dotyczy" as const,
+      }],
+    };
+
+    expect(getNextAction(data, settled)).toBe("Gotowe do analizy");
+    expect(canClose(data, settled)).toEqual({ ok: true, blockingTasks: [] });
   });
 
   it("does not treat optional research fields as missing operational data", () => {

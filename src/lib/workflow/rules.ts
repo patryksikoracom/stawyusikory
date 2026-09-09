@@ -9,6 +9,7 @@ import type {
 import { addLocalDays, dateDiffDays, todayInPoland } from "../date";
 import { createMinorProtectionTask, requiresMinorProtection } from "../compliance/minor-protection";
 import { importedReservationBlockMatchesBooking } from "../integrations/ical-block-classification";
+import { calculateBookingFinance } from "../metrics/finance";
 
 export function nightsBetween(checkIn?: string, checkOut?: string) {
   if (!checkIn || !checkOut) return 0;
@@ -89,13 +90,21 @@ export function canConfirm(data: AppData, booking: Booking) {
 }
 
 export function canClose(data: AppData, booking: Booking) {
+  const paymentSettled = isPaymentSettled(data, booking);
   const blockingTasks = data.tasks.filter(
     (task) =>
       task.bookingId === booking.id &&
       ["Opinia", "Content", "Płatność"].includes(task.type) &&
+      !(task.type === "Płatność" && paymentSettled) &&
       !["Zrobione", "Nie dotyczy"].includes(task.status),
   );
   return { ok: blockingTasks.length === 0, blockingTasks };
+}
+
+function isPaymentSettled(data: AppData, booking: Booking) {
+  if (["Opłacone", "Barter", "Anulowane"].includes(booking.paymentStatus)) return true;
+  const finance = calculateBookingFinance(booking, data.payments);
+  return finance.balanceStatus === "settled" || finance.balanceStatus === "overpaid";
 }
 
 export function createTasksForBooking(booking: Booking): OpsTask[] {
@@ -340,7 +349,9 @@ export function getNextAction(data: AppData, booking: Booking) {
   }
 
   const openTask = data.tasks.find(
-    (task) => task.bookingId === booking.id && !["Zrobione", "Nie dotyczy"].includes(task.status),
+    (task) => task.bookingId === booking.id
+      && !(task.type === "Płatność" && isPaymentSettled(data, booking))
+      && !["Zrobione", "Nie dotyczy"].includes(task.status),
   );
   if (openTask) return openTask.title;
 
