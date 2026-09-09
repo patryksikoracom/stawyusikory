@@ -62,6 +62,7 @@ import {
 } from "@/lib/sync/state-conflict";
 import { instantiateCleaningChecklist } from "@/lib/cleaning/operations";
 import { ensureGuestPeople, mergeGuestPeople } from "@/lib/crm/guest-identity";
+import { preserveOperatorPaymentSummary } from "@/lib/metrics/finance";
 
 export type SyncMode = "checking" | "cloud" | "local" | "error" | "conflict";
 export type DataStatus = "loading" | "ready" | "error";
@@ -573,12 +574,16 @@ function bookingAggregate(
 
 function mergeBookingAggregate(current: AppData, aggregate: BookingAggregate): AppData {
   const bookingId = aggregate.booking.id;
+  const booking = preserveOperatorPaymentSummary(
+    current.bookings.find((item) => item.id === bookingId),
+    aggregate.booking,
+  );
   const taskIds = new Set(aggregate.tasks.map((task) => task.id));
   const checklistIds = new Set(aggregate.checklistItems.map((item) => item.id));
   const messageIds = new Set(aggregate.scheduledMessages.map((message) => message.id));
   return {
     ...current,
-    bookings: [aggregate.booking, ...current.bookings.filter((booking) => booking.id !== bookingId)],
+    bookings: [booking, ...current.bookings.filter((item) => item.id !== bookingId)],
     consents: aggregate.contact
       ? [aggregate.contact, ...current.consents.filter((contact) => contact.bookingId !== bookingId)]
       : current.consents.filter((contact) => contact.bookingId !== bookingId),

@@ -33,6 +33,11 @@ const booking = {
   children: 1,
   guestLabel: "Anna Testowa",
   grossPrice: 2100,
+  commission: 315,
+  openingPaidAmount: 2100,
+  openingPaidCurrency: "PLN",
+  openingPaidSource: "Chronione źródło",
+  importWarnings: ["Prowizja 315 PLN"],
   paymentStatus: "Zaliczka",
   workflowStatus: "Nowa",
   createdBy: "Patryk",
@@ -158,6 +163,11 @@ describe("POST /api/bookings", () => {
       "create_operational_booking",
       expect.objectContaining({ p_booking_id: booking.id }),
     );
+    const payload = await response.json();
+    expect(payload.aggregate.booking).not.toHaveProperty("commission");
+    expect(payload.aggregate.booking).not.toHaveProperty("openingPaidAmount");
+    expect(payload.aggregate.booking).not.toHaveProperty("openingPaidSource");
+    expect(payload.aggregate.booking).not.toHaveProperty("importWarnings");
   });
 
   it("akceptuje postgresowy offset czasu w zapisanej checkliście", async () => {

@@ -103,6 +103,35 @@ function completeness(unavailable: boolean, issues: FinanceIssue[]): FinanceComp
   return issues.length ? "partial" : "complete";
 }
 
+export function preserveOperatorPaymentSummary(current: Booking | undefined, next: Booking): Booking {
+  const previous = current?.operatorPaymentSummary;
+  if (!previous) return next;
+  const bookingValue = isValidAmount(next.grossPrice) ? next.grossPrice : null;
+  const currency = next.currency ?? null;
+  const balance = bookingValue == null || !currency || currency !== previous.currency
+    ? null
+    : bookingValue - previous.paid;
+  return {
+    ...next,
+    operatorPaymentSummary: {
+      ...previous,
+      currency,
+      bookingValue,
+      balance,
+      amountDue: balance == null ? null : Math.max(0, balance),
+      overpayment: balance == null ? null : Math.max(0, -balance),
+      balanceStatus: balance == null
+        ? "unavailable"
+        : balance > 0.005
+          ? "due"
+          : balance < -0.005
+            ? "overpaid"
+            : "settled",
+      completeness: balance == null ? "unavailable" : previous.completeness,
+    },
+  };
+}
+
 export function calculateBookingFinance(
   booking: Booking,
   payments: PaymentTransaction[],
@@ -219,6 +248,49 @@ export function calculateBookingFinance(
     "transaction_currency_missing",
     "transaction_currency_mismatch",
   ].includes(issue.code));
+
+  const operatorSummary = booking.operatorPaymentSummary;
+  if (operatorSummary) {
+    return {
+      bookingId: booking.id,
+      currency: operatorSummary.currency,
+      bookingValue: operatorSummary.bookingValue,
+      openingPaid: 0,
+      openingPaidSource: null,
+      guestPayments: 0,
+      guestRefunds: 0,
+      guestPaidNet: operatorSummary.paid,
+      balance: operatorSummary.balance,
+      amountDue: operatorSummary.amountDue,
+      overpayment: operatorSummary.overpayment,
+      balanceStatus: operatorSummary.balanceStatus,
+      cashflow: { inflows: 0, outflows: 0, net: 0 },
+      managementInputs: { commission: 0, costs: 0, otaPayout: 0 },
+      perspectives: {
+        sales: {
+          metricId: "sales_booking_value_v1",
+          currency: operatorSummary.currency,
+          completeness: operatorSummary.bookingValue == null ? "unavailable" : "complete",
+        },
+        receivables: {
+          metricId: "receivables_guest_balance_v1",
+          currency: operatorSummary.currency,
+          completeness: operatorSummary.completeness,
+        },
+        cashflow: {
+          metricId: "cashflow_posted_transactions_v1",
+          currency: operatorSummary.currency,
+          completeness: "unavailable",
+        },
+        management: {
+          metricId: "management_result_inputs_v1",
+          currency: operatorSummary.currency,
+          completeness: "unavailable",
+        },
+      },
+      issues: [],
+    };
+  }
 
   return {
     bookingId: booking.id,

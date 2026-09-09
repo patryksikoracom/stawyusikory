@@ -3,6 +3,8 @@ import { isGeneralStateReader } from "@/lib/auth/permissions";
 import { visibleOperationalRecord } from "@/lib/auth/state-visibility";
 import { requireOrganization } from "@/lib/supabase/auth-context";
 import { createServiceClient } from "@/lib/supabase/server";
+import { calculateBookingFinance } from "@/lib/metrics/finance";
+import type { Booking, PaymentTransaction } from "@/lib/types";
 import {
   isCompatibleDatabaseRelease,
   releaseIdentity,
@@ -65,8 +67,33 @@ export async function GET(request: Request) {
     if (!missingTable) return NextResponse.json({ error: recordsError?.message ?? revisionError?.message }, { status: 500 });
   }
 
+  const operatorPaymentSummaries = new Map<string, Record<string, unknown>>();
+  if (result.role === "manager") {
+    const payments = (records ?? [])
+      .filter((record) => record.entity_type === "payments")
+      .map((record) => record.payload as PaymentTransaction);
+    for (const record of records ?? []) {
+      if (record.entity_type !== "bookings") continue;
+      const finance = calculateBookingFinance(record.payload as Booking, payments);
+      operatorPaymentSummaries.set(record.entity_id, {
+        currency: finance.currency,
+        bookingValue: finance.bookingValue,
+        paid: finance.guestPaidNet,
+        balance: finance.balance,
+        amountDue: finance.amountDue,
+        overpayment: finance.overpayment,
+        balanceStatus: finance.balanceStatus,
+        completeness: finance.perspectives.receivables.completeness,
+      });
+    }
+  }
+
   const visibleRecords = (records ?? [])
-    .map((record) => visibleOperationalRecord(record, result.role))
+    .map((record) => visibleOperationalRecord(
+      record,
+      result.role,
+      operatorPaymentSummaries.get(record.entity_id),
+    ))
     .filter((record): record is NonNullable<typeof record> => Boolean(record));
 
   if (visibleRecords.length) {

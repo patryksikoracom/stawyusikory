@@ -5,6 +5,7 @@ import {
   type CreateBookingCommandResult,
 } from "@/lib/domain/booking-command";
 import { isBookingOperator, requireOrganization } from "@/lib/supabase/auth-context";
+import { visibleBookingForRole } from "@/lib/auth/state-visibility";
 
 const maxPayloadBytes = 512_000;
 
@@ -116,7 +117,12 @@ export async function POST(request: Request) {
     ok: true,
     idempotentReplay: result.status === "already_committed",
     requestId: parsed.data.requestId,
-    aggregate: committedAggregate.data,
+    aggregate: context.role === "manager"
+      ? {
+        ...committedAggregate.data,
+        booking: visibleBookingForRole(committedAggregate.data.booking, context.role),
+      }
+      : committedAggregate.data,
     stateVersion: result.stateVersion,
     savedAt: result.savedAt,
   });

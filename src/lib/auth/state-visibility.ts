@@ -1,4 +1,4 @@
-import type { UserRole } from "@/lib/types";
+import type { Booking, UserRole } from "@/lib/types";
 
 type OperationalRecord = {
   entity_type: string;
@@ -41,7 +41,10 @@ function redact(value: unknown, options: { pii: boolean; finance: boolean }): un
   );
 }
 
-function managerOperationalPayload(record: OperationalRecord) {
+function managerOperationalPayload(
+  record: OperationalRecord,
+  operatorPaymentSummary?: Record<string, unknown>,
+) {
   const redacted = redact(record.payload, { pii: true, finance: false });
   if (!redacted || typeof redacted !== "object" || Array.isArray(redacted)) return redacted;
   const source = record.payload && typeof record.payload === "object" && !Array.isArray(record.payload)
@@ -55,10 +58,20 @@ function managerOperationalPayload(record: OperationalRecord) {
         ? ["grossPrice", "pricePerNight", "pricingMode", "depositAmount", "depositDueDate", "paymentMethod", "currency", "paymentStatus"]
         : [];
   const result = { ...redacted as Record<string, unknown> };
-  for (const key of ["commission", "payout", "guestServiceFee", "guestPaidTotal", "openingPaidAmount"]) {
+  for (const key of [
+    "commission",
+    "payout",
+    "guestServiceFee",
+    "guestPaidTotal",
+    "priceAdjustment",
+    "openingPaidAmount",
+    "openingPaidCurrency",
+    "openingPaidSource",
+    "importWarnings",
+  ]) {
     delete result[key];
   }
-  return {
+  const visible = {
     ...result,
     ...Object.fromEntries(
       allowedPricingKeys
@@ -66,9 +79,16 @@ function managerOperationalPayload(record: OperationalRecord) {
         .map((key) => [key, source[key]]),
     ),
   };
+  return record.entity_type === "bookings" && operatorPaymentSummary
+    ? { ...visible, operatorPaymentSummary }
+    : visible;
 }
 
-export function visibleOperationalRecord(record: OperationalRecord, role: UserRole): OperationalRecord | null {
+export function visibleOperationalRecord(
+  record: OperationalRecord,
+  role: UserRole,
+  operatorPaymentSummary?: Record<string, unknown>,
+): OperationalRecord | null {
   if (role === "owner" || role === "admin") return record;
   if (role === "cleaning") return null;
   if (role === "accounting") {
@@ -81,6 +101,17 @@ export function visibleOperationalRecord(record: OperationalRecord, role: UserRo
   }
   if (role === "viewer" && !viewerEntities.has(record.entity_type)) return null;
   if (role === "manager" && financeEntities.has(record.entity_type)) return null;
-  if (role === "manager") return { ...record, payload: managerOperationalPayload(record) };
+  if (role === "manager") {
+    return { ...record, payload: managerOperationalPayload(record, operatorPaymentSummary) };
+  }
   return { ...record, payload: redact(record.payload, { pii: false, finance: false }) };
+}
+
+export function visibleBookingForRole(booking: Booking, role: UserRole): Booking {
+  if (role !== "manager") return booking;
+  return managerOperationalPayload({
+    entity_type: "bookings",
+    entity_id: booking.id,
+    payload: booking,
+  }) as Booking;
 }

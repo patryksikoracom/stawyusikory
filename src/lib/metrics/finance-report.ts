@@ -10,6 +10,7 @@ import {
   type ManagementResult,
 } from "@/lib/metrics/management-result";
 import type { AppData, Currency, PaymentTransaction, PlatformImport } from "@/lib/types";
+import { formatCurrency } from "@/lib/money";
 
 export type FinancePeriodPreset = "today" | "next14" | "month" | "ytd" | "custom";
 
@@ -448,11 +449,7 @@ export function financeMetricValue(metric: FinanceReportMetric) {
   return metric.values.map(({ currency, value }) => (
     value == null
       ? `${currency}: brak podstawy`
-      : new Intl.NumberFormat("pl-PL", {
-        style: "currency",
-        currency,
-        maximumFractionDigits: 0,
-      }).format(value)
+      : formatCurrency(value, currency)
   )).join(" · ");
 }
 

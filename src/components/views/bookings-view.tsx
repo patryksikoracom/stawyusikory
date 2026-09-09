@@ -20,6 +20,7 @@ import {
   defaultBookingListFilters,
   type BookingListFilters,
 } from "@/lib/workflow/booking-list";
+import { formatCurrency } from "@/lib/money";
 
 const statuses: WorkflowStatus[] = ["Nowa", "Potwierdzona", "Przed przyjazdem", "W trakcie", "Po pobycie", "Zamknięta", "Anulowana"];
 const tabs = ["Podsumowanie", "Płatności", "Wiadomości", "Zadania", "Historia"] as const;
@@ -28,7 +29,9 @@ type StatusFeedback = { tone: "success" | "error"; message: string };
 const bookingsPageSize = 40;
 const bookingListStorageKey = "stawy-os:booking-list-v1";
 
-function money(value?: number, currency: Booking["currency"] = "PLN") { return value == null ? "—" : new Intl.NumberFormat("pl-PL", { style: "currency", currency: currency ?? "PLN", maximumFractionDigits: 0 }).format(value); }
+function money(value?: number, currency: Booking["currency"] = "PLN") {
+  return value == null ? "—" : formatCurrency(value, currency ?? "PLN");
+}
 function shortDate(value?: string) { return formatPolishDate(value); }
 
 export function BookingsView({ initialId, initialView = "list", initialTab = "Podsumowanie", role }: { initialId?: string; initialView?: "list" | "sheet"; initialTab?: Tab; role?: UserRole | null }) {

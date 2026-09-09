@@ -9,6 +9,7 @@ import type { Booking, Channel, PaymentStatus } from "@/lib/types";
 import { formatPolishDate } from "@/lib/date";
 import { getBookingConflicts, nightsBetween, unitName } from "@/lib/workflow/rules";
 import { quoteStay } from "@/lib/workflow/pricing";
+import { formatCurrency } from "@/lib/money";
 
 type Draft = {
   unitId: string;
@@ -25,7 +26,7 @@ type Draft = {
 };
 
 function money(value: number | undefined, currency: Booking["currency"] = "PLN") {
-  return value == null ? "—" : new Intl.NumberFormat("pl-PL", { style: "currency", currency: currency ?? "PLN", maximumFractionDigits: 0 }).format(value);
+  return value == null ? "—" : formatCurrency(value, currency ?? "PLN");
 }
 
 function draftFor(booking: Booking): Draft {

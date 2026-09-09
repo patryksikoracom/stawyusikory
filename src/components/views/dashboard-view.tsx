@@ -27,11 +27,12 @@ import {
 } from "@/lib/metrics/finance-report";
 import { TodayOperations } from "@/components/dashboard/today-operations";
 import { buildTodayAgenda, buildTodayUnitStates } from "@/lib/workflow/today-agenda";
+import { formatCurrency } from "@/lib/money";
 
 function isoToday() { return todayInPoland(); }
 function formatDay(date?: string) { return formatPolishDate(date, { year: false }); }
 function money(value: number, currency: CurrencyMetric["currency"]) {
-  return new Intl.NumberFormat("pl-PL", { style: "currency", currency, maximumFractionDigits: 0 }).format(value);
+  return formatCurrency(value, currency);
 }
 
 function currencyValues(metrics: CurrencyMetric[], key: "adr" | "revPar") {

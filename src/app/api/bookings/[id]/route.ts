@@ -5,6 +5,7 @@ import {
   type UpdateBookingCommandResult,
 } from "@/lib/domain/booking-command";
 import { isBookingOperator, requireOrganization } from "@/lib/supabase/auth-context";
+import { visibleBookingForRole } from "@/lib/auth/state-visibility";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -110,7 +111,12 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   return NextResponse.json({
     ok: true,
     requestId: parsed.data.requestId,
-    aggregate: committedAggregate.data,
+    aggregate: context.role === "manager"
+      ? {
+        ...committedAggregate.data,
+        booking: visibleBookingForRole(committedAggregate.data.booking, context.role),
+      }
+      : committedAggregate.data,
     recordVersion: result.recordVersion,
     stateVersion: result.stateVersion,
     savedAt: result.savedAt,

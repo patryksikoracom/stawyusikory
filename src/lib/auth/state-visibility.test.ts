@@ -51,16 +51,38 @@ describe("widoczność rekordów według roli", () => {
         currency: "PLN",
         commission: 360,
         payout: 2040,
+        openingPaidAmount: 2400,
+        openingPaidCurrency: "PLN",
+        openingPaidSource: "Import z panelem finansowym",
+        importWarnings: ["Prowizja 360 PLN, wypłata 2040 PLN"],
       },
     };
-    expect(visibleOperationalRecord(pricedBooking, "manager")?.payload).toMatchObject({
+    const visible = visibleOperationalRecord(pricedBooking, "manager", {
+      currency: "PLN",
+      bookingValue: 2400,
+      paid: 2400,
+      balance: 0,
+      amountDue: 0,
+      overpayment: 0,
+      balanceStatus: "settled",
+      completeness: "complete",
+    })?.payload;
+    expect(visible).toMatchObject({
       grossPrice: 2400,
       pricePerNight: 600,
       depositAmount: 800,
       currency: "PLN",
+      operatorPaymentSummary: {
+        paid: 2400,
+        amountDue: 0,
+        balanceStatus: "settled",
+      },
     });
-    expect(visibleOperationalRecord(pricedBooking, "manager")?.payload).not.toHaveProperty("commission");
-    expect(visibleOperationalRecord(pricedBooking, "manager")?.payload).not.toHaveProperty("payout");
+    expect(visible).not.toHaveProperty("commission");
+    expect(visible).not.toHaveProperty("payout");
+    expect(visible).not.toHaveProperty("openingPaidAmount");
+    expect(visible).not.toHaveProperty("openingPaidSource");
+    expect(visible).not.toHaveProperty("importWarnings");
   });
 
   it("manager otrzymuje stawkę potrzebną do wyceny bez kosztu sprzątania", () => {

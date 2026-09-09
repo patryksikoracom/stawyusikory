@@ -29,9 +29,10 @@ import {
 } from "@/lib/metrics/finance-report";
 import { calculateManagementResult } from "@/lib/metrics/management-result";
 import { ManagementScenarioLab } from "@/components/finances/management-scenario-lab";
+import { formatCurrency } from "@/lib/money";
 
-function money(value: number, currency: CurrencyMetric["currency"] = "PLN") { return new Intl.NumberFormat("pl-PL", { style: "currency", currency, maximumFractionDigits: 0 }).format(value); }
-function metricMoney(value: number, currency: CurrencyMetric["currency"]) { return new Intl.NumberFormat("pl-PL", { style: "currency", currency, maximumFractionDigits: 0 }).format(value); }
+function money(value: number, currency: CurrencyMetric["currency"] = "PLN") { return formatCurrency(value, currency); }
+function metricMoney(value: number, currency: CurrencyMetric["currency"]) { return formatCurrency(value, currency); }
 function currencyMetricValues(metrics: CurrencyMetric[], key: "adr" | "revPar") {
   const values = metrics.filter((metric) => metric[key] != null);
   if (!values.length) return ["Brak danych"];

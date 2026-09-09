@@ -33,6 +33,11 @@ const booking = {
   children: 1,
   guestLabel: "Anna Zmieniona",
   grossPrice: 2200,
+  commission: 330,
+  openingPaidAmount: 2200,
+  openingPaidCurrency: "PLN",
+  openingPaidSource: "Chronione źródło",
+  importWarnings: ["Prowizja 330 PLN"],
   paymentStatus: "Zaliczka",
   workflowStatus: "Potwierdzona",
   createdBy: "Patryk",
@@ -132,6 +137,11 @@ describe("PATCH /api/bookings/:id", () => {
       "mutate_operational_booking",
       expect.objectContaining({ p_booking_id: booking.id }),
     );
+    const payload = await response.json();
+    expect(payload.aggregate.booking).not.toHaveProperty("commission");
+    expect(payload.aggregate.booking).not.toHaveProperty("openingPaidAmount");
+    expect(payload.aggregate.booking).not.toHaveProperty("openingPaidSource");
+    expect(payload.aggregate.booking).not.toHaveProperty("importWarnings");
   });
 
   it("wykonuje jedną atomową komendę dla rezerwacji i jej skutków", async () => {

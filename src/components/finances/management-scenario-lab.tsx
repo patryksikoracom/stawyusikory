@@ -5,6 +5,7 @@ import { Badge, Button, Card, Field, inputClass } from "@/components/ui/primitiv
 import { Icon } from "@/components/ui/icons";
 import { calculateManagementResult } from "@/lib/metrics/management-result";
 import type { Booking, Channel, PaymentTransaction, PlatformImport, Unit } from "@/lib/types";
+import { formatCurrency } from "@/lib/money";
 
 const sampleUnit: Unit = {
   id: "sample-unit",
@@ -17,11 +18,7 @@ const sampleUnit: Unit = {
 };
 
 function money(value: number) {
-  return new Intl.NumberFormat("pl-PL", {
-    style: "currency",
-    currency: "PLN",
-    maximumFractionDigits: 0,
-  }).format(value);
+  return formatCurrency(value);
 }
 
 export function ManagementScenarioLab() {

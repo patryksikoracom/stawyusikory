@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Booking, PaymentTransaction } from "@/lib/types";
-import { buildBookingFinanceCsv, calculateBookingFinance, calculateFinanceOverview } from "./finance";
+import { buildBookingFinanceCsv, calculateBookingFinance, calculateFinanceOverview, preserveOperatorPaymentSummary } from "./finance";
 
 const booking = (overrides: Partial<Booking> = {}): Booking => ({
   id: "B-550",
@@ -59,6 +59,56 @@ describe("booking finance engine", () => {
     expect(result.amountDue).toBe(0);
     expect(result.overpayment).toBe(50);
     expect(result.balanceStatus).toBe("overpaid");
+  });
+
+  it("uses the server-computed operator summary without exposing ledger rows", () => {
+    const result = calculateBookingFinance(booking({
+      openingPaidAmount: undefined,
+      operatorPaymentSummary: {
+        currency: "PLN",
+        bookingValue: 3245.25,
+        paid: 3245.25,
+        balance: 0,
+        amountDue: 0,
+        overpayment: 0,
+        balanceStatus: "settled",
+        completeness: "complete",
+      },
+    }), []);
+
+    expect(result).toMatchObject({
+      bookingValue: 3245.25,
+      guestPaidNet: 3245.25,
+      amountDue: 0,
+      balanceStatus: "settled",
+    });
+    expect(result.perspectives.receivables.completeness).toBe("complete");
+    expect(result.managementInputs).toEqual({ commission: 0, costs: 0, otaPayout: 0 });
+  });
+
+  it("keeps and recalculates the operator summary after an allowed booking edit", () => {
+    const current = booking({
+      grossPrice: 1000,
+      operatorPaymentSummary: {
+        currency: "PLN",
+        bookingValue: 1000,
+        paid: 600,
+        balance: 400,
+        amountDue: 400,
+        overpayment: 0,
+        balanceStatus: "due",
+        completeness: "complete",
+      },
+    });
+    const next = preserveOperatorPaymentSummary(current, booking({ grossPrice: 600 }));
+
+    expect(next.operatorPaymentSummary).toMatchObject({
+      bookingValue: 600,
+      paid: 600,
+      balance: 0,
+      amountDue: 0,
+      balanceStatus: "settled",
+    });
   });
 
   it("subtracts refunds but keeps commission, costs and OTA payout outside guest payments", () => {

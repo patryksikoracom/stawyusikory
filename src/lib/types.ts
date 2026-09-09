@@ -151,6 +151,21 @@ export type Booking = {
   openingPaidAmount?: number;
   openingPaidCurrency?: Currency;
   openingPaidSource?: string;
+  /**
+   * Read-only receivables projection prepared by the server for an operator.
+   * It deliberately contains no ledger rows, commissions, payouts or sources.
+   * Command schemas strip this field before a booking reaches PostgreSQL.
+   */
+  operatorPaymentSummary?: {
+    currency: Currency | null;
+    bookingValue: number | null;
+    paid: number;
+    balance: number | null;
+    amountDue: number | null;
+    overpayment: number | null;
+    balanceStatus: "due" | "settled" | "overpaid" | "unavailable";
+    completeness: "complete" | "partial" | "unavailable";
+  };
   updatedAt?: string;
   /** Miękko usunięta rezerwacja jest dostępna w koszu przez 30 dni. */
   deletedAt?: string;
