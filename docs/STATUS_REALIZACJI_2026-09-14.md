@@ -109,3 +109,13 @@ Skrypt scripts/maintenance/convert-confirmed-remont.sql jest jednorazową korekt
 Kolejka SMS: nowy readSmsQueue przechodzi przez kolejne strony do zebrania partii kwalifikujących się wiadomości, więc terminalne błędy na początku nie blokują nowszych. Test SDK z limitem serwera niższym od żądanej strony obejmuje 40 terminalnych błędów przed 5 wysyłalnymi rekordami i awarię kolejnej strony. Przejęcie wiadomości dodatkowo porównuje poprzedni next_attempt_at. Nie wysłano SMS-ów. Atomowość webhooków i analogiczny problem selekcji e-mail pozostają do rozwiązania.
 
 Aktualne lokalne kontrole: 607/607 testów w 124 plikach, TypeScript poprawny, lint zmienionych plików poprawny.
+
+## Partia: postęp kolejki e-mail i atomowy webhook
+
+Worker e-mail czyta kolejne strony przed rozpoczęciem wysyłania; pominięte i terminalne wiadomości nie zajmują limitu prób wysłania. Politykę wysyłania nadal sprawdza isCurrentEmail na pełnych danych operacyjnych. Regresja HTTP z prawdziwym klientem Supabase i atrapą transportu obejmuje 40 terminalnych wiadomości, limit serwera 20 rekordów, 3 wysyłki z kolejnej strony przy limicie dziennym 3 oraz odmowę wysyłki przy niepełnym odczycie. Nie wykonano rzeczywistych wysyłek.
+
+Webhook używa jednej transakcji apply_resend_webhook: deduplikacja zdarzenia, blokada wiersza kolejki, aktualizacja stanu i projekcji operatora oraz audyt. Błąd wycofuje całość. Przedwczesny callback bez zapisanego identyfikatora dostawcy zwraca 503, aby dostawca ponowił zdarzenie. Funkcja SECURITY INVOKER, EXECUTE wyłącznie service_role, dodatkowa kontrola roli JWT. Migracja 20260914115246_atomic_resend_webhook.sql jest addytywna i zgodna z dotychczasowym znacznikiem schematu; zastosowana na TEST i bazie używanej przez Preview.
+
+Test SQL tests/integration/resend-webhook.sql na TEST: wymuszony błąd aktualizacji projekcji wycofuje wcześniejsze operacje; retry i duplikat, późne sent, zachowanie dowodu błędu, przedwczesny callback oraz brak uprawnień anon/authenticated. Udane wywołania sprawdzone także po SET LOCAL ROLE service_role. Wszystkie dane testowe wycofano przez ROLLBACK. Doradca bezpieczeństwa: brak nowych ostrzeżeń (pozostają dwa znane RPC rezerwacji i informacja o niedostępnym publicznie manifeście).
+
+Walidacja lokalna: 609/609 testów w 124 plikach, TypeScript i lint zmienionych plików poprawne. Pozostaje pełny test równoległości worker/webhook i globalnego limitu przy równoległych uruchomieniach, rzeczywiste dostarczenie na zatwierdzony adres testowy oraz HTTP/przeglądarka na izolowanej konfiguracji. Odczyt klucza serwerowego testowego projektu do wyniku narzędzia został odrzucony przez automatyczną kontrolę; nie zapisano klucza ani nie skonfigurowano .env.integration.local.

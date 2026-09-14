@@ -1,3 +1,4 @@
+import { readEmailQueue, type DueMessage } from "@/lib/integrations/read-email-queue";
 import { isCurrentEmail, readCommunicationData } from "@/lib/integrations/current-email";
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
@@ -8,20 +9,6 @@ import {
   isEmailDeliveryEnabled,
   sendResendEmail,
 } from "@/lib/integrations/resend";
-
-type DueMessage = {
-  id: string;
-  organization_id: string;
-  booking_id: string;
-  rule_id: string;
-  due_at: string;
-  recipient: string | null;
-  subject: string | null;
-  rendered_body: string;
-  status: "Zatwierdzona" | "Błąd";
-  blocked_reason: string | null;
-  idempotency_key: string;
-};
 
 type OutboundMessage = {
   id: string;
@@ -137,39 +124,23 @@ export async function POST(request: Request) {
   }
 
   const remaining = Math.min(20, dailyLimit - (sentInWindow ?? 0));
-  const { data, error } = await service
-    .from("scheduled_messages")
-    .select("id,organization_id,booking_id,rule_id,due_at,recipient,subject,rendered_body,status,blocked_reason,idempotency_key")
-    .eq("channel", "E-mail")
-    .in("status", ["Zatwierdzona", "Błąd"])
-    .is("blocked_reason", null)
-    .lte("due_at", now.toISOString())
-    .order("due_at", { ascending: true })
-    .limit(remaining)
-    .returns<DueMessage[]>();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  const due = data ?? [];
-  const ids = due.map((message) => message.id);
-  const { data: records, error: recordsError } = ids.length
-    ? await service.from("operational_records")
-      .select("organization_id,entity_id,payload")
-      .eq("entity_type", "scheduledMessages")
-      .in("entity_id", ids)
-    : { data: [], error: null };
-  if (recordsError) return NextResponse.json({ error: recordsError.message }, { status: 500 });
-  const policyByMessage = new Map((records ?? []).map((record) => [
-    `${record.organization_id}:${record.entity_id}`,
-    (record.payload as { deliveryPolicy?: string }).deliveryPolicy,
-  ]));
+  let due: DueMessage[];
+  try {
+    due = await readEmailQueue(service, now);
+  } catch {
+    return NextResponse.json({ error: "Nie udało się odczytać pełnej kolejki e-mail." }, { status: 503 });
+  }
 
   let sent = 0;
   let failed = 0;
   let skipped = 0;
+  let processed = 0;
+  let claimed = 0;
   for (const message of due) {
-    const policy = policyByMessage.get(`${message.organization_id}:${message.id}`);
+    if (claimed >= remaining) break;
+    processed += 1;
     const recipient = normalizeDeliveryEmail(message.recipient ?? undefined);
-    if (!recipient || !message.subject?.trim() || !["manual_send", "auto_send"].includes(policy ?? "")) {
+    if (!recipient || !message.subject?.trim()) {
       skipped += 1;
       continue;
     }
@@ -195,6 +166,7 @@ export async function POST(request: Request) {
       continue;
     }
 
+    claimed += 1;
     const result = await sendResendEmail({
       to: recipient,
       subject: message.subject,
@@ -237,5 +209,5 @@ export async function POST(request: Request) {
     failed += 1;
   }
 
-  return NextResponse.json({ ok: failed === 0, processed: due.length, sent, failed, skipped, dailyLimit });
+  return NextResponse.json({ ok: failed === 0, processed, sent, failed, skipped, dailyLimit });
 }
