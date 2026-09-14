@@ -1,16 +1,19 @@
 import fs from "node:fs";
 import crypto from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
+import { readOperationalState } from "../src/lib/supabase/read-operational-state.ts";
 
 function loadLocalEnv() {
   const env = { ...process.env };
-  if (!fs.existsSync(".env.local")) return env;
-  for (const line of fs.readFileSync(".env.local", "utf8").split(/\r?\n/)) {
+  // Never fall back to the application environment: it may target production.
+  const testEnvFile = process.env.STAWY_INTEGRATION_ENV_FILE ?? ".env.integration.local";
+  if (!fs.existsSync(testEnvFile)) return env;
+  for (const line of fs.readFileSync(testEnvFile, "utf8").split(/\r?\n/)) {
     const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
     if (!match) continue;
     let value = match[2];
     if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
-    env[match[1]] = value;
+    if (process.env[match[1]] === undefined) env[match[1]] = value;
   }
   return env;
 }
@@ -28,7 +31,12 @@ if (env.RUN_SUPABASE_INTEGRATION !== "1" || env.SUPABASE_INTEGRATION_TEST_PROJEC
 const url = env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
-assert(url && anonKey && serviceKey, "Missing Supabase integration test configuration.");
+assert(url && anonKey && serviceKey, "Missing dedicated Supabase integration test configuration (.env.integration.local).");
+assert(!url.includes("crfrxrudohpcmcadltbx"), "Refusing to run destructive integration fixtures against Stawy production.");
+const testHost = new URL(url).hostname;
+assert(["127.0.0.1", "localhost", "::1", "[::1]"].includes(testHost)
+  || (env.SUPABASE_INTEGRATION_PROJECT_REF && testHost === `${env.SUPABASE_INTEGRATION_PROJECT_REF}.supabase.co`),
+  "Explicit SUPABASE_INTEGRATION_PROJECT_REF is required for a remote test project.");
 
 const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
 const userClient = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -91,7 +99,11 @@ try {
       label: `Checklist ${index}`,
       done: false,
     })),
-    issues: [], messages: [], auditLog: [],
+    issues: [], messages: [], auditLog: Array.from({ length: 1503 }, (_, index) => ({
+      id: `pagination-audit-${index}`, entityType: "integration", entityId: `fixture-${index}`,
+      action: "pagination_fixture", summary: "Synthetic pagination fixture", actor: "Integration",
+      createdAt: "2099-01-01T00:00:00.000Z",
+    })),
     settings: { organizationName: "Test", timezone: "Europe/Warsaw", cleaningContactName: "", cleaningPhone: "", defaultCheckIn: "16:00", defaultCheckOut: "11:00", aiApprovalRequired: true },
   };
   const firstRequestId = crypto.randomUUID();
@@ -102,19 +114,19 @@ try {
     p_client_sent_at: new Date().toISOString(),
     p_tab_id: "integration-session-a",
   });
-  if (firstCommit.error) throw firstCommit.error;
-  assert(Number(firstCommit.data) === 1, "Initial state version was not created.");
-
+  assert(firstCommit.error?.code === "42501", "Legacy whole-state writer must remain inaccessible.");
   const staleRequestId = crypto.randomUUID();
-  const staleCommit = await userClient.rpc("replace_operational_state_v2", {
-    p_expected_version: 0,
-    p_state: state,
-    p_request_id: staleRequestId,
-    p_client_sent_at: new Date().toISOString(),
-    p_tab_id: "integration-session-b",
-  });
-  console.log("Integration: stale-write result", { code: staleCommit.error?.code ?? null, returnedVersion: staleCommit.data ?? null });
-  assert(!staleCommit.error && Number(staleCommit.data) < 0, "Stale write was not rejected without raising a database error.");
+  // Seed fixtures with the test administrator; all commands below run as the user.
+  const seedRows = Object.entries(state).flatMap(([entity_type, value]) =>
+    (Array.isArray(value) ? value : [{ ...value, id: "organization" }]).map(payload => ({
+      organization_id: ownOrg, entity_type, entity_id: payload.id, payload, record_version: 1,
+    })));
+  for (let offset = 0; offset < seedRows.length; offset += 500) {
+    const seeded = await admin.from("operational_records").insert(seedRows.slice(offset, offset + 500));
+    if (seeded.error) throw seeded.error;
+  }
+  const seededVersion = await admin.from("operational_state_versions").upsert({ organization_id: ownOrg, version: 1 });
+  if (seededVersion.error) throw seededVersion.error;
 
   console.log("Integration: running 100 parallel record-level task updates…");
   const taskCommits = await Promise.all(state.tasks.map((task, index) => userClient.rpc("update_operational_task", {
@@ -746,7 +758,7 @@ try {
   assert(batchConflict.data?.status === "conflict", "Stale record batch did not return a conflict.");
 
   const [records, writeTelemetry, taskTelemetry, checklistTelemetry, settingsTelemetry, bookingTelemetry, paymentTelemetry, blockTelemetry, batchTelemetry, scheduledRows] = await Promise.all([
-    userClient.from("operational_records").select("entity_type,entity_id,record_version,payload"),
+    readOperationalState(userClient, ownOrg).then(result => ({ data: result.records, error: null })),
     userClient
       .from("audit_events")
       .select("entity_id,action,payload")
@@ -797,12 +809,12 @@ try {
   if (blockTelemetry.error) throw blockTelemetry.error;
   if (batchTelemetry.error) throw batchTelemetry.error;
   if (scheduledRows.error) throw scheduledRows.error;
+  assert(records.data.filter(record => record.entity_type === "auditLog" && record.entity_id.startsWith("pagination-audit-")).length === 1503, "Paginated state lost records beyond the Data API cap.");
   assert(records.data.some((record) => record.entity_type === "units" && record.entity_id === "test-unit"), "Normalized records were not persisted.");
   const taskRecords = records.data.filter((record) => record.entity_type === "tasks" && record.entity_id.startsWith("test-task-"));
   assert(taskRecords.length === 100, "Not all task records survived parallel updates.");
   assert(taskRecords.every((record) => Number(record.record_version) === 2 && record.payload.status === "W toku"), "Parallel task records have inconsistent versions or payloads.");
-  assert(writeTelemetry.data.some((event) => event.entity_id === firstRequestId && event.action === "committed"), "Successful write telemetry is missing.");
-  assert(writeTelemetry.data.some((event) => event.entity_id === staleRequestId && event.action === "conflict"), "Conflict telemetry is missing.");
+  assert(writeTelemetry.data.length === 0, "Denied legacy writer unexpectedly created commit telemetry.");
   assert(taskTelemetry.data.length === 100, "Task command audit is incomplete.");
   const checklistRecords = records.data.filter((record) => record.entity_type === "checklistItems" && record.entity_id.startsWith("test-check-"));
   assert(checklistRecords.length === 100, "Not all checklist records survived parallel updates.");
@@ -891,6 +903,12 @@ try {
 } finally {
   console.log("Integration: cleaning temporary data…");
   await userClient.auth.signOut().catch(() => undefined);
-  if (userId) await admin.auth.admin.deleteUser(userId).catch(() => undefined);
-  await admin.from("organizations").delete().in("id", [ownOrg, otherOrg]);
+  // Remove organization rows first: their actor references can prevent Auth deletion.
+  const removedOrganizations = await admin.from("organizations").delete().in("id", [ownOrg, otherOrg]);
+  if (removedOrganizations.error) throw new Error(`Fixture cleanup failed: ${removedOrganizations.error.message}`);
+  if (userId) {
+    const removedUser = await admin.auth.admin.deleteUser(userId);
+    if (removedUser.error) throw new Error(`Test user cleanup failed: ${removedUser.error.message}`);
+  }
+  console.log("Integration: temporary organizations and user removed.");
 }

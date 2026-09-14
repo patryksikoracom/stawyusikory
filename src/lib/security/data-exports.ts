@@ -16,7 +16,7 @@ function download(content: string, type: string, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export async function downloadEncryptedJson(data: unknown, passphrase: string, filename: string) {
+export async function encryptJson(data: unknown, passphrase: string) {
   if (passphrase.length < 12) throw new Error("Hasło kopii musi mieć co najmniej 12 znaków.");
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -39,7 +39,7 @@ export async function downloadEncryptedJson(data: unknown, passphrase: string, f
     key,
     new TextEncoder().encode(JSON.stringify(data)),
   ));
-  download(JSON.stringify({
+  return JSON.stringify({
     format: "stawy-os-encrypted-backup",
     version: 1,
     cipher: "AES-256-GCM",
@@ -47,7 +47,39 @@ export async function downloadEncryptedJson(data: unknown, passphrase: string, f
     salt: bytesToBase64(salt),
     iv: bytesToBase64(iv),
     ciphertext: bytesToBase64(ciphertext),
-  }), "application/octet-stream", filename);
+  });
+}
+
+export async function downloadEncryptedJson(data: unknown, passphrase: string, filename: string) {
+  download(await encryptJson(data, passphrase), "application/octet-stream", filename);
+}
+
+/** Authenticated decryption only. The returned value still requires domain validation before restoration. */
+export async function decryptJson(content: string, passphrase: string): Promise<unknown> {
+  if (content.length > 100_000_000) throw new Error("Plik kopii jest zbyt duży.");
+  const envelope = JSON.parse(content);
+  if (!envelope || envelope.format !== "stawy-os-encrypted-backup" || envelope.version !== 1
+    || envelope.cipher !== "AES-256-GCM" || envelope.kdf?.name !== "PBKDF2-SHA-256"
+    || envelope.kdf.iterations !== 600_000) throw new Error("Nieobsługiwany format kopii.");
+  function decode(value: unknown) {
+    if (typeof value !== "string" || !/^[A-Za-z0-9+/]*={0,2}$/.test(value)) throw new Error("Uszkodzona kopia.");
+    return Uint8Array.from(atob(value), (character) => character.charCodeAt(0));
+  }
+  const salt = decode(envelope.salt);
+  const iv = decode(envelope.iv);
+  const ciphertext = decode(envelope.ciphertext);
+  if (salt.length !== 16 || iv.length !== 12 || ciphertext.length < 16) throw new Error("Uszkodzona kopia.");
+  const material = await crypto.subtle.importKey("raw", new TextEncoder().encode(passphrase), "PBKDF2", false, ["deriveKey"]);
+  const key = await crypto.subtle.deriveKey(
+    { name: "PBKDF2", hash: "SHA-256", salt, iterations: 600_000 }, material,
+    { name: "AES-GCM", length: 256 }, false, ["decrypt"],
+  );
+  try {
+    const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
+    return JSON.parse(new TextDecoder().decode(plaintext));
+  } catch {
+    throw new Error("Nieprawidłowe hasło lub uszkodzona kopia.");
+  }
 }
 
 function daysBetween(from?: string, to?: string) {

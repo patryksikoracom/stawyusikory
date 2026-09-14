@@ -1,3 +1,7 @@
 backups/
 outputs/
 tmp/
+.env*
+mobile-*.png
+production-mobile-login.png
+docs/

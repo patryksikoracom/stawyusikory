@@ -3,6 +3,12 @@ import { initialData } from "@/lib/demo-data";
 import { annualSalesCutoff, buildAnnualOverview, classifyGap, detectAnnualGaps } from "./annual-overview";
 
 describe("annual overview", () => {
+  it("does not count a new inquiry as a sold stay", () => {
+    const booking = { ...initialData.bookings[0]!, workflowStatus: "Nowa" as const, bookingDate: "2026-01-01", checkIn: "2026-07-01", checkOut: "2026-07-03" };
+    const result = buildAnnualOverview({ ...initialData, bookings: [booking] }, 2026, "2026-09-14");
+    expect(result.months.reduce((sum, month) => sum + month.soldNights, 0)).toBe(0);
+    expect(result.months.reduce((sum, month) => sum + month.bookingsCount, 0)).toBe(0);
+  });
   it("uses the same sales day for the selected and previous year", () => {
     expect(annualSalesCutoff(2026, "2026-07-27")).toBe("2026-07-27");
     expect(annualSalesCutoff(2025, "2026-07-27")).toBe("2025-07-27");

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { readOperationalState } from "@/lib/supabase/read-operational-state";
 import { buildCleaningDashboard } from "@/lib/cleaning/dashboard";
 import { requireOrganization } from "@/lib/supabase/auth-context";
 import { createServiceClient } from "@/lib/supabase/server";
@@ -38,16 +39,17 @@ export async function GET(request: Request) {
   const service = createServiceClient();
   if (!service) return NextResponse.json({ error: "Panel sprzątania nie jest skonfigurowany." }, { status: 503 });
 
-  const { data, error } = await service
-    .from("operational_records")
-    .select("entity_type,entity_id,payload")
-    .eq("organization_id", context.organizationId)
-    .in("entity_type", ["units", "bookings", "tasks", "checklistItems", "departureDebriefs", "settings"]);
-  if (error) return NextResponse.json({ error: "Nie udało się pobrać planu sprzątania." }, { status: 500 });
-
-  return NextResponse.json(buildCleaningDashboard(data ?? []), {
-    headers: { "cache-control": "private, no-store", "x-content-type-options": "nosniff" },
-  });
+  try {
+    const { records } = await readOperationalState(service, context.organizationId);
+    return NextResponse.json(buildCleaningDashboard(records), {
+      headers: { "cache-control": "private, no-store", "x-content-type-options": "nosniff" },
+    });
+  } catch {
+    return NextResponse.json({ error: "Nie udało się pobrać kompletnego planu sprzątania. Spróbuj ponownie." }, {
+      status: 503,
+      headers: { "cache-control": "private, no-store" },
+    });
+  }
 }
 
 export async function PATCH(request: Request) {

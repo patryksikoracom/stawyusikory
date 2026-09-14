@@ -87,9 +87,13 @@ describe("GET /api/state wersje rekordów", () => {
     ];
     const recordsQuery = {
       select: vi.fn(),
-      eq: vi.fn().mockResolvedValue({ data: records, error: null }),
+      eq: vi.fn(),
+      order: vi.fn(),
+      range: vi.fn().mockResolvedValue({ data: records, error: null, count: records.length }),
     };
     recordsQuery.select.mockReturnValue(recordsQuery);
+    recordsQuery.eq.mockReturnValue(recordsQuery);
+    recordsQuery.order.mockReturnValue(recordsQuery);
     const revisionQuery = {
       select: vi.fn(),
       eq: vi.fn(),
@@ -160,5 +164,9 @@ describe("GET /api/state wersje rekordów", () => {
         },
       },
     });
+    recordsQuery.range.mockResolvedValueOnce({ data: null, error: { message: "read failed" }, count: null });
+    const failedResponse = await GET(new Request("https://app.example.com/api/state"));
+    expect(failedResponse.status).toBe(503);
+    expect(await failedResponse.json()).not.toHaveProperty("data");
   });
 });

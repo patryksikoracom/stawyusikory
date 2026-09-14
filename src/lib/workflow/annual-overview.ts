@@ -1,3 +1,4 @@
+import { isActiveBooking } from "@/lib/metrics/commercial";
 import type { AppData, Currency, RateRule } from "@/lib/types";
 import { addLocalDays, dateDiffDays } from "@/lib/date";
 
@@ -31,7 +32,7 @@ export type AnnualGap = {
 };
 
 const activeBooking = (booking: AppData["bookings"][number]) =>
-  booking.workflowStatus !== "Anulowana" && !booking.deletedAt && booking.checkOut > booking.checkIn;
+  isActiveBooking(booking) && booking.checkOut > booking.checkIn;
 
 const activeBlock = (block: AppData["blocks"][number]) =>
   block.status !== "Anulowana" && block.dateTo > block.dateFrom;

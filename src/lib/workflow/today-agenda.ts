@@ -202,7 +202,7 @@ export function buildTodayUnitStates(data: AppData, today: string): TodayUnitSta
     const cleaning = data.tasks
       .filter((task) => task.type === "Sprzątanie" && task.unitId === unit.id && task.dueDate === today)
       .sort((left, right) => (right.updatedAt ?? "").localeCompare(left.updatedAt ?? ""))[0];
-    const issue = data.issues.find((item) => item.unitId === unit.id && item.status !== "Rozwiązane");
+    const issue = data.issues.find((item) => item.unitId === unit.id && item.status !== "Rozwiązane" && (item.nextArrivalRisk || item.severity === "Krytyczna" || item.planningHorizon === "Przed następnym przyjazdem"));
     const sameDay = departure?.checkOut === today && arrival?.checkIn === today;
     const departureTime = departure?.departureTime || data.settings.defaultCheckOut;
     const arrivalTime = arrival?.arrivalTime || data.settings.defaultCheckIn;
@@ -225,7 +225,7 @@ export function buildTodayUnitStates(data: AppData, today: string): TodayUnitSta
         actionLabel: "Otwórz sprzątanie",
       } : issue ? {
         label: issue.title,
-        href: "/tasks",
+        href: `/tasks?issue=${encodeURIComponent(issue.id)}#issue-${encodeURIComponent(issue.id)}`,
         actionLabel: "Otwórz usterkę",
       } : undefined,
       sameDayTurnover: sameDay ? {

@@ -274,14 +274,6 @@ export function getChecks(data: AppData): CheckItem[] {
       severity: "info",
     },
     {
-      label: "Media bez jasnej zgody",
-      count: data.media.filter((asset) => asset.usageStatus === "Do zgody" || !asset.consentScope)
-        .length,
-      where: "Media",
-      why: "Facebook, strona i reklama to różne zakresy użycia.",
-      severity: "critical",
-    },
-    {
       label: "Zadania po terminie",
       count: data.tasks.filter(
         (task) =>
@@ -308,7 +300,6 @@ export function getChecks(data: AppData): CheckItem[] {
 export function getBookingDataIssues(data: AppData, booking: Booking) {
   const consent = data.consents.find((item) => item.bookingId === booking.id);
   const importMatch = data.imports.find((item) => item.matchedBookingId === booking.id);
-  const media = data.media.filter((asset) => asset.bookingId === booking.id);
   const issues: string[] = [];
 
   if (!booking.bookingDate) issues.push("brak daty bookowania");
@@ -319,9 +310,6 @@ export function getBookingDataIssues(data: AppData, booking: Booking) {
     issues.push("brak spięcia z importem platformy");
   }
   if (!consent?.email && !consent?.phone && booking.checkOut > todayInPoland()) issues.push("brak kontaktu");
-  if (media.length && (!consent || consent.photoFbConsent === "Do dopytania")) {
-    issues.push("brak jasnej zgody na media");
-  }
 
   return issues;
 }
@@ -407,7 +395,7 @@ export function dashboardMetrics(data: AppData) {
     importedShare: data.bookings.length ? Math.round((importedBookings / data.bookings.length) * 100) : 0,
     dataQuality:
       qualityScores.length > 0
-        ? Math.round(qualityScores.reduce((sum, score) => sum + score, 0) / qualityScores.length)
+        ? Math.floor(qualityScores.reduce((sum, score) => sum + score, 0) / qualityScores.length)
         : 0,
     averageLeadTime:
       leadTimes.length > 0

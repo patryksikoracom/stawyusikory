@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/ui/icons";
 import type { AppIdentity } from "@/lib/auth/identity";
 import type { CleaningDashboard, CleaningJob } from "@/lib/cleaning/dashboard";
@@ -34,6 +34,7 @@ export function CleaningApp({ identity }: { identity: AppIdentity }) {
   const [dashboard, setDashboard] = useState<CleaningDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const mutationInFlight = useRef(false);
   const [busy, setBusy] = useState("");
   const [toast, setToast] = useState("");
   const [showDone, setShowDone] = useState(false);
@@ -75,6 +76,8 @@ export function CleaningApp({ identity }: { identity: AppIdentity }) {
   const todayCount = (dashboard?.jobs ?? []).filter((job) => job.status !== "Zrobione" && job.dueDate === todayInPoland()).length;
 
   async function mutate(payload: Record<string, unknown>, success: string) {
+    if (mutationInFlight.current) return false;
+    mutationInFlight.current = true;
     const key = String(payload.itemId ?? payload.taskId ?? payload.action);
     setBusy(key);
     setError("");
@@ -85,9 +88,12 @@ export function CleaningApp({ identity }: { identity: AppIdentity }) {
       setToast(success);
       window.setTimeout(() => setToast(""), 3000);
       await load();
+      return true;
     } catch (mutationError) {
       setError(mutationError instanceof Error ? mutationError.message : "Nie udało się zapisać zmiany.");
+      return false;
     } finally {
+      mutationInFlight.current = false;
       setBusy("");
     }
   }
@@ -125,13 +131,13 @@ export function CleaningApp({ identity }: { identity: AppIdentity }) {
           <h1 className="relative mt-1 font-display text-[34px] font-semibold leading-tight tracking-[-.035em]">Dzień dobry, {identity.displayName}</h1>
           <p className="relative mt-2 max-w-lg text-sm leading-6 text-white/70">Tu jest tylko plan przygotowania domków. Bez danych gości, cen i pozostałych modułów.</p>
           <div className="relative mt-5 grid grid-cols-2 gap-2">
-            <div className="rounded-2xl bg-white/[.09] p-3.5"><p className="font-display text-3xl font-semibold">{todayCount}</p><p className="text-[10px] font-black uppercase tracking-[.12em] text-white/55">na dzisiaj</p></div>
-            <div className="rounded-2xl bg-white/[.09] p-3.5"><p className="font-display text-3xl font-semibold">{openCount}</p><p className="text-[10px] font-black uppercase tracking-[.12em] text-white/55">łącznie otwarte</p></div>
+            <div className="rounded-2xl bg-white/[.09] p-3.5"><p className="font-display text-3xl font-semibold">{dashboard && !error ? todayCount : "—"}</p><p className="text-[10px] font-black uppercase tracking-[.12em] text-white/55">na dzisiaj</p></div>
+            <div className="rounded-2xl bg-white/[.09] p-3.5"><p className="font-display text-3xl font-semibold">{dashboard && !error ? openCount : "—"}</p><p className="text-[10px] font-black uppercase tracking-[.12em] text-white/55">łącznie otwarte</p></div>
           </div>
         </section>
 
         <div className="animate-rise-2 mt-5 grid grid-cols-2 gap-2 rounded-2xl border border-[#d4d8cb] bg-[#f8f7f0] p-1.5">
-          <button className={`min-h-11 rounded-xl text-sm font-black transition ${!showDone ? "bg-[#174d3b] text-white shadow-sm" : "text-[#68746d]"}`} onClick={() => setShowDone(false)} type="button">Do zrobienia · {openCount}</button>
+          <button className={`min-h-11 rounded-xl text-sm font-black transition ${!showDone ? "bg-[#174d3b] text-white shadow-sm" : "text-[#68746d]"}`} onClick={() => setShowDone(false)} type="button">Do zrobienia · {dashboard && !error ? openCount : "—"}</button>
           <button className={`min-h-11 rounded-xl text-sm font-black transition ${showDone ? "bg-[#174d3b] text-white shadow-sm" : "text-[#68746d]"}`} onClick={() => setShowDone(true)} type="button">Gotowe</button>
         </div>
 
@@ -141,16 +147,16 @@ export function CleaningApp({ identity }: { identity: AppIdentity }) {
 
         {!loading ? <div className="animate-rise-3 mt-5 grid gap-4">{visibleJobs.map((job) => <JobCard busy={busy} job={job} key={job.id} onMutate={mutate} onReport={() => setReport({ taskId: job.id, unitName: job.unit.name, title: "", description: "", category: "Inne" })}/>)}</div> : null}
 
-        {!loading && !visibleJobs.length ? <section className="mt-5 rounded-[24px] border border-[#d4d8cb] bg-[#fffdf8] p-8 text-center"><span className="mx-auto grid size-14 place-items-center rounded-full bg-[#dfebdc] text-[#34704f]"><Icon className="size-7" name="check"/></span><h2 className="mt-4 font-display text-2xl font-semibold">{showDone ? "Brak ukończonych zadań" : "Wszystko przygotowane"}</h2><p className="mt-2 text-sm text-[#68756f]">{showDone ? "Ukończone sprzątania pojawią się tutaj." : "Nie ma teraz żadnego otwartego sprzątania."}</p></section> : null}
+        {!loading && dashboard && !error && !visibleJobs.length ? <section className="mt-5 rounded-[24px] border border-[#d4d8cb] bg-[#fffdf8] p-8 text-center"><span className="mx-auto grid size-14 place-items-center rounded-full bg-[#dfebdc] text-[#34704f]"><Icon className="size-7" name="check"/></span><h2 className="mt-4 font-display text-2xl font-semibold">{showDone ? "Brak ukończonych zadań" : "Brak otwartych zadań"}</h2><p className="mt-2 text-sm text-[#68756f]">{showDone ? "Ukończone sprzątania pojawią się tutaj." : "Nie ma teraz żadnego otwartego sprzątania."}</p></section> : null}
       </main>
 
-      {report ? <ReportDialog busy={Boolean(busy)} draft={report} onChange={setReport} onClose={() => setReport(null)} onSubmit={async () => { await mutate({ action: "report", taskId: report.taskId, title: report.title, description: report.description, category: report.category }, "Problem zgłoszony właścicielowi."); setReport(null); }}/>: null}
+      {report ? <ReportDialog error={error} busy={Boolean(busy)} draft={report} onChange={setReport} onClose={() => setReport(null)} onSubmit={async () => { const saved = await mutate({ action: "report", taskId: report.taskId, title: report.title, description: report.description, category: report.category }, "Problem zgłoszony właścicielowi."); if (saved) setReport(null); }}/>: null}
       {toast ? <div className="fixed bottom-5 left-1/2 z-50 flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 items-center gap-3 rounded-2xl bg-[#17372d] px-4 py-3.5 text-sm font-bold text-white shadow-2xl" role="status"><span className="grid size-7 place-items-center rounded-full bg-[#559169]"><Icon className="size-4" name="check"/></span>{toast}</div> : null}
     </div>
   );
 }
 
-function JobCard({ job, busy, onMutate, onReport }: { job: CleaningJob; busy: string; onMutate: (payload: Record<string, unknown>, success: string) => Promise<void>; onReport: () => void }) {
+function JobCard({ job, busy, onMutate, onReport }: { job: CleaningJob; busy: string; onMutate: (payload: Record<string, unknown>, success: string) => Promise<boolean>; onReport: () => void }) {
   const [proposedStartTime, setProposedStartTime] = useState(job.proposedStartTime ?? "");
   const [rejecting, setRejecting] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
@@ -191,6 +197,6 @@ function JobCard({ job, busy, onMutate, onReport }: { job: CleaningJob; busy: st
   </article>;
 }
 
-function ReportDialog({ draft, busy, onChange, onClose, onSubmit }: { draft: ReportDraft; busy: boolean; onChange: (draft: ReportDraft) => void; onClose: () => void; onSubmit: () => Promise<void> }) {
-  return <Dialog ariaLabel="Zgłoś problem" className="w-full max-w-lg rounded-[26px] bg-[#fffdf8] shadow-2xl" closeDisabled={busy} onClose={onClose} overlayClassName="flex items-end p-3 sm:items-center sm:justify-center"><form className="p-5" onSubmit={(event) => { event.preventDefault(); void onSubmit(); }}><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[.14em] text-[#8a7650]">{draft.unitName}</p><h2 className="font-display text-2xl font-semibold">Zgłoś problem</h2></div><button aria-label="Zamknij" className="grid size-11 place-items-center rounded-xl border border-[#d8d4ca]" disabled={busy} onClick={onClose} type="button"><Icon className="size-4" name="close"/></button></div><div className="mt-5 grid gap-4"><label className="grid gap-1.5 text-sm font-black text-[#52645b]">Co się stało?<input data-dialog-initial-focus className="min-h-12 rounded-xl border border-[#cbc8bf] bg-white px-3.5 text-base font-semibold outline-none focus:border-[#397762] sm:text-sm" maxLength={120} onChange={(event) => onChange({ ...draft, title: event.target.value })} placeholder="np. cieknie kran w łazience" required value={draft.title}/></label><label className="grid gap-1.5 text-sm font-black text-[#52645b]">Kategoria<select className="min-h-12 rounded-xl border border-[#cbc8bf] bg-white px-3.5 text-base font-semibold sm:text-sm" onChange={(event) => onChange({ ...draft, category: event.target.value as ReportDraft["category"] })} value={draft.category}>{["Inne", "Wyposażenie", "Komfort", "Woda", "Prąd", "Dostęp/drzwi", "Bezpieczeństwo"].map((category) => <option key={category}>{category}</option>)}</select></label><label className="grid gap-1.5 text-sm font-black text-[#52645b]">Dodatkowy opis <span className="font-semibold text-[#879088]">(opcjonalnie)</span><textarea className="min-h-24 rounded-xl border border-[#cbc8bf] bg-white p-3.5 text-base font-semibold outline-none focus:border-[#397762] sm:text-sm" maxLength={500} onChange={(event) => onChange({ ...draft, description: event.target.value })} placeholder="Gdzie dokładnie i czy blokuje przygotowanie domku?" value={draft.description}/></label></div><div className="mt-5 grid grid-cols-2 gap-2"><button className="min-h-12 rounded-2xl border border-[#d4d0c6] bg-white text-sm font-black" disabled={busy} onClick={onClose} type="button">Anuluj</button><button className="min-h-12 rounded-2xl bg-[#9a452f] text-sm font-black text-white disabled:opacity-50" disabled={busy || draft.title.trim().length < 2} type="submit">{busy ? "Zapisuję…" : "Wyślij zgłoszenie"}</button></div></form></Dialog>;
+function ReportDialog({ draft, busy, error, onChange, onClose, onSubmit }: { draft: ReportDraft; busy: boolean; error: string; onChange: (draft: ReportDraft) => void; onClose: () => void; onSubmit: () => Promise<void> }) {
+  return <Dialog ariaLabel="Zgłoś problem" className="w-full max-w-lg rounded-[26px] bg-[#fffdf8] shadow-2xl" closeDisabled={busy} onClose={onClose} overlayClassName="flex items-end p-3 sm:items-center sm:justify-center"><form className="p-5" onSubmit={(event) => { event.preventDefault(); void onSubmit(); }}><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[.14em] text-[#8a7650]">{draft.unitName}</p><h2 className="font-display text-2xl font-semibold">Zgłoś problem</h2></div><button aria-label="Zamknij" className="grid size-11 place-items-center rounded-xl border border-[#d8d4ca]" disabled={busy} onClick={onClose} type="button"><Icon className="size-4" name="close"/></button></div><div className="mt-5 grid gap-4"><label className="grid gap-1.5 text-sm font-black text-[#52645b]">Co się stało?<input data-dialog-initial-focus className="min-h-12 rounded-xl border border-[#cbc8bf] bg-white px-3.5 text-base font-semibold outline-none focus:border-[#397762] sm:text-sm" maxLength={120} onChange={(event) => onChange({ ...draft, title: event.target.value })} placeholder="np. cieknie kran w łazience" required value={draft.title}/></label><label className="grid gap-1.5 text-sm font-black text-[#52645b]">Kategoria<select className="min-h-12 rounded-xl border border-[#cbc8bf] bg-white px-3.5 text-base font-semibold sm:text-sm" onChange={(event) => onChange({ ...draft, category: event.target.value as ReportDraft["category"] })} value={draft.category}>{["Inne", "Wyposażenie", "Komfort", "Woda", "Prąd", "Dostęp/drzwi", "Bezpieczeństwo"].map((category) => <option key={category}>{category}</option>)}</select></label><label className="grid gap-1.5 text-sm font-black text-[#52645b]">Dodatkowy opis <span className="font-semibold text-[#879088]">(opcjonalnie)</span><textarea className="min-h-24 rounded-xl border border-[#cbc8bf] bg-white p-3.5 text-base font-semibold outline-none focus:border-[#397762] sm:text-sm" maxLength={500} onChange={(event) => onChange({ ...draft, description: event.target.value })} placeholder="Gdzie dokładnie i czy blokuje przygotowanie domku?" value={draft.description}/></label></div>{error ? <p role="alert" className="mt-4 text-sm font-bold text-[#8f402c]">{error}</p> : null}<div className="mt-5 grid grid-cols-2 gap-2"><button className="min-h-12 rounded-2xl border border-[#d4d0c6] bg-white text-sm font-black" disabled={busy} onClick={onClose} type="button">Anuluj</button><button className="min-h-12 rounded-2xl bg-[#9a452f] text-sm font-black text-white disabled:opacity-50" disabled={busy || draft.title.trim().length < 2} type="submit">{busy ? "Zapisuję…" : "Wyślij zgłoszenie"}</button></div></form></Dialog>;
 }

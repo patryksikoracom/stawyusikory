@@ -89,6 +89,14 @@ function fixture(): AppData {
 }
 
 describe("today agenda", () => {
+  it("does not label a minor maintenance issue as a stay blocker", () => {
+    const data = fixture();
+    data.tasks = [];
+    data.issues = [{ id: "minor", unitId: data.units[0].id, title: "Rysa", status: "Otwarte", severity: "Niska", createdAt: today }];
+    expect(buildTodayUnitStates(data, today)[0].blocker).toBeUndefined();
+    data.issues[0].nextArrivalRisk = true;
+    expect(buildTodayUnitStates(data, today)[0].blocker?.href).toBe("/tasks?issue=minor#issue-minor");
+  });
   it("łączy wyjazd, turnover, przyjazd i wiadomość w jednej chronologii", () => {
     const events = buildTodayAgenda(fixture(), today);
 

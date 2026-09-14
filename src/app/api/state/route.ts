@@ -3,6 +3,7 @@ import { isGeneralStateReader } from "@/lib/auth/permissions";
 import { visibleOperationalRecord } from "@/lib/auth/state-visibility";
 import { requireOrganization } from "@/lib/supabase/auth-context";
 import { createServiceClient } from "@/lib/supabase/server";
+import { readOperationalState } from "@/lib/supabase/read-operational-state";
 import { calculateBookingFinance } from "@/lib/metrics/finance";
 import type { Booking, PaymentTransaction } from "@/lib/types";
 import {
@@ -50,22 +51,15 @@ export async function GET(request: Request) {
     }, { status: 503, headers: { "cache-control": "private, no-store" } });
   }
 
-  const [{ data: records, error: recordsError }, { data: revision, error: revisionError }] = await Promise.all([
-    service
-      .from("operational_records")
-      .select("entity_type,entity_id,payload,record_version,updated_at")
-      .eq("organization_id", result.organizationId),
-    service
-      .from("operational_state_versions")
-      .select("version,updated_at")
-      .eq("organization_id", result.organizationId)
-      .maybeSingle(),
-  ]);
-
-  if (recordsError || revisionError) {
-    const missingTable = recordsError?.code === "42P01" || revisionError?.code === "42P01";
-    if (!missingTable) return NextResponse.json({ error: recordsError?.message ?? revisionError?.message }, { status: 500 });
+  let snapshot: Awaited<ReturnType<typeof readOperationalState>>;
+  try {
+    snapshot = await readOperationalState(service, result.organizationId);
+  } catch {
+    return NextResponse.json({
+      error: "Nie udało się pobrać kompletnych, aktualnych danych. Spróbuj ponownie.",
+    }, { status: 503, headers: { "cache-control": "private, no-store" } });
   }
+  const { records, revision } = snapshot;
 
   const operatorPaymentSummaries = new Map<string, Record<string, unknown>>();
   if (result.role === "manager") {

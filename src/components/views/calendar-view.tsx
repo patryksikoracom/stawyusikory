@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { SourceSyncBadge } from "@/components/integrations/source-sync-badge";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { useAppStore } from "@/components/layout/app-store";
 import { Badge, Button, Card, Field, inputClass } from "@/components/ui/primitives";
@@ -249,7 +250,7 @@ export function CalendarView({ role = "owner" }: { role?: UserRole }) {
           <div className="calendar-desktop-legend hidden flex-wrap items-center gap-2 sm:flex"><Legend color="bg-[#27727d]" label="Booking"/><Legend color="bg-[#df735a]" label="Airbnb"/><Legend color="bg-[#55835d]" label="Direct"/><Legend color="bg-[#d9ad4f]" label="Telefon"/><Legend color="border border-dashed border-[#8d866f] bg-[#f0eadc]" label="Blokada ręczna"/></div>
         </div>
         <div className="calendar-toolbar-actions grid grid-cols-1 gap-2 min-[380px]:grid-cols-2 sm:flex sm:flex-wrap sm:items-center">
-          <Link className="calendar-secondary-action hidden min-h-11 items-center justify-center gap-2 rounded-xl border border-[#cec6b7] bg-white px-3 text-sm font-black text-[#355248] sm:inline-flex" href="/calendar/year"><Icon className="size-4" name="calendar"/>Przegląd roku</Link>
+          {role !== "manager" ? <Link className="calendar-secondary-action hidden min-h-11 items-center justify-center gap-2 rounded-xl border border-[#cec6b7] bg-white px-3 text-sm font-black text-[#355248] sm:inline-flex" href="/calendar/year"><Icon className="size-4" name="calendar"/>Przegląd roku</Link> : null}
           <select aria-label="Filtr kanału rezerwacji" className="calendar-secondary-action hidden min-h-11 min-w-0 rounded-xl border border-[#cec6b7] bg-white px-3 text-sm font-bold outline-none sm:block" value={channel} onChange={(event) => setChannel(event.target.value)}><option value="Wszystkie">Wszystkie kanały</option>{availableChannels.map((item) => <option key={item}>{item}</option>)}</select>
           <label aria-label={channel === "Wszystkie" ? "Filtr kanałów: wszystkie" : `Filtr kanałów: ${channel}`} className="calendar-channel-filter relative grid size-10 shrink-0 place-items-center rounded-[.65rem] border border-[#cec6b7] bg-white text-[#38544a] sm:hidden"><Icon className="size-4" name="filter"/>{channel !== "Wszystkie" ? <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-[#e86e4e]"/> : null}<select aria-label="Filtr kanału rezerwacji na telefonie" className="absolute inset-0 size-full cursor-pointer opacity-0" value={channel} onChange={(event) => setChannel(event.target.value)}><option value="Wszystkie">Wszystkie kanały</option>{availableChannels.map((item) => <option key={item}>{item}</option>)}</select></label>
           <div className="calendar-mobile-mode-toggle grid grid-cols-2 rounded-xl bg-[#ebe7de] p-1 sm:hidden"><button className={`min-h-10 rounded-lg px-2 py-1.5 text-xs font-black ${mobileMode === "agenda" ? "bg-white shadow-sm" : "text-[#6f7a74]"}`} onClick={() => setMobileMode("agenda")}>Agenda</button><button className={`min-h-10 rounded-lg px-2 py-1.5 text-xs font-black ${mobileMode === "timeline" ? "bg-white shadow-sm" : "text-[#6f7a74]"}`} onClick={() => setMobileMode("timeline")}>Oś czasu</button></div>
@@ -265,7 +266,7 @@ export function CalendarView({ role = "owner" }: { role?: UserRole }) {
       </section>
 
       <section aria-label="Stan synchronizacji kalendarza" className="calendar-sync hidden gap-2 rounded-2xl border border-[#d8d0c2] bg-[#fffdf8] p-3 sm:grid sm:grid-cols-2">
-        {data.sourceConnections.map((source) => <div className="flex items-center justify-between gap-3 rounded-xl bg-[#f4f1e9] px-3 py-2" key={source.id}><div><p className="text-sm font-black">{source.platform} · {source.connectionType}</p><p className="text-[11px] text-[#68756e]">Pokrycie {source.coverage}% · dostępność może czekać na synchronizację</p></div><Badge tone={source.status === "Aktywne" ? "good" : "warn"}>{source.status}</Badge></div>)}
+        {data.sourceConnections.map((source) => <div className="flex items-center justify-between gap-3 rounded-xl bg-[#f4f1e9] px-3 py-2" key={source.id}><div><p className="text-sm font-black">{source.platform} · {source.connectionType}</p><p className="text-[11px] text-[#68756e]">{source.lastSyncAt ? `Ostatni odczyt: ${new Date(source.lastSyncAt).toLocaleString("pl-PL")}` : "Brak potwierdzonego odczytu"} · iCal nie zawiera cen ani kontaktu</p></div><SourceSyncBadge source={source}/></div>)}
       </section>
 
       {selectionStatus ? <div aria-live="polite" className={`rounded-xl border px-4 py-3 text-sm font-bold ${selectionStatus.startsWith("Nie można") ? "border-[#e3b5a7] bg-[#f9e7e1] text-[#8a3b29]" : "border-[#b9d2bd] bg-[#e8f2e7] text-[#285d3e]"}`}>{selectionStatus}</div> : null}

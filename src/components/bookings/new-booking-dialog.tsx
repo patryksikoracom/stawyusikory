@@ -369,7 +369,7 @@ export function NewBookingDialog({ onClose, onAdded, booking, defaults, returnFo
         >
           <p className="text-[10px] font-black uppercase tracking-[.16em] text-[#a84a2e]">Usuwanie rezerwacji</p>
           <h3 className="mt-1 font-display text-2xl font-semibold" id="delete-booking-title">Przenieść do kosza?</h3>
-          <p className="mt-3 text-sm leading-6 text-[#5d6c65]" id="delete-booking-description"><strong>{booking.guestLabel}</strong> zniknie z kalendarza i bieżących list. Rezerwację będzie można przywrócić z kosza przez 30 dni, potem zostanie usunięta automatycznie.</p>
+          <p className="mt-3 text-sm leading-6 text-[#5d6c65]" id="delete-booking-description"><strong>{booking.guestLabel}</strong> zniknie z kalendarza i bieżących list. Rezerwację będzie można przywrócić z kosza przez 30 dni, potem pozostanie w archiwum bez możliwości samodzielnego przywrócenia.</p>
           {error ? <p aria-live="assertive" className="mt-4 rounded-xl bg-[#f9dfd7] p-3 text-sm font-bold text-[#963c27]">{error}</p> : null}
           <div className="mt-6 flex justify-end gap-2"><Button data-dialog-initial-focus disabled={saving} type="button" variant="secondary" onClick={() => setConfirmDeletion(false)}>Wróć</Button><Button disabled={saving} type="button" variant="danger" onClick={async () => { setSaving(true); setError(""); const result = await deleteBooking(booking.id); setSaving(false); if (!result.ok) { setError(result.message); return; } onAdded(); }}>{saving ? "Usuwanie…" : "Tak, usuń do kosza"}</Button></div>
         </Dialog>

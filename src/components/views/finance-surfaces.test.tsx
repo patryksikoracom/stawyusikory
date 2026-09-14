@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initialData } from "@/lib/demo-data";
 import type { AppData } from "@/lib/types";
@@ -59,7 +59,7 @@ describe("finance presentation across surfaces", () => {
     });
 
     render(<DashboardView />);
-    vi.runAllTimers();
+    act(() => vi.advanceTimersByTime(1_000));
 
     const financeSection = screen
       .getByRole("heading", { name: "Te same liczby, które otworzysz w Finansach" })

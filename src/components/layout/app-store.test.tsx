@@ -203,6 +203,91 @@ describe("AppStoreProvider w trybie chmurowym", () => {
     expect(store?.syncMode).toBe("cloud");
   });
 
+  it("zapisuje usterkę i blokadę zadania w jednej atomowej komendzie", async () => {
+    vi.useFakeTimers();
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "test-anon-key");
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        clear: vi.fn(),
+        getItem: vi.fn(() => null),
+        key: vi.fn(() => null),
+        length: 0,
+        removeItem: vi.fn(),
+        setItem: vi.fn(),
+      },
+    });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: {tasks:[{id:"TASK-ISSUE",title:"Sprzątanie",type:"Sprzątanie",status:"W toku",priority:"Średni",owner:"Test",unitId:"unit",bookingId:"booking"}]}, version: 8, recordVersions: {"tasks:TASK-ISSUE":1} }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          stateVersion: 9,
+          savedAt: "2026-07-26T18:00:01.000Z",
+          changes: [{entityType: "tasks", entityId: "TASK-ISSUE", operation: "upsert", recordVersion: 2}, {
+            entityType: "issues",
+            entityId: "ISSUE-BATCH",
+            operation: "upsert",
+            recordVersion: 1,
+          }],
+        }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { AppStoreProvider, useAppStore } = await import("./app-store");
+    let store: ReturnType<typeof useAppStore> | undefined;
+    function Probe() {
+      store = useAppStore();
+      return (
+        <button onClick={() => store?.reportTaskIssue({
+          taskId: "TASK-ISSUE",
+          id: "ISSUE-BATCH",
+          title: "Test batcha",
+          status: "Otwarte",
+          createdAt: "2026-07-26T18:00:00.000Z",
+        })}>
+          Dodaj usterkę
+        </button>
+      );
+    }
+
+    render(<AppStoreProvider><Probe /></AppStoreProvider>);
+    await act(async () => {
+      vi.advanceTimersByTime(0);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Dodaj usterkę" }));
+    expect(store?.data.issues[0]?.id).toBe("ISSUE-BATCH");
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/records/batch", expect.objectContaining({
+      method: "POST",
+    }));
+    const body = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(body.changes).toEqual(expect.arrayContaining([
+      expect.objectContaining({entityType:"tasks",entityId:"TASK-ISSUE",payload:expect.objectContaining({status:"Zablokowane",issueId:"ISSUE-BATCH"})}),
+      expect.objectContaining({
+        entityType: "issues",
+        entityId: "ISSUE-BATCH",
+        operation: "upsert",
+        expectedRecordVersion: 0,
+      }),
+    ]));
+    expect(fetchMock.mock.calls.filter(([, options]) => options?.method === "PUT")).toHaveLength(0);
+    expect(store?.syncMode).toBe("cloud");
+  });
+
   it("cofa optymistyczną mutację po jednoznacznym 422 i zwraca błąd akcji", async () => {
     vi.useFakeTimers();
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
@@ -1587,7 +1672,7 @@ describe("AppStoreProvider w trybie chmurowym", () => {
     expect(skippedAfterTrash).not.toHaveProperty("statusBeforeBookingDeletion");
     expect(store?.data.scheduledMessages.find((message) => message.id === approvedMessage.id)).toMatchObject({
       status: "Anulowana",
-      statusBeforeBookingDeletion: "Zatwierdzona",
+      statusBeforeBookingDeletion: "Wersja robocza",
     });
     const deliveredAfterTrash = store?.data.scheduledMessages.find(
       (message) => message.id === deliveredMessage.id,
@@ -1644,7 +1729,7 @@ describe("AppStoreProvider w trybie chmurowym", () => {
     const approvedAfterRestore = store?.data.scheduledMessages.find(
       (message) => message.id === approvedMessage.id,
     );
-    expect(approvedAfterRestore).toMatchObject({ status: "Zatwierdzona" });
+    expect(approvedAfterRestore).toMatchObject({ status: "Wersja robocza" });
     expect(approvedAfterRestore).not.toHaveProperty("statusBeforeBookingDeletion");
     expect(store?.data.scheduledMessages.find((message) => message.id === deliveredMessage.id)).toMatchObject({
       status: "Dostarczona",
@@ -1953,5 +2038,77 @@ describe("AppStoreProvider w trybie chmurowym", () => {
       currentVersion: 7,
     });
     expect(fetchMock.mock.calls.filter(([, options]) => options?.method === "PUT")).toHaveLength(0);
+  });
+});
+
+describe("odświeżanie między urządzeniami", () => {
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  async function setup() {
+    vi.useFakeTimers();
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "test-anon-key");
+    const response = (name: string, version: number) => ({
+      ok: true, json: async () => ({ data: { settings: { organizationName: name } }, version }),
+    });
+    const fetchMock = vi.fn().mockResolvedValue(response("Pierwsza wersja", 1));
+    vi.stubGlobal("fetch", fetchMock);
+    const { AppStoreProvider, useAppStore } = await import("./app-store");
+    let store: ReturnType<typeof useAppStore>;
+    function Probe() { store = useAppStore(); return null; }
+    render(<AppStoreProvider><Probe /></AppStoreProvider>);
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    return { fetchMock, response, getStore: () => store! };
+  }
+
+  it("pobiera zmiany z drugiego urządzenia bez BroadcastChannel i bez restartu", async () => {
+    const { fetchMock, response, getStore } = await setup();
+    fetchMock.mockResolvedValue(response("Zmiana z telefonu", 2));
+    await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+    expect(getStore().data.settings.organizationName).toBe("Zmiana z telefonu");
+    expect(getStore().dataStatus).toBe("ready");
+    expect(getStore().syncMode).toBe("cloud");
+  });
+
+  it("nie przebudowuje danych, jeśli wersja się nie zmieniła", async () => {
+    const { getStore } = await setup();
+    const previous = getStore().data;
+    await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+    expect(getStore().data).toBe(previous);
+  });
+
+  it("zachowuje dane przy awarii odświeżania i odzyskuje połączenie", async () => {
+    const { fetchMock, response, getStore } = await setup();
+    fetchMock.mockResolvedValue({ ok: false, status: 503 });
+    await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+    expect(getStore().syncMode).toBe("error");
+    expect(getStore().data.settings.organizationName).toBe("Pierwsza wersja");
+    expect(getStore().dataStatus).toBe("ready");
+    fetchMock.mockResolvedValue(response("Odzyskane połączenie", 2));
+    await act(async () => { window.dispatchEvent(new Event("online")); });
+    expect(getStore().syncMode).toBe("cloud");
+    expect(getStore().data.settings.organizationName).toBe("Odzyskane połączenie");
+  });
+
+  it("odrzuca opóźniony odczyt po zapisie ustawień", async () => {
+    const { fetchMock, response, getStore } = await setup();
+    let resolveRead!: (value: ReturnType<typeof response>) => void;
+    fetchMock.mockImplementationOnce(() => new Promise((resolve) => { resolveRead = resolve; }));
+    await act(async () => { window.dispatchEvent(new Event("focus")); });
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({
+      settings: { ...getStore().data.settings, organizationName: "Nowy zapis", version: 2 },
+      recordVersion: 2, stateVersion: 2, savedAt: "2026-09-14T10:00:00Z",
+    }) });
+    await act(async () => {
+      await getStore().updateSettings({ ...getStore().data.settings, organizationName: "Nowy zapis" });
+    });
+    await act(async () => { resolveRead(response("Stary odczyt", 1)); });
+    expect(getStore().data.settings.organizationName).toBe("Nowy zapis");
+    expect(getStore().syncMode).toBe("cloud");
   });
 });

@@ -92,8 +92,9 @@ type AppStore = {
   cancelBooking: (bookingId: string) => Promise<BookingCommandResult>;
   deleteBooking: (bookingId: string) => Promise<BookingCommandResult>;
   restoreBooking: (bookingId: string) => Promise<BookingCommandResult>;
-  updateTask: (task: OpsTask) => void;
-  toggleChecklistItem: (item: TaskChecklistItem) => void;
+  updateTask: (task: OpsTask) => Promise<boolean>;
+  toggleChecklistItem: (item: TaskChecklistItem) => Promise<boolean>;
+  reportTaskIssue: (issue: IssueReport) => Promise<RecordCommandResult>;
   addIssue: (issue: IssueReport) => Promise<RecordCommandResult>;
   updateIssue: (issue: IssueReport) => Promise<RecordCommandResult>;
   prepareDepartureDebriefs: (bookingIds: string[]) => Promise<RecordCommandResult>;
@@ -137,7 +138,7 @@ type AppStore = {
     contacts?: ContactConsent[],
     imports?: AppData["imports"],
     costSettings?: CostSetting[],
-  ) => void;
+  ) => Promise<RecordCommandResult>;
   exportSnapshot: (passphrase: string) => Promise<void>;
   exportPricingAnalysis: () => void;
   resetDemo: () => void;
@@ -342,7 +343,7 @@ function normalizeData(parsed?: Partial<AppData> | null, fallback: AppData = ini
       ...unit,
       defaultPricePerNight: unit.defaultPricePerNight ?? rates.find((rate) => rate.unitId === unit.id && rate.active)?.pricePerNight ?? 0,
     })),
-    bookings: (parsed?.bookings ?? fallback.bookings).filter((booking) => !isTrashExpired(booking)).map((booking) => ({
+    bookings: (parsed?.bookings ?? fallback.bookings).map((booking) => ({
       ...booking,
       pricingMode: booking.pricingMode ?? (booking.grossPrice ? "manual" : "rate-card"),
       needsReview: booking.needsReview ?? (booking.createdBy === "Import Mobile-Calendar" && (!booking.grossPrice || booking.adults + booking.children === 0)),
@@ -972,6 +973,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         if (!active) return;
         if (response.ok) {
           const payload = await response.json() as CloudStatePayload;
+          if (!active) return;
           applyCloudPayload(payload);
           return;
         }
@@ -995,16 +997,70 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const refreshCloudSnapshot = useCallback(async () => {
     if (!cloudConfigured) return true;
     if (pendingRecordCommands.current > 0 || localRevision.current !== savedRevision.current) return false;
+    const startingData = latestData.current;
+    const startingVersion = stateVersion.current;
+    const generation = conflictGeneration.current;
     try {
       const response = await fetch("/api/state", { cache: "no-store" });
       if (!response.ok) return false;
       const payload = await response.json() as CloudStatePayload;
+      // A command may start and finish while the read is in flight.
+      if (pendingRecordCommands.current > 0 || localRevision.current !== savedRevision.current
+        || latestData.current !== startingData || stateVersion.current !== startingVersion
+        || conflictGeneration.current !== generation) return false;
       applyCloudPayload(payload);
       return true;
     } catch {
       return false;
     }
   }, [applyCloudPayload]);
+
+  useEffect(() => {
+    if (!hydrated || !cloudConfigured) return;
+    let active = true;
+    let refreshing = false;
+    const refresh = async () => {
+      if (!active || refreshing || document.visibilityState === "hidden"
+        || !cloudReady.current || !dataReady.current
+        || pendingRecordCommands.current > 0 || localRevision.current !== savedRevision.current) return;
+      refreshing = true;
+      const startingData = latestData.current;
+      const generation = conflictGeneration.current;
+      const startingVersion = stateVersion.current;
+      try {
+        const response = await fetch("/api/state", { cache: "no-store" });
+        if (!response.ok) throw new Error("refresh failed");
+        const payload = await response.json() as CloudStatePayload;
+        if (!active || !cloudReady.current || pendingRecordCommands.current > 0
+          || localRevision.current !== savedRevision.current || latestData.current !== startingData
+          || stateVersion.current !== startingVersion || conflictGeneration.current !== generation) return;
+        if (payload.version === startingVersion) {
+          setSyncMode("cloud");
+          return;
+        }
+        applyCloudPayload(payload);
+      } catch {
+        if (active && cloudReady.current && pendingRecordCommands.current === 0
+          && conflictGeneration.current === generation && latestData.current === startingData) {
+          setSyncMode("error");
+        }
+      } finally {
+        refreshing = false;
+      }
+    };
+    const trigger = () => { void refresh(); };
+    const interval = window.setInterval(trigger, 30_000);
+    window.addEventListener("focus", trigger);
+    window.addEventListener("online", trigger);
+    document.addEventListener("visibilitychange", trigger);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", trigger);
+      window.removeEventListener("online", trigger);
+      document.removeEventListener("visibilitychange", trigger);
+    };
+  }, [applyCloudPayload, hydrated]);
 
   useEffect(() => {
     if (!hydrated || dataStatus !== "ready") return;
@@ -1377,7 +1433,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
                     ? "cancelled"
                     : "updated",
               operation === "trash"
-                ? "Przeniesiono rezerwację do kosza na 30 dni"
+                ? "Przeniesiono rezerwację do kosza; przywracanie dostępne przez 30 dni"
                 : operation === "restore"
                   ? "Przywrócono rezerwację z kosza"
                   : operation === "cancel"
@@ -1600,20 +1656,20 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return outcome;
   }, [finishRecordCommand, mutate]);
 
-  const updateTask = useCallback((task: OpsTask) => {
-    if (!dataReady.current) return;
+  const updateTask = useCallback(async (task: OpsTask): Promise<boolean> => {
+    if (!dataReady.current) return false;
     if (!cloudConfigured) {
       mutate((current) => ({
         ...current,
         tasks: current.tasks.map((item) => item.id === task.id ? task : item),
         auditLog: [audit("task", task.id, "updated", `${task.title}: ${task.status}`), ...current.auditLog],
       }));
-      return;
+      return true;
     }
-    if (!cloudReady.current) return;
+    if (!cloudReady.current) return false;
 
     const currentTask = latestData.current.tasks.find((item) => item.id === task.id);
-    if (!currentTask) return;
+    if (!currentTask) return false;
     const expectedRecordVersion = taskRecordVersions.current.get(task.id) ?? currentTask.version ?? 1;
     const requestId = typeof crypto !== "undefined" && crypto.randomUUID
       ? crypto.randomUUID()
@@ -1632,6 +1688,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       tasks: current.tasks.map((item) => item.id === task.id ? optimisticTask : item),
     }));
 
+    let saved = false;
     cloudSaveQueue.current = cloudSaveQueue.current.then(async () => {
       if (!cloudReady.current) {
         finishRecordCommand();
@@ -1667,7 +1724,20 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           });
           return;
         }
-        if (!response.ok) throw new Error("task command failed");
+        if (!response.ok) {
+          if ([400, 401, 403, 404, 422].includes(response.status)) {
+            // A definite rejection must not leave the item looking completed.
+            if (taskRecordVersions.current.get(task.id) === optimisticTask.version) {
+              taskRecordVersions.current.set(task.id, expectedRecordVersion);
+            }
+            setData((current) => ({
+              ...current,
+              tasks: current.tasks.map((candidate) => candidate.id === task.id
+                && candidate.version === optimisticTask.version ? currentTask : candidate),
+            }));
+          }
+          throw new Error("task command failed");
+        }
         const payload = await response.json() as {
           task: OpsTask;
           recordVersion: number;
@@ -1693,6 +1763,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           ...baseData.current,
           tasks: baseData.current.tasks.map((item) => item.id === task.id ? committedTask : item),
         };
+        saved = true;
         setSyncMode("cloud");
         const savedAt = payload.savedAt ?? new Date().toISOString();
         setLastSavedAt(savedAt);
@@ -1712,22 +1783,24 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         finishRecordCommand();
       }
     });
+    await cloudSaveQueue.current;
+    return saved;
   }, [finishRecordCommand, mutate]);
 
-  const updateChecklistItem = useCallback((item: TaskChecklistItem) => {
-    if (!dataReady.current) return;
+  const updateChecklistItem = useCallback(async (item: TaskChecklistItem): Promise<boolean> => {
+    if (!dataReady.current) return false;
     if (!cloudConfigured) {
       mutate((current) => ({
         ...current,
         checklistItems: current.checklistItems.map((candidate) => candidate.id === item.id ? item : candidate),
         auditLog: [audit("checklist", item.id, item.done ? "completed" : "reopened", item.label), ...current.auditLog],
       }));
-      return;
+      return true;
     }
-    if (!cloudReady.current) return;
+    if (!cloudReady.current) return false;
 
     const currentItem = latestData.current.checklistItems.find((candidate) => candidate.id === item.id);
-    if (!currentItem) return;
+    if (!currentItem) return false;
     const expectedRecordVersion = checklistRecordVersions.current.get(item.id) ?? currentItem.version ?? 1;
     const requestId = typeof crypto !== "undefined" && crypto.randomUUID
       ? crypto.randomUUID()
@@ -1747,6 +1820,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       checklistItems: current.checklistItems.map((candidate) => candidate.id === item.id ? optimisticItem : candidate),
     }));
 
+    let saved = false;
     cloudSaveQueue.current = cloudSaveQueue.current.then(async () => {
       if (!cloudReady.current) {
         finishRecordCommand();
@@ -1782,7 +1856,20 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           });
           return;
         }
-        if (!response.ok) throw new Error("checklist command failed");
+        if (!response.ok) {
+          if ([400, 401, 403, 404, 422].includes(response.status)) {
+            // A definite rejection must not leave the item looking completed.
+            if (checklistRecordVersions.current.get(item.id) === optimisticItem.version) {
+              checklistRecordVersions.current.set(item.id, expectedRecordVersion);
+            }
+            setData((current) => ({
+              ...current,
+              checklistItems: current.checklistItems.map((candidate) => candidate.id === item.id
+                && candidate.version === optimisticItem.version ? currentItem : candidate),
+            }));
+          }
+          throw new Error("checklist command failed");
+        }
         const payload = await response.json() as {
           item: TaskChecklistItem;
           recordVersion: number;
@@ -1808,6 +1895,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           ...baseData.current,
           checklistItems: baseData.current.checklistItems.map((candidate) => candidate.id === item.id ? committedItem : candidate),
         };
+        saved = true;
         setSyncMode("cloud");
         const savedAt = payload.savedAt ?? new Date().toISOString();
         setLastSavedAt(savedAt);
@@ -1825,6 +1913,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         finishRecordCommand();
       }
     });
+    await cloudSaveQueue.current;
+    return saved;
   }, [finishRecordCommand, mutate]);
 
   const createPayment = useCallback((payment: PaymentTransaction) => {
@@ -2474,6 +2564,19 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     },
     updateTask,
     toggleChecklistItem: updateChecklistItem,
+    reportTaskIssue: (issue) => {
+      if (!issue.taskId || !latestData.current.tasks.some((task) => task.id === issue.taskId)) {
+        return Promise.resolve({ ok: false, message: "Zadanie nie jest dostępne. Odśwież plan.", resolution: "rolled-back" } as RecordCommandResult);
+      }
+      return batchMutate((current) => ({
+      ...current,
+      issues: [issue, ...current.issues],
+      tasks: current.tasks.map((task) => task.id === issue.taskId ? {
+        ...task, status: "Zablokowane", blocker: issue.title, issueId: issue.id,
+      } : task),
+      auditLog: [audit("issue", issue.id, "created", issue.title), ...current.auditLog],
+    }));
+    },
     addIssue: (issue) => batchMutate((current) => ({
       ...current,
       issues: [issue, ...current.issues],

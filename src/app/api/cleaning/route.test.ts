@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { PATCH } from "./route";
+import { GET, PATCH } from "./route";
 
 const mocks = vi.hoisted(() => ({
   context: {
@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
     user: { id: "00000000-0000-4000-8000-000000000002" },
   },
   rpc: vi.fn(),
+  read: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/auth-context", () => ({
@@ -82,5 +83,33 @@ describe("PATCH /api/cleaning", () => {
 
     expect(response.status).toBe(422);
     expect(await response.json()).toEqual({ error: "Nie udało się zapisać zmiany." });
+  });
+});
+
+vi.mock("@/lib/supabase/read-operational-state", () => ({ readOperationalState: mocks.read }));
+
+describe("GET /api/cleaning", () => {
+  beforeEach(() => {
+    mocks.context.role = "cleaning";
+    mocks.read.mockReset().mockResolvedValue({ records: [], revision: null });
+  });
+  it("requires the cleaning role before reading privileged data", async () => {
+    mocks.context.role = "manager";
+    expect((await GET(new Request("https://app.example.com/api/cleaning"))).status).toBe(403);
+    expect(mocks.read).not.toHaveBeenCalled();
+  });
+  it("returns an unavailable response instead of an incomplete plan", async () => {
+    mocks.read.mockRejectedValue(new Error("private database detail"));
+    const response = await GET(new Request("https://app.example.com/api/cleaning"));
+    expect(response.status).toBe(503);
+    expect(JSON.stringify(await response.json())).not.toContain("private database detail");
+  });
+  it("does not expose unrelated raw records in the cleaning response", async () => {
+    mocks.read.mockResolvedValue({ records: [{ entity_type: "consents", entity_id: "private", payload: { email: "private@example.com" } }], revision: null });
+    const response = await GET(new Request("https://app.example.com/api/cleaning"));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(JSON.stringify(await response.json())).not.toContain("private@example.com");
+    expect(mocks.read).toHaveBeenCalledWith(expect.anything(), mocks.context.organizationId);
   });
 });
