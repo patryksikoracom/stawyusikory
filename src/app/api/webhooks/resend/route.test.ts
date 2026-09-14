@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   verify: vi.fn(),
+  status: "sent",
   insert: vi.fn(),
   deleteEvent: vi.fn(),
   update: vi.fn(),
@@ -24,7 +25,7 @@ vi.mock("@/lib/supabase/server", () => ({
               id: "OUT-1",
               organization_id: "ORG-1",
               scheduled_message_id: "SCH-1",
-              status: "sent",
+              status: mocks.status,
             },
             error: null,
           })),
@@ -63,6 +64,7 @@ function request() {
 describe("POST /api/webhooks/resend", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.status = "sent";
     mocks.insert.mockResolvedValue({ error: null });
     mocks.rpc.mockResolvedValue({ error: null });
   });
@@ -95,6 +97,15 @@ describe("POST /api/webhooks/resend", () => {
       p_scheduled_message_id: "SCH-1",
       p_status: "Dostarczona",
     }));
+  });
+
+  it.each(["delivered", "error"])("does not downgrade %s after a late sent event", async (status) => {
+    mocks.status = status;
+    mocks.verify.mockReturnValue({ eventId: "late", event: { type: "email.sent", created_at: "2026-08-10T19:00:00Z", data: { email_id: "email_1" } } });
+    const response = await POST(request());
+    expect(await response.json()).toMatchObject({ status, recorded: true });
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.rpc).not.toHaveBeenCalled();
   });
 
   it("acknowledges duplicate events without applying status twice", async () => {

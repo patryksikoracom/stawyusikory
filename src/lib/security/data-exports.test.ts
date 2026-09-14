@@ -1,6 +1,30 @@
 import { describe, expect, it } from "vitest";
 import { initialData } from "@/lib/demo-data";
-import { buildPricingAnalysisDataset } from "./data-exports";
+import { buildPricingAnalysisDataset, encryptJson, decryptJson } from "./data-exports";
+
+describe("encrypted backup recovery", () => {
+  const password = "test-only-passphrase-2026";
+  it("recovers every collection, including archived bookings, without changing identifiers", async () => {
+    const data = { ...initialData, bookings: initialData.bookings.map(item => ({ ...item, deletedAt: "2020-01-01", purgeAfter: "2020-01-31" })) };
+    const encrypted = await encryptJson(data, password);
+    expect(encrypted).not.toContain(data.bookings[0].guestLabel);
+    expect(await decryptJson(encrypted, password)).toEqual(data);
+  });
+  it("rejects an incorrect password", async () => {
+    const encrypted = await encryptJson(initialData, password);
+    await expect(decryptJson(encrypted, "different-password")).rejects.toThrow("Nieprawidłowe hasło");
+  });
+  it("detects modified ciphertext", async () => {
+    const envelope = JSON.parse(await encryptJson(initialData, password));
+    envelope.ciphertext = (envelope.ciphertext[0] === "A" ? "B" : "A") + envelope.ciphertext.slice(1);
+    await expect(decryptJson(JSON.stringify(envelope), password)).rejects.toThrow("uszkodzona kopia");
+  });
+  it("rejects unsupported KDF parameters before executing them", async () => {
+    const envelope = JSON.parse(await encryptJson({}, password));
+    envelope.kdf.iterations = 2_000_000_000;
+    await expect(decryptJson(JSON.stringify(envelope), password)).rejects.toThrow("Nieobsługiwany format");
+  });
+});
 
 describe("pricing analysis export", () => {
   it("keeps pricing signals and excludes guest-identifying fields", () => {

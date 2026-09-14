@@ -55,6 +55,13 @@ export async function POST(request: Request) {
   const isSent = event.type === "email.sent";
   if (!isFailure && !isDelivered && !isSent) return NextResponse.json({ ok: true, recorded: true });
 
+  // A delayed "sent" event cannot undo a confirmed delivery or failure.
+  // Preserve failure evidence until an operator reconciles the delivery.
+  if ((outbound.status === "delivered" && isSent)
+    || (outbound.status === "error" && !isFailure)) {
+    return NextResponse.json({ ok: true, recorded: true, status: outbound.status });
+  }
+
   const nextStatus = isFailure ? "error" : isDelivered ? "delivered" : outbound.status === "delivered" ? "delivered" : "sent";
   const { error: updateError } = await service.from("outbound_messages").update({
     status: nextStatus,

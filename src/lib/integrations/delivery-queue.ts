@@ -21,8 +21,13 @@ export function isOutboundClaimable(
   existing: { status: string; next_attempt_at: string | null } | null,
   now: Date,
 ) {
-  if (!existing || ["queued", "error"].includes(existing.status)) {
-    return !existing?.next_attempt_at || existing.next_attempt_at <= now.toISOString();
+  if (!existing) return true;
+  if (existing.status === "queued") {
+    return !existing.next_attempt_at || existing.next_attempt_at <= now.toISOString();
+  }
+  // An error without a retry date is terminal, not immediately claimable.
+  if (existing.status === "error") {
+    return Boolean(existing.next_attempt_at && existing.next_attempt_at <= now.toISOString());
   }
   return existing.status === "processing"
     && (!existing.next_attempt_at || existing.next_attempt_at <= now.toISOString());

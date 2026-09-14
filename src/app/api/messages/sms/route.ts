@@ -3,7 +3,7 @@ import { z } from "zod";
 import { isOrganizationEditor, requireOrganization } from "@/lib/supabase/auth-context";
 import { sendSmsApi } from "@/lib/integrations/smsapi";
 import { isSmsDeliveryEnabled, smsDeliveryDisabledMessage } from "@/lib/integrations/outbound-delivery";
-import { normalizeE164 } from "@/lib/integrations/delivery-queue";
+import { normalizeE164, deliveryRetry } from "@/lib/integrations/delivery-queue";
 
 const schema = z.object({
   to: z.string().min(9).max(20),
@@ -44,10 +44,10 @@ export async function POST(request: Request) {
       channel: "SMS",
       recipient,
       body: parsed.data.message,
-      status: "queued",
+      status: "processing",
       idempotency_key: parsed.data.idempotencyKey,
       attempts: 0,
-      next_attempt_at: new Date().toISOString(),
+      next_attempt_at: null,
     })
     .select("id")
     .single();
@@ -67,6 +67,7 @@ export async function POST(request: Request) {
     status: result.ok ? "sent" : "error",
     provider_response: result.provider,
     attempts: 1,
+    next_attempt_at: !result.ok && result.retryable ? deliveryRetry({ attempts: 1, now: new Date(), important: false }).nextAttemptAt ?? null : null,
     updated_at: new Date().toISOString(),
   }).eq("id", queued.id);
   if (!result.ok) return NextResponse.json({ error: "SMSAPI odrzuciło wiadomość.", provider: result.provider }, { status: 502 });

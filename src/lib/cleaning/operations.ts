@@ -102,11 +102,11 @@ export function deriveTeamTaskQueues(
   today: string,
 ): TeamTaskQueues {
   const team = tasks.filter((task) => !["Zrobione", "Nie dotyczy"].includes(task.status));
-  const mine = team.filter((task) =>
-    (identity.userId && task.assigneeUserId === identity.userId)
-    || (identity.role && task.assigneeRole === identity.role)
-    || (identity.displayName && task.owner === identity.displayName),
-  );
+  const mine = team.filter((task) => {
+    if (task.assigneeUserId) return task.assigneeUserId === identity.userId;
+    if (task.assigneeRole) return task.assigneeRole === identity.role;
+    return Boolean(identity.displayName && task.owner === identity.displayName);
+  });
   const overdue = team.filter((task) => Boolean(task.dueDate && task.dueDate < today));
   return { mine, team, overdue };
 }

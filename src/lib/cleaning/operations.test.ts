@@ -11,6 +11,12 @@ import {
   instantiateCleaningChecklist,
 } from "./operations";
 
+it("keeps tasks assigned to another account out of my queue despite a matching name or role", () => {
+  const assigned = { id: "assigned", bookingId: "booking", title: "Test", type: "Naprawa" as const, status: "Do zrobienia" as const, priority: "Średni" as const, owner: "Patryk", assigneeRole: "owner" as const, assigneeUserId: "another-user" };
+  expect(deriveTeamTaskQueues([assigned], { userId: "my-user", role: "owner", displayName: "Patryk" }, "2026-09-14").mine).toEqual([]);
+  expect(deriveTeamTaskQueues([assigned], { userId: "another-user", role: "admin", displayName: "Other name" }, "2026-09-14").mine).toEqual([assigned]);
+});
+
 const task: OpsTask = {
   id: "clean-1",
   bookingId: "booking-1",

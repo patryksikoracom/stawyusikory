@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAppStore } from "@/components/layout/app-store";
 import { Badge, Button, Card, Field, inputClass } from "@/components/ui/primitives";
 import { Icon, type IconName } from "@/components/ui/icons";
@@ -11,7 +11,6 @@ import { formatPolishDate, formatPolishDateTime } from "@/lib/date";
 import { Dialog } from "@/components/ui/dialog";
 import { EncryptedBackupDialog } from "@/components/settings/encrypted-backup-dialog";
 import { parseAdSpendCsv } from "@/lib/growth/ad-spend";
-import { IntegrationGoLivePanel } from "@/components/integrations/integration-go-live-panel";
 import {
   configuredIcalConnections,
   connectionForSlot,
@@ -30,6 +29,7 @@ export function ImportsView() {
   const [bookingFileName, setBookingFileName] = useState("");
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [message, setMessage] = useState("");
+  const importInFlight = useRef(false);
   const [busy, setBusy] = useState(false);
   const [configuring, setConfiguring] = useState<SourceConnection | null>(null);
   const [showBackup, setShowBackup] = useState(false);
@@ -60,17 +60,23 @@ export function ImportsView() {
   }, []);
 
   async function previewImport() {
+    if (busy) return;
     setBusy(true); setMessage("");
-    const response = await fetch("/api/imports/mobile-calendar/preview", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ raw: rawImport, airbnbRaw, bookingRaw }),
-    });
-    const result = await response.json().catch(() => null) as ImportPreview | { error?: string } | null;
-    setBusy(false);
-    if (!response.ok || !result || !("rows" in result)) { setMessage((result && "error" in result && result.error) || "Nie udało się przeanalizować importu."); return; }
-    setPreview(result);
-    setMessage(result.rows.length ? `Rozpoznano ${result.rows.length} ${result.rows.length === 1 ? "rekord" : "rekordów"}. Sprawdź podgląd przed scaleniem.` : "Nie rozpoznano poprawnych rekordów.");
+    try {
+      const response = await fetch("/api/imports/mobile-calendar/preview", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ raw: rawImport, airbnbRaw, bookingRaw }),
+      });
+      const result = await response.json().catch(() => null) as ImportPreview | { error?: string } | null;
+      if (!response.ok || !result || !("rows" in result)) { setMessage((result && "error" in result && result.error) || "Nie udało się przeanalizować importu."); return; }
+      setPreview(result);
+      setMessage(result.rows.length ? `Rozpoznano ${result.rows.length} rekordów. Sprawdź podgląd przed scaleniem.` : "Nie rozpoznano poprawnych rekordów.");
+    } catch {
+      setMessage("Nie udało się połączyć. Dane importu zostały zachowane; spróbuj ponownie.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function selectFile(file?: File) {
@@ -114,37 +120,36 @@ export function ImportsView() {
   }
 
   async function commitImport() {
-    if (!preview?.rows.length) return;
+    if (busy || importInFlight.current || !preview?.rows.length) return;
+    importInFlight.current = true;
     setBusy(true);
-    const response = await fetch("/api/imports/mobile-calendar/commit", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        rows: preview.rows,
-        contacts: preview.contacts,
-        imports: preview.imports,
-        costSettings: preview.costSettings,
-      }),
-    });
-    setBusy(false);
-    if (!response.ok) { setMessage("Walidacja importu nie powiodła się."); return; }
-    const existing = new Set(data.bookings.map((booking) => booking.id));
-    const newCount = preview.rows.filter((booking) => !existing.has(booking.id)).length;
-    const updatedCount = preview.rows.length - newCount;
-    replaceWithImportedBookings(
-      preview.rows,
-      preview.contacts,
-      preview.imports,
-      preview.costSettings,
-    );
-    setMessage(`Dodano ${newCount} rezerwacji, wzbogacono ${updatedCount} istniejących i zapisano ${preview.imports.length} rekordów źródłowych OTA. Dane zapisują się teraz w chmurze.`);
-    setRawImport("");
-    setFileName("");
-    setAirbnbRaw("");
-    setAirbnbFileName("");
-    setBookingRaw("");
-    setBookingFileName("");
-    setPreview(null);
+    setMessage("");
+    try {
+      const response = await fetch("/api/imports/mobile-calendar/commit", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ rows: preview.rows, contacts: preview.contacts, imports: preview.imports, costSettings: preview.costSettings }),
+      });
+      if (!response.ok) { setMessage("Walidacja importu nie powiodła się. Dane pozostają w podglądzie."); return; }
+      const existing = new Set(data.bookings.map((booking) => booking.id));
+      const newCount = preview.rows.filter((booking) => !existing.has(booking.id)).length;
+      const updatedCount = preview.rows.length - newCount;
+      const result = await replaceWithImportedBookings(preview.rows, preview.contacts, preview.imports, preview.costSettings);
+      if (!result.ok) { setMessage(result.message); return; }
+      setMessage(`Dodano ${newCount} rezerwacji, wzbogacono ${updatedCount} istniejących i zapisano ${preview.imports.length} rekordów źródłowych OTA.`);
+      setRawImport("");
+      setFileName("");
+      setAirbnbRaw("");
+      setAirbnbFileName("");
+      setBookingRaw("");
+      setBookingFileName("");
+      setPreview(null);
+    } catch {
+      setMessage("Nie udało się potwierdzić zapisu importu. Podgląd i pliki zostały zachowane; sprawdź stan danych przed ponowieniem.");
+    } finally {
+      importInFlight.current = false;
+      setBusy(false);
+    }
   }
 
   async function syncNow() {
@@ -164,7 +169,7 @@ export function ImportsView() {
   return <div className="grid gap-5">
     <section className="animate-rise-2 relative overflow-hidden rounded-[22px] bg-[#163e34] p-6 text-white sm:p-7"><div className="absolute -right-16 -top-24 size-72 rounded-full border-[40px] border-white/[.04]"/><div className="relative grid gap-6 lg:grid-cols-[1fr_auto] lg:items-center"><div><span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-[.14em] text-[#dce5bd]"><Icon className="size-3.5" name="plug"/>Dostępność OTA</span><h2 className="mt-4 max-w-3xl font-display text-4xl font-semibold leading-[1.05] tracking-[-.035em]">Bezpłatny most iCal, <span className="text-[#d2de99]">bez udawania pełnego API.</span></h2><p className="mt-4 max-w-2xl text-sm leading-6 text-white/65">iCal może blokować terminy między portalami, ale nie pobiera ceny, płatności ani kontaktu gościa. Odświeżenie po stronie portalu może potrwać kilka godzin.</p></div><Button className="bg-[#f0be55] text-[#18332c] hover:bg-[#f5ce77]" disabled={busy} onClick={() => void syncNow()}><Icon className="size-4" name="refresh"/>Sprawdź teraz</Button></div></section>
 
-    <IntegrationGoLivePanel data={data} />
+
 
     <section className="animate-rise-3 grid gap-4 md:grid-cols-3"><Stat label="Aktywne połączenia" value={`${connected}/${slots.length}`} note="portal × domek" icon="plug"/><Stat label="Blokady zewnętrzne" value={data.blocks.filter((item) => item.id.startsWith("ICAL-")).length} note="nie są pełnymi rezerwacjami" icon="calendar"/><Stat label="Wymaga weryfikacji" value={data.bookings.filter((item) => item.needsReview).length} note="rekordy niekompletne" icon="warning" warn/></section>
 

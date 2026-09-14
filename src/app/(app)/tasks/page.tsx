@@ -1,7 +1,8 @@
 import { TasksView } from "@/components/views/tasks-view";
 import { requirePageAccess } from "@/lib/auth/require-page-access";
 
-export default async function TasksPage() {
+export default async function TasksPage({ searchParams }: { searchParams: Promise<{ issue?: string }> }) {
   const identity = await requirePageAccess("/tasks");
-  return <TasksView identity={identity} />;
+  const { issue } = await searchParams;
+  return <TasksView identity={identity} initialIssueId={issue} />;
 }

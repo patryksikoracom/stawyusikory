@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boundaryTimesOverlap, calendarBarPlacement, canClose, cancelOpenStayTasks, createTasksForBooking, getBookingConflicts, getBookingDataIssues, getNextAction, nightsBetween, overlaps, rescheduleOpenTasksForBooking } from "./rules";
+import { boundaryTimesOverlap, dashboardMetrics, calendarBarPlacement, canClose, cancelOpenStayTasks, createTasksForBooking, getBookingConflicts, getBookingDataIssues, getNextAction, nightsBetween, overlaps, rescheduleOpenTasksForBooking } from "./rules";
 import type { Booking, CalendarBlock, OpsTask } from "../types";
 import { initialData } from "../demo-data";
 import { todayInPoland } from "../date";
@@ -182,5 +182,19 @@ describe("availability rules", () => {
 
     expect(tasks.some((task) => task.type === "Content")).toBe(false);
     expect(tasks.some((task) => task.type === "Opinia")).toBe(true);
+  });
+});
+
+
+describe("dashboard data completeness", () => {
+  it("does not round incomplete records up to 100 percent", () => {
+    const bookings = Array.from({ length: 200 }, (_, index) => ({
+      ...base, id: `quality-${index}`, grossPrice: index === 0 ? undefined : 100,
+      checkIn: "2020-01-01", checkOut: "2020-01-03",
+    }));
+    const data = { ...initialData, bookings, consents: [], imports: [] };
+    expect(dashboardMetrics(data)).toMatchObject({ dataQuality: 99, missingMarketingFields: 1 });
+    expect(dashboardMetrics({ ...data, bookings: bookings.map(b => ({ ...b, grossPrice: 100 })) }))
+      .toMatchObject({ dataQuality: 100, missingMarketingFields: 0 });
   });
 });

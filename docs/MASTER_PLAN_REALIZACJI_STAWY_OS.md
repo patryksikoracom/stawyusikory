@@ -1,5 +1,7 @@
 # Stawy OS — nadrzędny plan realizacji
 
+> Aktualizacja 14.09.2026: bieżący stan i kolejka są w [STATUS_REALIZACJI_2026-09-14.md](STATUS_REALIZACJI_2026-09-14.md). Pakiety 1–2 z audytu wrześniowego są wdrożone; pakiet 3 przygotowano lokalnie. Poniższe statusy sierpniowe są historyczne.
+
 **Status:** plan obowiązujący
 **Data aktualizacji:** 10 sierpnia 2026
 **Źródła:** audyt aplikacji, plan wdrożenia poprawek, plan restrukturyzacji, ADR-001, słownik KPI, raport z przejścia przez aplikację z 19 lipca oraz ustalenia z realizacji PR-1–PR-5

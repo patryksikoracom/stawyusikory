@@ -146,4 +146,22 @@ describe("SettingsView po twardym odświeżeniu", () => {
 
     expect(screen.queryByRole("button", { name: "Wyślij test e-mail" })).not.toBeInTheDocument();
   });
+  it("zachowuje instrukcję po odrzuceniu zapisu i czyści ją po potwierdzeniu", async () => {
+    const store=storeWithSettings("Stawy u Sikory", "ready");
+    store.upsertCommunicationConfig.mockResolvedValueOnce({ok:false,message:"Konflikt konfiguracji"}).mockResolvedValueOnce({ok:true});
+    mocks.store.current=store;
+    render(<SettingsView currentRole="owner"/>);
+    fireEvent.change(screen.getByLabelText("Instrukcja dojazdu"),{target:{value:"Jedź od głównej drogi."}});
+    fireEvent.change(screen.getByLabelText("Ostrzeżenie o trasie"),{target:{value:"Nie wjeżdżaj w las."}});
+    fireEvent.click(screen.getByRole("button",{name:"Zatwierdź instrukcję dla domku"}));
+    expect(await screen.findByText("Konflikt konfiguracji")).toBeInTheDocument();
+    expect(screen.getByLabelText("Instrukcja dojazdu")).toHaveValue("Jedź od głównej drogi.");
+    fireEvent.click(screen.getByRole("button",{name:"Zatwierdź instrukcję dla domku"}));
+    expect(await screen.findByText("Instrukcja została zapisana.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Instrukcja dojazdu")).toHaveValue("");
+    const first=store.upsertCommunicationConfig.mock.calls[0][0];
+    const retry=store.upsertCommunicationConfig.mock.calls[1][0];
+    expect(retry.travelGuides.length).toBe(first.travelGuides.length);
+  });
+
 });

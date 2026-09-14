@@ -1,3 +1,4 @@
+import type { CommunicationData } from "@/lib/integrations/current-email";
 import { bookingLanguage } from "@/lib/crm/guest-identity";
 import type {
   AppData,
@@ -111,8 +112,10 @@ export function bookingFingerprint(booking: Booking) {
   return [booking.checkIn, booking.checkOut, booking.arrivalTime, booking.departureTime, booking.guestLabel, booking.paymentStatus, booking.workflowStatus, booking.unitId].join("|");
 }
 
-function communicationFingerprint(booking: Booking, language?: string, recipient?: string, templateVersion?: number) {
-  return [bookingFingerprint(booking), language, recipient, templateVersion].join("|");
+function communicationFingerprint(booking: Booking, language: string | undefined, recipient: string | undefined, template: MessageTemplate, rendered: ReturnType<typeof renderTemplate>, dueAt: string) {
+  // Keep the exact inputs, including rendered amounts and approved travel guide.
+  // Manual edits remain approved only while these source values are unchanged.
+  return JSON.stringify([bookingFingerprint(booking), booking.deletedAt, language, recipient, template.id, template.version, rendered.subject, rendered.body, dueAt]);
 }
 
 function dueDate(rule: AutomationRule, booking: Booking, data: Pick<AppData, "payments">) {
@@ -173,21 +176,22 @@ export function renderTemplate(template: MessageTemplate, booking: Booking, data
   const replace = (value?: string) => value?.replace(/{{\s*([a-z_]+)\s*}}/g, (_, key: string) => values[key] ?? `{{${key}}}`);
   const body = replace(template.body) || "";
   const subject = replace(template.subject);
-  const unresolved = Array.from(new Set([...body.matchAll(/{{\s*([^}]+)\s*}}/g)].map((match) => match[1])));
+  const unresolved = Array.from(new Set([...`${subject ?? ""}\n${body}`.matchAll(/{{\s*([^}]+)\s*}}/g)].map((match) => match[1])));
   return { body, subject, unresolved };
 }
 
-export function reconcileScheduledMessages(data: AppData): ScheduledMessage[] {
+export function reconcileScheduledMessages(data: CommunicationData): ScheduledMessage[] {
   const current = new Map(data.scheduledMessages.map((item) => [item.id, item]));
-  const output: ScheduledMessage[] = [];
+  const output: ScheduledMessage[] = data.scheduledMessages.filter(item => ["Wysłana", "Dostarczona"].includes(item.status));
   const today = todayInPoland();
   for (const booking of data.bookings) {
     if (booking.historicalImport || booking.checkOut <= today) continue;
     for (const rule of data.automationRules.filter((item) => item.active)) {
       const messageId = `SCH-${rule.id}-${booking.id}`;
       const existing = current.get(messageId);
+      if (existing && ["Wysłana", "Dostarczona"].includes(existing.status)) continue;
       const baseTemplate = data.messageTemplates.find((item) => item.id === rule.templateId && item.active);
-      if (!baseTemplate) continue;
+      if (!baseTemplate || baseTemplate.id.startsWith("TPL-MC-")) continue;
       const profile = data.guests.find((item) => item.bookingId === booking.id);
       const person = data.people.find((item) => item.id === profile?.personId);
       const language = bookingLanguage(data, booking.id);
@@ -205,9 +209,7 @@ export function reconcileScheduledMessages(data: AppData): ScheduledMessage[] {
       const rendered = renderTemplate(template, booking, data);
       const consent = data.consents.find((item) => item.bookingId === booking.id);
       const recipient = contactFor(template, consent);
-      const fingerprint = language
-        ? communicationFingerprint(booking, language, recipient, template.version)
-        : bookingFingerprint(booking);
+      const fingerprint = communicationFingerprint(booking, language, recipient, template, rendered, candidateDueAt);
       const blockingReasons = [
         !language ? "Brak jawnie wybranego języka gościa" : undefined,
         language && template.language !== language ? `Brak szablonu w języku ${language.toUpperCase()}` : undefined,
@@ -230,7 +232,7 @@ export function reconcileScheduledMessages(data: AppData): ScheduledMessage[] {
         && !blockedReason
         && existing?.status === "Wersja robocza"
         && existing.deliveryPolicy === "auto_send";
-      const status = booking.workflowStatus === "Anulowana"
+      const status = booking.deletedAt || booking.workflowStatus === "Anulowana"
         ? "Anulowana"
         : changedAfterApproval
           ? automatic

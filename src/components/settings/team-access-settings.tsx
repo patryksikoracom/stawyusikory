@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { UserRole } from "@/lib/types";
+import { roleLabel } from "@/lib/auth/identity";
 import { Button, Card, CardTitle, Field, inputClass } from "@/components/ui/primitives";
 
 type InvitationRole = Exclude<UserRole, "owner">;
@@ -23,6 +24,9 @@ export function TeamAccessSettings({ currentRole }: { currentRole: UserRole | nu
   const [role, setRole] = useState<InvitationRole>(allowedRoles[0] ?? "viewer");
   const [status, setStatus] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [members, setMembers] = useState<Array<{ userId: string; role: UserRole; displayName: string; email: string | null; accountAvailable: boolean }>>();
+  const [loadingMembers, setLoadingMembers] = useState(false);
+  const [membersError, setMembersError] = useState("");
 
   if (!allowedRoles.length) return null;
 
@@ -51,6 +55,20 @@ export function TeamAccessSettings({ currentRole }: { currentRole: UserRole | nu
       <CardTitle eyebrow="Zespół" title="Dostęp do Stawy OS">
         Zaproszona osoba otrzyma e-mail do ustawienia hasła. Dostęp powstaje tylko z wybraną rolą — nigdy automatycznie jako właściciel.
       </CardTitle>
+      <div className="border-b p-5">
+        <Button variant="secondary" disabled={loadingMembers} onClick={async () => {
+          setLoadingMembers(true); setMembersError("");
+          try {
+            const response = await fetch("/api/admin/members", { cache: "no-store" });
+            const result = await response.json();
+            if (!response.ok || !Array.isArray(result.members)) throw new Error(result.error ?? "Nie udało się pobrać listy kont.");
+            setMembers(result.members);
+          } catch (cause) { setMembersError(cause instanceof Error ? cause.message : "Nie udało się pobrać listy kont."); }
+          finally { setLoadingMembers(false); }
+        }}>{loadingMembers ? "Pobieram konta…" : "Pokaż obecne konta i role"}</Button>
+        {membersError ? <p role="alert" className="mt-3 text-sm text-[#943b27]">{membersError}</p> : null}
+        {members ? <ul className="mt-4 grid gap-3">{members.map(member => <li key={member.userId} className="rounded-xl bg-[#f4f1e9] p-3 text-sm"><p className="font-bold">{member.displayName}</p><p>{roleLabel(member.role)}{member.email && member.email !== member.displayName ? ` · ${member.email}` : ""}</p>{!member.accountAvailable ? <p className="text-[#943b27]">Nie udało się odczytać danych konta.</p> : null}</li>)}</ul> : null}
+      </div>
       <div className="grid gap-4 p-5 sm:grid-cols-[1fr_260px_auto] sm:items-end">
         <Field label="E-mail osoby">
           <input

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { sendSmsApi } from "@/lib/integrations/smsapi";
 import { isSmsDeliveryEnabled, smsDeliveryDisabledMessage } from "@/lib/integrations/outbound-delivery";
+import { readSmsQueue } from "@/lib/integrations/read-sms-queue";
 import { deliveryRetry } from "@/lib/integrations/delivery-queue";
 
 export async function POST(request: Request) {
@@ -14,20 +15,24 @@ export async function POST(request: Request) {
   const service = createServiceClient();
   if (!token || !service) return NextResponse.json({ error: "Brak konfiguracji SMSAPI lub Supabase." }, { status: 503 });
 
-  const { data: messages, error } = await service
-    .from("outbound_messages")
-    .select("id,organization_id,recipient,body,attempts,important")
-    .in("status", ["queued", "error"])
-    .lt("attempts", 5)
-    .or(`next_attempt_at.is.null,next_attempt_at.lte.${new Date().toISOString()}`)
-    .order("created_at", { ascending: true })
-    .limit(20);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
+  let eligible;
+  try {
+    eligible = await readSmsQueue(service, new Date());
+  } catch {
+    return NextResponse.json({ error: "Nie udało się pobrać kolejki SMS." }, { status: 503 });
+  }
   let sent = 0;
   let failed = 0;
-  const eligible = (messages ?? []).filter((message) => message.attempts < (message.important ? 5 : 3));
   for (const message of eligible) {
+    let claimQuery = service.from("outbound_messages")
+      .update({ status: "processing", next_attempt_at: null, updated_at: new Date().toISOString() })
+      .eq("id", message.id).eq("status", message.status).eq("attempts", message.attempts);
+    claimQuery = message.next_attempt_at === null
+      ? claimQuery.is("next_attempt_at", null)
+      : claimQuery.eq("next_attempt_at", message.next_attempt_at);
+    const { data: claimed, error: claimError } = await claimQuery.select("id").maybeSingle();
+    if (claimError) { failed += 1; continue; }
+    if (!claimed) continue;
     const result = await sendSmsApi(token, message.recipient, message.body);
     const attempts = message.attempts + 1;
     const retry = deliveryRetry({ attempts, now: new Date(), important: message.important });
@@ -35,7 +40,7 @@ export async function POST(request: Request) {
       status: result.ok ? "sent" : "error",
       provider_response: result.provider,
       attempts,
-      next_attempt_at: result.ok ? null : retry.nextAttemptAt ?? null,
+      next_attempt_at: !result.ok && result.retryable ? retry.nextAttemptAt ?? null : null,
       last_error: result.ok ? null : "provider_rejected_or_unavailable",
       updated_at: new Date().toISOString(),
     }).eq("id", message.id);

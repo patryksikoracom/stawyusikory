@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { SourceSyncBadge } from "@/components/integrations/source-sync-badge";
 import { useMemo, useState } from "react";
 import { useAppStore } from "@/components/layout/app-store";
 import { Badge, Card } from "@/components/ui/primitives";
@@ -62,13 +63,14 @@ export function DashboardView() {
   const arrivals = data.bookings.filter((booking) => booking.workflowStatus !== "Anulowana" && booking.checkIn >= today).sort((a, b) => a.checkIn.localeCompare(b.checkIn)).slice(0, 4);
   const departures = data.bookings.filter((booking) => booking.workflowStatus !== "Anulowana" && booking.checkOut >= today).sort((a, b) => a.checkOut.localeCompare(b.checkOut)).slice(0, 4);
   const openTasks = data.tasks.filter((task) => !["Zrobione", "Nie dotyczy"].includes(task.status));
-  const priorityTasks = [...openTasks].sort((a, b) => (a.priority === "Wysoki" ? -1 : b.priority === "Wysoki" ? 1 : 0)).slice(0, 4);
+  const urgentTasks = openTasks.filter((task) => task.priority === "Wysoki" && task.dueDate === today);
+  const priorityTasks = [...openTasks].sort((a, b) => (a.dueDate || "9999").localeCompare(b.dueDate || "9999")).slice(0, 4);
   const pendingPayments = data.bookings.filter((booking) => {
     if (booking.workflowStatus === "Anulowana" || booking.deletedAt || booking.checkOut < today) return false;
     const finance = calculateBookingFinance(booking, data.payments);
     return finance.balanceStatus !== "settled" || finance.perspectives.receivables.completeness !== "complete";
   });
-  const urgentCount=priorityTasks.filter((task)=>task.priority==="Wysoki").length;
+  const urgentCount=urgentTasks.length;
   const todayDepartures = data.bookings.filter((booking) => booking.workflowStatus !== "Anulowana" && booking.checkOut === today);
   const selectedDeparture = todayDepartures.find((item) => item.id === departureId);
   const todayAgenda = useMemo(() => buildTodayAgenda(data, today), [data, today]);
@@ -91,7 +93,7 @@ export function DashboardView() {
           <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-white/10 bg-white/10">
             <HeroStat icon="home" label="Goście na miejscu" value={active.length} note={`${active.reduce((sum, b) => sum + b.adults + b.children, 0)} osób`} />
             <HeroStat icon="calendar" label="Najbliższy przyjazd" value={arrivals[0] ? formatDay(arrivals[0].checkIn) : "—"} note={arrivals[0] ? unitName(data.units, arrivals[0].unitId) : "brak"} />
-            <HeroStat icon="cleaning" label="Otwarte zadania" value={openTasks.length} note={`${priorityTasks.filter((t) => t.priority === "Wysoki").length} pilne`} />
+            <HeroStat icon="cleaning" label="Otwarte zadania" value={openTasks.length} note={`${urgentCount} pilne`} />
             <HeroStat icon="wallet" label="Do rozliczenia" value={pendingPayments.length} note="rezerwacje" />
           </div>
         </div>
@@ -151,7 +153,7 @@ export function DashboardView() {
         <Card className="overflow-hidden">
           <div className="flex items-start justify-between border-b border-[#e5ded1] p-5 sm:p-6"><div><p className="text-[11px] font-black uppercase tracking-[.18em] text-[#7d8d4c]">Bezpieczeństwo sprzedaży</p><h2 className="font-display text-2xl font-semibold">Kanały i synchronizacja</h2></div><span className="inline-flex items-center gap-2 text-xs font-black text-[#6f5b20]"><span className="size-2 rounded-full bg-[#d6a643]" />{data.sourceConnections.some((item)=>item.status==="Aktywne")?"Częściowo aktywne":"Do konfiguracji"}</span></div>
           <div className="grid gap-4 p-4 sm:grid-cols-2">
-            {data.sourceConnections.map((source) => <div className="relative overflow-hidden rounded-2xl border border-[#ded7ca] bg-white p-4" key={source.id}><div className="flex items-start justify-between"><div><p className="font-display text-xl font-semibold">{source.platform}</p><p className="text-xs font-semibold text-[#748078]">{source.connectionType} · pokrycie {source.coverage}%</p></div><Badge tone={source.status === "Aktywne" ? "good" : "warn"}>{source.status}</Badge></div><div className="mt-4 h-1.5 overflow-hidden rounded-full bg-[#eae5dc]"><div className={`h-full rounded-full ${source.coverage > 70 ? "bg-[#4b9471]" : "bg-[#d6a643]"}`} style={{ width: `${source.coverage}%` }} /></div><p className="mt-3 text-xs leading-5 text-[#64716b]">{source.nextStep}</p></div>)}
+            {data.sourceConnections.map((source) => <div className="relative overflow-hidden rounded-2xl border border-[#ded7ca] bg-white p-4" key={source.id}><div className="flex items-start justify-between"><div><p className="font-display text-xl font-semibold">{source.platform}</p><p className="text-xs font-semibold text-[#748078]">{source.connectionType} · {source.lastSyncAt ? `Ostatni odczyt: ${new Date(source.lastSyncAt).toLocaleString("pl-PL")}` : "Brak potwierdzonego odczytu"}</p></div><SourceSyncBadge source={source}/></div><p className="mt-3 text-xs leading-5 text-[#64716b]">{source.nextStep}</p></div>)}
           </div>
           <div className="mx-4 mb-4 flex flex-col gap-3 rounded-2xl bg-[#edf2e5] p-4 sm:flex-row sm:items-center"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#174d3b] text-white"><Icon className="size-5" name="spark" /></span><div className="flex-1"><p className="text-sm font-black">Kontrola dostępności</p><p className="text-xs leading-5 text-[#637068]">Kalendarz pokazuje rzeczywiste rezerwacje i blokady. Rekomendacje cenowe pozostają wyłączone, dopóki stawki sezonowe i koszty nie będą kompletne.</p></div><Link className="inline-flex min-h-10 items-center justify-center rounded-xl border border-[#cec6b7] bg-white px-4 text-sm font-bold" href="/calendar">Sprawdź kalendarz</Link></div>
         </Card>

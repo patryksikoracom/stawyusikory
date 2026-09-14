@@ -1,3 +1,4 @@
+import { isCurrentEmail, readCommunicationData } from "@/lib/integrations/current-email";
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { deliveryRetry, isOutboundClaimable, normalizeDeliveryEmail } from "@/lib/integrations/delivery-queue";
@@ -65,14 +66,18 @@ async function claimOutbound(
     .maybeSingle<OutboundMessage>();
   if (existingError) return { error: existingError.message };
   if (existing?.status === "sent" || existing?.status === "delivered") return { duplicate: true };
+  if (existing && deliveryRetry({ attempts: existing.attempts, now, important }).exhausted) return { deferred: true };
   if (!isOutboundClaimable(existing, now)) return { deferred: true };
 
   if (existing) {
     const leaseUntil = new Date(now.getTime() + 10 * 60_000).toISOString();
-    const { data: claimed, error } = await service.from("outbound_messages")
+    let claimQuery = service.from("outbound_messages")
       .update({ status: "processing", next_attempt_at: leaseUntil, updated_at: now.toISOString() })
-      .eq("id", existing.id)
-      .eq("status", existing.status)
+      .eq("id", existing.id).eq("status", existing.status).eq("attempts", existing.attempts);
+    claimQuery = existing.next_attempt_at === null
+      ? claimQuery.is("next_attempt_at", null)
+      : claimQuery.eq("next_attempt_at", existing.next_attempt_at);
+    const { data: claimed, error } = await claimQuery
       .select("id,status,attempts,next_attempt_at,provider_message_id")
       .maybeSingle<OutboundMessage>();
     if (error) return { error: error.message };
@@ -168,6 +173,17 @@ export async function POST(request: Request) {
       skipped += 1;
       continue;
     }
+    try {
+      const currentData = await readCommunicationData(service, message.organization_id);
+      if (!isCurrentEmail(currentData, message)) {
+        skipped += 1;
+        continue;
+      }
+    } catch {
+      // Never send using a partial snapshot or a stale queue projection.
+      failed += 1;
+      continue;
+    }
     const important = !/review|opini/i.test(message.rule_id);
     const claim = await claimOutbound(service, message, important, now);
     if (claim.error) {
@@ -213,7 +229,7 @@ export async function POST(request: Request) {
       status: "error",
       provider_response: result,
       attempts,
-      next_attempt_at: result.retryable ? quotaDelay ?? retry.nextAttemptAt ?? null : null,
+      next_attempt_at: result.retryable && !retry.exhausted ? quotaDelay ?? retry.nextAttemptAt ?? null : null,
       last_error: result.error,
       updated_at: new Date().toISOString(),
     }).eq("id", claim.row.id);

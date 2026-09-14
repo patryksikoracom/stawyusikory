@@ -1,16 +1,19 @@
 import fs from "node:fs";
 import crypto from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
+import { readOperationalState } from "../src/lib/supabase/read-operational-state.ts";
 
 function loadLocalEnv() {
   const env = { ...process.env };
-  if (!fs.existsSync(".env.local")) return env;
-  for (const line of fs.readFileSync(".env.local", "utf8").split(/\r?\n/)) {
+  // Never fall back to the application environment: it may target production.
+  const testEnvFile = process.env.STAWY_INTEGRATION_ENV_FILE ?? ".env.integration.local";
+  if (!fs.existsSync(testEnvFile)) return env;
+  for (const line of fs.readFileSync(testEnvFile, "utf8").split(/\r?\n/)) {
     const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
     if (!match) continue;
     let value = match[2];
     if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
-    env[match[1]] = value;
+    if (process.env[match[1]] === undefined) env[match[1]] = value;
   }
   return env;
 }
@@ -28,7 +31,12 @@ if (env.RUN_SUPABASE_INTEGRATION !== "1" || env.SUPABASE_INTEGRATION_TEST_PROJEC
 const url = env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
-assert(url && anonKey && serviceKey, "Missing Supabase integration test configuration.");
+assert(url && anonKey && serviceKey, "Missing dedicated Supabase integration test configuration (.env.integration.local).");
+assert(!url.includes("crfrxrudohpcmcadltbx"), "Refusing to run destructive integration fixtures against Stawy production.");
+const testHost = new URL(url).hostname;
+assert(["127.0.0.1", "localhost", "::1", "[::1]"].includes(testHost)
+  || (env.SUPABASE_INTEGRATION_PROJECT_REF && testHost === `${env.SUPABASE_INTEGRATION_PROJECT_REF}.supabase.co`),
+  "Explicit SUPABASE_INTEGRATION_PROJECT_REF is required for a remote test project.");
 
 const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
 const userClient = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -91,7 +99,11 @@ try {
       label: `Checklist ${index}`,
       done: false,
     })),
-    issues: [], messages: [], auditLog: [],
+    issues: [], messages: [], auditLog: Array.from({ length: 1503 }, (_, index) => ({
+      id: `pagination-audit-${index}`, entityType: "integration", entityId: `fixture-${index}`,
+      action: "pagination_fixture", summary: "Synthetic pagination fixture", actor: "Integration",
+      createdAt: "2099-01-01T00:00:00.000Z",
+    })),
     settings: { organizationName: "Test", timezone: "Europe/Warsaw", cleaningContactName: "", cleaningPhone: "", defaultCheckIn: "16:00", defaultCheckOut: "11:00", aiApprovalRequired: true },
   };
   const firstRequestId = crypto.randomUUID();
@@ -746,7 +758,7 @@ try {
   assert(batchConflict.data?.status === "conflict", "Stale record batch did not return a conflict.");
 
   const [records, writeTelemetry, taskTelemetry, checklistTelemetry, settingsTelemetry, bookingTelemetry, paymentTelemetry, blockTelemetry, batchTelemetry, scheduledRows] = await Promise.all([
-    userClient.from("operational_records").select("entity_type,entity_id,record_version,payload"),
+    readOperationalState(userClient, ownOrg).then(result => ({ data: result.records, error: null })),
     userClient
       .from("audit_events")
       .select("entity_id,action,payload")
@@ -797,6 +809,7 @@ try {
   if (blockTelemetry.error) throw blockTelemetry.error;
   if (batchTelemetry.error) throw batchTelemetry.error;
   if (scheduledRows.error) throw scheduledRows.error;
+  assert(records.data.filter(record => record.entity_type === "auditLog" && record.entity_id.startsWith("pagination-audit-")).length === 1503, "Paginated state lost records beyond the Data API cap.");
   assert(records.data.some((record) => record.entity_type === "units" && record.entity_id === "test-unit"), "Normalized records were not persisted.");
   const taskRecords = records.data.filter((record) => record.entity_type === "tasks" && record.entity_id.startsWith("test-task-"));
   assert(taskRecords.length === 100, "Not all task records survived parallel updates.");
