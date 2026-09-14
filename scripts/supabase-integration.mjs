@@ -114,19 +114,19 @@ try {
     p_client_sent_at: new Date().toISOString(),
     p_tab_id: "integration-session-a",
   });
-  if (firstCommit.error) throw firstCommit.error;
-  assert(Number(firstCommit.data) === 1, "Initial state version was not created.");
-
+  assert(firstCommit.error?.code === "42501", "Legacy whole-state writer must remain inaccessible.");
   const staleRequestId = crypto.randomUUID();
-  const staleCommit = await userClient.rpc("replace_operational_state_v2", {
-    p_expected_version: 0,
-    p_state: state,
-    p_request_id: staleRequestId,
-    p_client_sent_at: new Date().toISOString(),
-    p_tab_id: "integration-session-b",
-  });
-  console.log("Integration: stale-write result", { code: staleCommit.error?.code ?? null, returnedVersion: staleCommit.data ?? null });
-  assert(!staleCommit.error && Number(staleCommit.data) < 0, "Stale write was not rejected without raising a database error.");
+  // Seed fixtures with the test administrator; all commands below run as the user.
+  const seedRows = Object.entries(state).flatMap(([entity_type, value]) =>
+    (Array.isArray(value) ? value : [{ ...value, id: "organization" }]).map(payload => ({
+      organization_id: ownOrg, entity_type, entity_id: payload.id, payload, record_version: 1,
+    })));
+  for (let offset = 0; offset < seedRows.length; offset += 500) {
+    const seeded = await admin.from("operational_records").insert(seedRows.slice(offset, offset + 500));
+    if (seeded.error) throw seeded.error;
+  }
+  const seededVersion = await admin.from("operational_state_versions").upsert({ organization_id: ownOrg, version: 1 });
+  if (seededVersion.error) throw seededVersion.error;
 
   console.log("Integration: running 100 parallel record-level task updates…");
   const taskCommits = await Promise.all(state.tasks.map((task, index) => userClient.rpc("update_operational_task", {
@@ -814,8 +814,7 @@ try {
   const taskRecords = records.data.filter((record) => record.entity_type === "tasks" && record.entity_id.startsWith("test-task-"));
   assert(taskRecords.length === 100, "Not all task records survived parallel updates.");
   assert(taskRecords.every((record) => Number(record.record_version) === 2 && record.payload.status === "W toku"), "Parallel task records have inconsistent versions or payloads.");
-  assert(writeTelemetry.data.some((event) => event.entity_id === firstRequestId && event.action === "committed"), "Successful write telemetry is missing.");
-  assert(writeTelemetry.data.some((event) => event.entity_id === staleRequestId && event.action === "conflict"), "Conflict telemetry is missing.");
+  assert(writeTelemetry.data.length === 0, "Denied legacy writer unexpectedly created commit telemetry.");
   assert(taskTelemetry.data.length === 100, "Task command audit is incomplete.");
   const checklistRecords = records.data.filter((record) => record.entity_type === "checklistItems" && record.entity_id.startsWith("test-check-"));
   assert(checklistRecords.length === 100, "Not all checklist records survived parallel updates.");
@@ -904,6 +903,12 @@ try {
 } finally {
   console.log("Integration: cleaning temporary data…");
   await userClient.auth.signOut().catch(() => undefined);
-  if (userId) await admin.auth.admin.deleteUser(userId).catch(() => undefined);
-  await admin.from("organizations").delete().in("id", [ownOrg, otherOrg]);
+  // Remove organization rows first: their actor references can prevent Auth deletion.
+  const removedOrganizations = await admin.from("organizations").delete().in("id", [ownOrg, otherOrg]);
+  if (removedOrganizations.error) throw new Error(`Fixture cleanup failed: ${removedOrganizations.error.message}`);
+  if (userId) {
+    const removedUser = await admin.auth.admin.deleteUser(userId);
+    if (removedUser.error) throw new Error(`Test user cleanup failed: ${removedUser.error.message}`);
+  }
+  console.log("Integration: temporary organizations and user removed.");
 }

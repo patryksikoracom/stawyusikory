@@ -119,3 +119,13 @@ Webhook używa jednej transakcji apply_resend_webhook: deduplikacja zdarzenia, b
 Test SQL tests/integration/resend-webhook.sql na TEST: wymuszony błąd aktualizacji projekcji wycofuje wcześniejsze operacje; retry i duplikat, późne sent, zachowanie dowodu błędu, przedwczesny callback oraz brak uprawnień anon/authenticated. Udane wywołania sprawdzone także po SET LOCAL ROLE service_role. Wszystkie dane testowe wycofano przez ROLLBACK. Doradca bezpieczeństwa: brak nowych ostrzeżeń (pozostają dwa znane RPC rezerwacji i informacja o niedostępnym publicznie manifeście).
 
 Walidacja lokalna: 609/609 testów w 124 plikach, TypeScript i lint zmienionych plików poprawne. Pozostaje pełny test równoległości worker/webhook i globalnego limitu przy równoległych uruchomieniach, rzeczywiste dostarczenie na zatwierdzony adres testowy oraz HTTP/przeglądarka na izolowanej konfiguracji. Odczyt klucza serwerowego testowego projektu do wyniku narzędzia został odrzucony przez automatyczną kontrolę; nie zapisano klucza ani nie skonfigurowano .env.integration.local.
+
+## Odblokowana integracja Auth/Data API — pełna pętla zaliczona
+
+Użytkownik uzupełnił lokalnie klucz projektu TEST. scripts/supabase-integration.mjs wykonano na pzsvfhchjvxavhlgwphw z rzeczywistym logowaniem Auth i wywołaniami Data API/RPC. Zaktualizowano nieaktualny bootstrap: stary replace_operational_state_v2 ma zwracać 42501, a dane syntetyczne przygotowuje administrator TEST. Pozostałe komendy wykonuje konto użytkownika. Nie przywracano dostępu do zapisu całego stanu.
+
+Test wykrył błąd produkcyjnej walidacji blokad: podwójnie escapowane \\d w SQL odrzucało wszystkie prawidłowe daty. Migracja 20260914135958_fix_calendar_block_date_pattern.sql zastępuje ten wzorzec równoważnym wzorcem cyfr [0-9], zachowując pozostałe reguły i uprawnienia funkcji. Zastosowana najpierw na TEST, po zaliczeniu pełnej pętli także na bazie produkcyjnej używanej przez Preview.
+
+Zaliczone dwa pełne przebiegi po naprawie: logowanie, izolacja organizacji, 100 równoległych zapisów zadań i 100 checklist, odrzucanie nieaktualnych wersji, ustawienia, atomowe utworzenie/edycja/anulowanie/kosz/przywrócenie rezerwacji, ponowienia płatności bez duplikacji, tworzenie/anulowanie blokad, równoległe konflikty rezerwacja–rezerwacja i rezerwacja–blokada, operacje zbiorcze, audyt i pełny odczyt ponad 1500 rekordów. Lint skryptu i kontrola manifestu poprawne.
+
+Naprawiono sprzątanie fixture: najpierw organizacje z rekordami odwołującymi się do aktora, potem konto Auth; błędy czyszczenia nie są ignorowane. Ostatni przebieg potwierdził usunięcie organizacji i konta. Test ten nie zastępuje jeszcze zapisów przez trasy Next.js i interfejs przeglądarki ani macierzy wszystkich ról.
