@@ -51,6 +51,15 @@ describe("email preflight against current records", () => {
     vi.setSystemTime(new Date("2026-10-05T12:00:00Z"));
     expect(isCurrentEmail(fresh.data, fresh.queued)).toBe(false);
   });
+  it("blocks a historical stay even when its queue entry remains approved or retryable", () => {
+    for (const status of ["Zatwierdzona", "Błąd"] as const) {
+      const { data, queued } = fixture();
+      data.bookings[0].historicalImport = true;
+      data.scheduledMessages = data.scheduledMessages.map(item => ({ ...item, status }));
+      expect(isCurrentEmail(data, queued)).toBe(false);
+      expect(reconcileScheduledMessages(data).every(item => item.status === "Anulowana")).toBe(true);
+    }
+  });
   it("does not retry an already delivered message", () => {
     const { data, queued } = fixture();
     data.scheduledMessages = data.scheduledMessages.map(item => ({ ...item, status: "Dostarczona" }));

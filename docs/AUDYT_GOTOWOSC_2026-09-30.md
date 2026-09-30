@@ -70,3 +70,21 @@ Niepewna wysyłka po upływie 23 godzin przechodzi do błędu wymagającego spra
 - Właściciel potwierdził obecny przewodnik i polecił na razie użyć wypełniacza konta. Zapisano jasną informację „Numer konta do wpłaty Marcin przekaże bezpośrednio.”, bez fikcyjnego numeru rachunku.
 - Naprawiono niespójność wersji reguł: klient aktualizował historyczne definicje w pamięci, a serwer wysyłki czytał stare wersje. Oba korzystają teraz z tej samej funkcji normalizacji, zachowującej wyłączenia reguł. Test odtwarzający stare dane produkcyjne: PASS; łącznie 32 testy obszaru zmiany, TypeScript i ESLint: PASS.
 - Nadal do potwierdzenia: rzeczywista kolejka, zgoda na kopię testów do Marcina oraz aktywny harmonogram GitHub. Nie włączono masowej wysyłki.
+
+## Stan po PR #44 i kontroli harmonogramu
+
+- PR #44 scalony; produkcyjny commit `0ad094f001cb9c7e08e99dfa726817330c2c4088` ma potwierdzony sukces Vercel. Pełny zestaw: 114 plików, 572 testy PASS; build PASS.
+- Konfiguracja produkcyjna zawiera sześć zatwierdzonych instrukcji dojazdu (dwa domki, PL/EN/DE). Zapis oraz odczyt po odświeżeniu potwierdzone.
+- Oryginalny wzorzec Mobile Calendar wskazuje odbiorcę „Treedent Marcin Sikora” i zmienną `{bank_acc_nr}`. Cyfr rachunku nie ma w lokalnej kopii; odczyt ustawień wymaga zalogowania do Mobile Calendar. Tymczasowy tekst pozostaje zgodnie z dyspozycją właściciela.
+- Dostęp do GitHub został potwierdzony. Cztery zatwierdzone zaległe maile sprawdzono bieżącą funkcją preflight na odczycie danych produkcyjnych: wszystkie odrzucone przed wysyłką.
+- Przełącznik kroku mailowego GitHub został chwilowo włączony podczas przygotowania próby. Automatyczna kontrola uprawnień odrzuciła ręczne uruchomienie produkcyjnego workflow; wskazała potrzebę zgody obejmującej rzeczywistych gości. Przełącznik przywrócono do `false`, zapis potwierdzono w UI. Odczyt kolejki nadawczej po cofnięciu: 0 maili.
+- Oczekujemy na odpowiedź właściciela dotyczącą produkcyjnego harmonogramu i testów z kopią do Marcina. Nie ponawiać odrzuconego uruchomienia bez nowej zgody. Nie uznawać celu za ukończony przed rzeczywistym testem kolejki i dostarczenia.
+
+## Czysty start i autoryzowany test, 17:34 CEST
+
+- Właściciel potwierdził adres testowy i kopię do Marcina oraz polecił zamknąć obowiązki historycznych pobytów.
+- Na produkcji oznaczono 208 pobytów zakończonych przed 30.09.2026 jako historię; anulowano 85 niewysłanych wiadomości w obu reprezentacjach kolejki i wyłączono 45 otwartych obowiązków pobytowych. Naprawy oraz rzeczywiste płatności zachowano. Operacja atomowa, zwiększone wersje rekordów i stanu, wpis audytowy; prywatna kopia przed zmianą poza repozytorium.
+- Kontrola SQL po zmianie: 0 historycznych wiadomości oczekujących, 0 otwartych historycznych obowiązków pobytowych, 0 zatwierdzonych maili i 0 maili w kolejce nadawczej.
+- Numer konta potwierdzono w danych konta Mobile Calendar i faktycznie wysłanym potwierdzeniu; suma kontrolna NRB poprawna. Zapis konfiguracji produkcyjnej: wersja 8. Numeru rachunku nie publikujemy w raporcie.
+- Test przez endpoint aplikacji zwrócił ID `01a0f2f0-5127-76f7-af17-c4df2af78f51`; Resend potwierdza delivered, właściwego nadawcę, odbiorcę oraz CC i Reply-To do Marcina. Endpoint deduplikuje test w obrębie dnia; jest to potwierdzenie integracji, nadal nie pełnego przebiegu kolejki rezerwacji.
+- Dodatkowe zabezpieczenia kodu: historia nie tworzy zadań, nie zgłasza braków danych, nie podnosi alertów, nie trafia do listy finansów do działania i jest odrzucana bezpośrednio przed wysyłką.

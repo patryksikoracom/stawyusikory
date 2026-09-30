@@ -34,14 +34,17 @@ export function deriveShellAlerts(data: AppData, today = todayInPoland()): Shell
     const finance = calculateBookingFinance(booking, data.payments);
     return finance.balanceStatus !== "settled" || finance.perspectives.receivables.completeness !== "complete";
   }).length;
-  const blockedTaskCount = data.tasks.filter(
+  const historicalIds = new Set(data.bookings.filter((booking) => booking.historicalImport).map((booking) => booking.id));
+  const activeTasks = data.tasks.filter((task) => !["Zrobione", "Nie dotyczy"].includes(task.status)
+    && !(task.bookingId && historicalIds.has(task.bookingId)));
+  const blockedTaskCount = activeTasks.filter(
     (task) => task.status === "Zablokowane"
       && !(task.type === "Sprzątanie" && task.assignmentStatus === "Odrzucone"),
   ).length;
-  const rejectedTurnoverCount = data.tasks.filter(
+  const rejectedTurnoverCount = activeTasks.filter(
     (task) => task.type === "Sprzątanie" && task.assignmentStatus === "Odrzucone",
   ).length;
-  const unansweredTurnoverCount = data.tasks.filter(
+  const unansweredTurnoverCount = activeTasks.filter(
     (task) => task.type === "Sprzątanie"
       && task.assignmentStatus === "Do przyjęcia"
       && Boolean(task.dueDate)

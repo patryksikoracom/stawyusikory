@@ -7,6 +7,13 @@ import { todayInPoland } from "../date";
 const base: Booking = { id:"A",bookingDate:"2026-07-01",source:"test",platform:"Bezpośrednio",unitId:"u1",checkIn:"2026-07-10",checkOut:"2026-07-12",adults:2,children:0,guestLabel:"Test",paymentStatus:"Opłacone",workflowStatus:"Potwierdzona",createdBy:"test" };
 
 describe("availability rules", () => {
+  it("keeps archived history without reopening data or operational obligations", () => {
+    const historical = { ...base, historicalImport: true, paymentStatus: "Do uzupełnienia" as const };
+    expect(createTasksForBooking(historical)).toEqual([]);
+    expect(getBookingDataIssues(initialData, historical)).toEqual([]);
+    expect(getNextAction(initialData, historical)).toBe("Historia — bez działań");
+    expect(historical.paymentStatus).toBe("Do uzupełnienia");
+  });
   it("allows same-day turnover and rejects actual overlap", () => {
     expect(overlaps("2026-07-10","2026-07-12","2026-07-12","2026-07-14")).toBe(false);
     expect(overlaps("2026-07-10","2026-07-13","2026-07-12","2026-07-14")).toBe(true);

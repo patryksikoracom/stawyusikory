@@ -94,6 +94,14 @@ describe("alerty powłoki aplikacji", () => {
     expect(alerts).toEqual([]);
   });
 
+  it("nie zgłasza historycznego sprzątania ani zamkniętych zleceń", () => {
+    const tasks: AppData["tasks"] = [
+      { id: "old", bookingId: "old", type: "Sprzątanie", priority: "Wysoki", status: "Zablokowane", owner: "test", title: "test", assignmentStatus: "Odrzucone", dueDate: today },
+      { id: "waived", bookingId: "new", type: "Sprzątanie", priority: "Wysoki", status: "Nie dotyczy", owner: "test", title: "test", assignmentStatus: "Do przyjęcia", dueDate: today },
+    ];
+    expect(deriveShellAlerts(fixture({ bookings: [booking({ id: "old", historicalImport: true })], tasks }), today)).toEqual([]);
+  });
+
   it("eskaluje odrzucony i przeterminowany turnover na podstawie zadań", () => {
     const alerts = deriveShellAlerts(fixture({
       tasks: [

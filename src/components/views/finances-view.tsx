@@ -95,7 +95,7 @@ export function FinancesView() {
     const pln=result.currencies.find((item)=>item.currency==="PLN");
     return{label,revenue:pln?.sales??0,net:pln?.result??null,completeness:pln?.completeness??"unavailable"};
   }),[currentLocalDate,currentYear,data.bookings,data.costSettings,data.imports,data.payments,data.units,reportYear]);
-  const unsettled=financeOverview.bookingFinances.filter((finance)=>finance.balanceStatus!=="settled");
+  const unsettled=financeOverview.bookingFinances.filter((finance)=>finance.balanceStatus!=="settled" && !bookingById.get(finance.bookingId)?.historicalImport);
   const questionsForDad = Array.from(new Set([
     "Który ostatni pełny miesiąc możemy razem sprawdzić ręcznie jako próbkę?",
     ...management.readiness.questions,

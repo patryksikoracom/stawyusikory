@@ -12,7 +12,7 @@ export function isCurrentEmail(data: CommunicationData, queued: {
 }) {
   const booking = data.bookings.find(item => item.id === queued.booking_id);
   const saved = data.scheduledMessages.find(item => item.id === queued.id);
-  if (!booking || booking.deletedAt || booking.workflowStatus === "Anulowana" || !saved
+  if (!booking || booking.historicalImport || booking.deletedAt || booking.workflowStatus === "Anulowana" || !saved
     || saved.bookingId !== booking.id || saved.channel !== "E-mail" || saved.blockedReason
     || !["Zatwierdzona", "Błąd"].includes(saved.status)
     || !["manual_send", "auto_send"].includes(saved.deliveryPolicy ?? "")) return false;
