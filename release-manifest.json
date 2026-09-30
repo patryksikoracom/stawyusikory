@@ -7,7 +7,7 @@
     "20260909133907_secure_manager_booking_contract.sql",
     "20260914115605_atomic_resend_webhook.sql",
     "20260914140134_fix_calendar_block_date_pattern.sql",
-    "20260930134304_operator_cleaning_settlement.sql",
-    "20260930140415_atomic_email_send_completion.sql"
+    "20260930142414_operator_cleaning_settlement.sql",
+    "20260930142421_atomic_email_send_completion.sql"
   ]
 }

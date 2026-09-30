@@ -46,13 +46,13 @@ Patryk zwykle potwierdza sprzątanie na miejscu; tata również może je potwier
 1. Resend: domena zweryfikowana, wysyłka dostępna, webhook skonfigurowany.
 2. Najnowszy sprawdzony GitHub Actions run `36687178832` zakończył się sukcesem, lecz krok „Process queued e-mails” był **skipped**. Zielony workflow nie oznacza działających maili.
 3. Produkcja ma stare reguły w trybie roboczym oraz brak rekordu communicationConfigs. Potrzebne są numer konta do zaliczek i aktualne materiały dojazdu. Pytania przekazano właścicielowi; nie uzupełniamy ich fikcyjnymi danymi.
-4. Połączenie Vercel nie zwraca projektu, a odczyt wdrożeń zwraca brak uprawnień. Właściciel musi udostępnić projekt temu połączeniu, aby można było dokończyć wdrożenie i kontrolę środowiska.
-5. Nowe migracje zastosowano wyłącznie do osobnej bazy testowej. Produkcyjne dane nie zostały zmienione.
+4. Dostęp do Vercel odzyskano przez zalogowaną przeglądarkę. Podgląd PR #43 ma status Ready. W produkcji potwierdzono obecność klucza Resend, webhooka, danych Supabase i konfiguracji nadawcy.
+5. Po testach zastosowano obie nowe migracje do produkcji. Numery plików odpowiadają wersjom nadanym przez historię migracji Supabase. Nie zmieniono danych rezerwacji ani rozliczeń.
 
 ## Kolejność zakończenia wdrożenia
 
 1. Przywrócić dostęp Vercel do istniejącego projektu; sprawdzić aktualny commit, środowisko oraz podłączoną bazę. Nie tworzyć drugiego projektu produkcyjnego.
-2. Przy wyłączonej wysyłce zastosować nowe migracje: `20260930134304_operator_cleaning_settlement.sql`, następnie `20260930140415_atomic_email_send_completion.sql`. Pliki migracji z 14 września odzwierciedlają już wdrożone zmiany — nie uruchamiać ich ponownie bez porównania historii.
+2. Przy wyłączonej wysyłce zastosować nowe migracje: `20260930142414_operator_cleaning_settlement.sql`, następnie `20260930142421_atomic_email_send_completion.sql`. Pliki migracji z 14 września odzwierciedlają już wdrożone zmiany — nie uruchamiać ich ponownie bez porównania historii.
 3. Wdrożyć kod i wykonać smoke test kont właściciela i operatora: dwie pozycje sprzątania, zapis z obu kont, zbiorcza zapłata, odświeżenie, konflikt na dwóch urządzeniach.
 4. Uzupełnić konto i przewodniki PL/EN/DE, sprawdzić aktualne szablony i migrację definicji reguł. Przejrzeć kolejkę: stare szkice nie mogą stać się masową zaległą wysyłką.
 5. Sprawdzić serwerowe RESEND_API_KEY, RESEND_FROM_EMAIL, RESEND_WEBHOOK_SECRET, CRON_SECRET i STAWY_OS_EMAIL_ENABLED oraz odpowiadające ustawienia harmonogramu GitHub. Sekretów nie umieszczać w repozytorium ani raporcie.
