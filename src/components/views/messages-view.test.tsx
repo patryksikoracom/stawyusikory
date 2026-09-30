@@ -22,7 +22,7 @@ describe("template editor", () => {
     fireEvent.click(screen.getByRole("button", { name: "Zapisz szablon" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Konflikt wersji");
     expect(screen.getByRole("textbox", { name: "Treść wiadomości" })).toHaveValue("Witaj {{guest_first_name}}");
-    expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({ version: 8, templateOverrides: [expect.objectContaining({ id: "TPL-CONFIRM", version: 4, body: "Witaj {{guest_first_name}}" })] }));
+    expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({ version: 8, templateOverrides: [expect.objectContaining({ id: "TPL-CONFIRM", version: defaultMessageTemplates.find(item => item.id === "TPL-CONFIRM")!.version + 1, body: "Witaj {{guest_first_name}}" })] }));
   });
   it("does not allow unknown placeholders or editing from a read-only role", async () => {
     const { unmount } = render(<MessagesView canEdit/>);

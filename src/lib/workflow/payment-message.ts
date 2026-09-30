@@ -5,9 +5,9 @@ import type { BookingFinance } from "../metrics/finance";
 export function transferDateRange(from: string, to: string) {
   const [fy, fm, fd] = from.split("-");
   const [ty, tm, td] = to.split("-");
-  if (fy !== ty) return `${fd}.${fm}/${fy.slice(-2)}-${td}.${tm}/${ty.slice(-2)}`;
-  if (fm !== tm) return `${fd}.${fm}-${td}.${tm}/${fy.slice(-2)}`;
-  return `${fd}-${td}.${tm}/${fy.slice(-2)}`;
+  if (fy !== ty) return `${fd}.${fm}.${fy.slice(-2)}-${td}.${tm}.${ty.slice(-2)}`;
+  if (fm !== tm) return `${fd}.${fm}-${td}.${tm}.${fy.slice(-2)}`;
+  return `${fd}-${td}.${tm}.${fy.slice(-2)}`;
 }
 
 export function messageDate(value: string) {
@@ -22,9 +22,9 @@ export function paymentMessage(booking: Booking, finance: BookingFinance, langua
       platform: "Szczegóły rozliczenia znajdziesz w potwierdzeniu z platformy, przez którą powstała rezerwacja. Ten mail nie jest prośbą o dodatkową wpłatę.",
       settled: "Pobyt jest opłacony. Nie trzeba wpłacać kolejnej zaliczki.",
       noDeposit: "Zgodnie z ustaleniami nie wymagamy zaliczki. Pozostałe rozliczenie odbędzie się na uzgodnionych warunkach.",
-      depositPaid: "Zaliczka jest rozliczona — dziękujemy. Pozostało do zapłaty za pobyt: {{balance_due}}.",
+      depositPaid: "Zaliczka jest rozliczona - dziękujemy. Pozostało do zapłaty za pobyt: {{balance_due}}.",
       custom: "Rozliczenie pobytu pozostaje zgodne z naszymi indywidualnymi ustaleniami.",
-      request: "Do wpłaty na poczet zaliczki: {{deposit_to_pay}}\nTermin wpłaty: {{deposit_due}}\nKonto i odbiorca: {{bank_account}}\n\nTytuł przelewu:\n{{transfer_reference}}\n\nTytuł zawiera dane osoby z rezerwacji i daty pobytu — dzięki temu łatwo dopasujemy wpłatę.",
+      request: "Do wpłaty na poczet zaliczki: {{deposit_to_pay}}\nTermin wpłaty: {{deposit_due}}\nKonto i odbiorca: {{bank_account}}\n\nTytuł przelewu:\n{{transfer_reference}}\n\nTytuł zawiera dane osoby z rezerwacji i daty pobytu - dzięki temu łatwo dopasujemy wpłatę.",
     },
     en: {
       platform: "Please refer to your booking platform's confirmation for payment details. This email is not a request for an additional payment.",
