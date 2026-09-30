@@ -43,6 +43,7 @@ import type {
 } from "@/lib/types";
 import { cancelOpenStayTasks, createTasksForBooking, rescheduleOpenTasksForBooking } from "@/lib/workflow/rules";
 import { defaultAutomationRules, defaultMessageTemplates, reconcileScheduledMessages } from "@/lib/workflow/communications";
+import { currentCommunicationDefinitions } from "@/lib/workflow/communication-definitions";
 import { guestInsightAfterDeparture, repairTaskForIssue } from "@/lib/workflow/departures";
 import { downloadEncryptedJson, downloadPricingAnalysisDataset } from "@/lib/security/data-exports";
 import { isTrashExpired, trashExpiryDate } from "@/lib/booking-trash";
@@ -306,36 +307,10 @@ function normalizeData(parsed?: Partial<AppData> | null, fallback: AppData = ini
   const base = { ...fallback, ...parsed };
   const tasks = parsed?.tasks ?? fallback.tasks;
   const rates = parsed?.rates ?? fallback.rates;
-  const storedTemplates = parsed?.messageTemplates?.length
-    ? parsed.messageTemplates
-    : fallback.messageTemplates.length
-      ? fallback.messageTemplates
-      : [];
-  const defaultTemplateById = new Map(defaultMessageTemplates.map((template) => [template.id, template]));
-  const messageTemplates = [
-    ...storedTemplates.map((template) => {
-      const currentDefault = defaultTemplateById.get(template.id);
-      return currentDefault && currentDefault.version > template.version
-        ? { ...currentDefault, active: template.active }
-        : template;
-    }),
-    ...defaultMessageTemplates.filter((template) => !storedTemplates.some((stored) => stored.id === template.id)),
-  ];
-  const storedRules = parsed?.automationRules?.length
-    ? parsed.automationRules
-    : fallback.automationRules.length
-      ? fallback.automationRules
-      : [];
-  const defaultRuleById = new Map(defaultAutomationRules.map((rule) => [rule.id, rule]));
-  const automationRules = [
-    ...storedRules.map((stored) => {
-      const currentDefault = defaultRuleById.get(stored.id);
-      return currentDefault && (currentDefault.definitionVersion ?? 0) > (stored.definitionVersion ?? 0)
-        ? { ...currentDefault, active: stored.active }
-        : stored;
-    }),
-    ...defaultAutomationRules.filter((rule) => !storedRules.some((stored) => stored.id === rule.id)),
-  ];
+  const { messageTemplates, automationRules } = currentCommunicationDefinitions({
+    messageTemplates: parsed?.messageTemplates?.length ? parsed.messageTemplates : fallback.messageTemplates,
+    automationRules: parsed?.automationRules?.length ? parsed.automationRules : fallback.automationRules,
+  });
   const normalized = ensureGuestPeople({
     ...base,
     units: (parsed?.units ?? fallback.units).map((unit) => ({

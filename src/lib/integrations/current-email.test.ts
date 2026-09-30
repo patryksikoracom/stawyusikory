@@ -24,6 +24,16 @@ describe("email preflight against current records", () => {
   beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date("2026-09-30T12:00:00Z")); });
   afterEach(() => vi.useRealTimers());
   it("permits the currently approved email", () => { const { data, queued } = fixture(); expect(isCurrentEmail(data, queued)).toBe(true); });
+  it("uses the same upgraded definitions as the browser for legacy production records", () => {
+    const { data, queued } = fixture();
+    data.automationRules = data.automationRules.filter(rule => rule.id === "RULE-CONFIRM")
+      .map(rule => ({ ...rule, definitionVersion: undefined, mode: "Wersja robocza" as const }));
+    data.messageTemplates = data.messageTemplates.filter(template => template.id === "TPL-CONFIRM")
+      .map(template => ({ ...template, version: 1, body: "Stare potwierdzenie" }));
+    expect(isCurrentEmail(data, queued)).toBe(true);
+    data.automationRules[0].active = false;
+    expect(isCurrentEmail(data, queued)).toBe(false);
+  });
   it("blocks cancellation, contact edits and price changes before a queued send", () => {
     for (const change of ["cancel", "contact", "price"] as const) {
       const { data, queued } = fixture();
