@@ -10,7 +10,7 @@ function request(auth = "secret") { return new Request("https://example.com/api/
 describe("scheduled email processing", () => {
   beforeEach(() => {
     vi.clearAllMocks(); vi.useFakeTimers(); vi.setSystemTime(new Date("2026-09-30T12:00:00Z"));
-    for (const [key, value] of Object.entries({ CRON_SECRET: "secret", STAWY_OS_EMAIL_ENABLED: "true", RESEND_API_KEY: "test", RESEND_FROM_EMAIL: "test@example.com" })) vi.stubEnv(key, value);
+    for (const [key, value] of Object.entries({ CRON_SECRET: "secret", EMAIL_CRON_SECRET: "", STAWY_OS_EMAIL_ENABLED: "true", RESEND_API_KEY: "test", RESEND_FROM_EMAIL: "test@example.com" })) vi.stubEnv(key, value);
     mocks.existing = null;
     mocks.claim = { id: "outbound", attempts: 0, status: "processing", created_at: new Date().toISOString() };
     mocks.read.mockResolvedValue([row]); mocks.current.mockReturnValue(true);
@@ -30,6 +30,18 @@ describe("scheduled email processing", () => {
   afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
   it("rejects unauthorized calls before touching the queue", async () => {
     expect((await POST(request("wrong"))).status).toBe(401); expect(mocks.read).not.toHaveBeenCalled();
+  });
+  it("accepts the dedicated database scheduler credential", async () => {
+    vi.stubEnv("EMAIL_CRON_SECRET", "database-secret");
+    vi.stubEnv("CRON_SECRET", "");
+    mocks.read.mockResolvedValue([]);
+    expect((await POST(request("database-secret"))).status).toBe(200);
+    expect(mocks.send).not.toHaveBeenCalled();
+  });
+  it.each(["", "undefined", "null", "secret"])("rejects requests when neither credential is configured: %s", async auth => {
+    vi.stubEnv("EMAIL_CRON_SECRET", ""); vi.stubEnv("CRON_SECRET", "");
+    expect((await POST(request(auth))).status).toBe(401);
+    expect(mocks.read).not.toHaveBeenCalled();
   });
   it("honors the delivery switch", async () => {
     vi.stubEnv("STAWY_OS_EMAIL_ENABLED", "false"); expect((await POST(request())).status).toBe(423); expect(mocks.send).not.toHaveBeenCalled();

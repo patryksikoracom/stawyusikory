@@ -122,8 +122,8 @@ async function claimOutbound(
 }
 
 export async function POST(request: Request) {
-  const expected = process.env.CRON_SECRET;
-  if (!expected || request.headers.get("authorization") !== `Bearer ${expected}`) {
+  const secrets = [process.env.EMAIL_CRON_SECRET, process.env.CRON_SECRET].filter(Boolean);
+  if (!secrets.some((secret) => request.headers.get("authorization") === `Bearer ${secret}`)) {
     return NextResponse.json({ error: "Brak autoryzacji harmonogramu." }, { status: 401 });
   }
   if (!isEmailDeliveryEnabled()) {
