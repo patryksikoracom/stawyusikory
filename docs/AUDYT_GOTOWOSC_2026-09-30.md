@@ -1,6 +1,6 @@
 # Stawy OS — audyt gotowości, 30 września 2026
 
-Pakiet kodu przeszedł testy, ale automatyczne wiadomości nie są jeszcze uruchomione na produkcji. Nie uznajemy całej aplikacji za gotową przed wdrożeniem, uzupełnieniem ustawień komunikacji i testem rzeczywistej kolejki.
+Pakiet kodu przeszedł testy, ale automatyczne wiadomości nie są jeszcze uruchomione na produkcji. PR #43 został wdrożony na produkcji (448fe1e). Nie uznajemy całej aplikacji za gotową przed testem rzeczywistej kolejki i uruchomieniem harmonogramu.
 
 ## Uzgodniony zakres
 
@@ -62,3 +62,11 @@ Patryk zwykle potwierdza sprzątanie na miejscu; tata również może je potwier
 ## Obsługa wyjątków
 
 Niepewna wysyłka po upływie 23 godzin przechodzi do błędu wymagającego sprawdzenia historii Resend. Nie zerować prób ani klucza deduplikacji bez sprawdzenia, czy wiadomość już doszła. Nieoznaczona kwota za sprzątanie jest pokazywana osobno i nie jest traktowana jako 0 zł.
+
+## Weryfikacja po wdrożeniu, 16:59 CEST
+
+- Na koncie właściciela w produkcji potwierdzono zapis kwoty 1,23 zł, oznaczenie zapłaty, cofnięcie i trwałość po odświeżeniu. Osobną pozycję testową usunięto; rzeczywistych należności nie zmieniono.
+- Próba zapisu komunikacji ujawniła błąd 23514: historyczne ograniczenie tabeli nie dopuszczało nowych kolekcji, mimo ich obsługi w komendzie batchowej. Migracja `20260930145818_extend_supported_operational_collections.sql` rozszerza ograniczenie, zachowując wcześniejsze typy. Test autoryzowanego zapisu konfiguracji na bazie testowej: PASS, ROLLBACK. Migracja zastosowana na produkcji; zapis przez UI potwierdzony w bazie.
+- Właściciel potwierdził obecny przewodnik i polecił na razie użyć wypełniacza konta. Zapisano jasną informację „Numer konta do wpłaty Marcin przekaże bezpośrednio.”, bez fikcyjnego numeru rachunku.
+- Naprawiono niespójność wersji reguł: klient aktualizował historyczne definicje w pamięci, a serwer wysyłki czytał stare wersje. Oba korzystają teraz z tej samej funkcji normalizacji, zachowującej wyłączenia reguł. Test odtwarzający stare dane produkcyjne: PASS; łącznie 32 testy obszaru zmiany, TypeScript i ESLint: PASS.
+- Nadal do potwierdzenia: rzeczywista kolejka, zgoda na kopię testów do Marcina oraz aktywny harmonogram GitHub. Nie włączono masowej wysyłki.

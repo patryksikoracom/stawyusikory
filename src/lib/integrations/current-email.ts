@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AppData } from "@/lib/types";
 import { readOperationalState } from "@/lib/supabase/read-operational-state";
+import { currentCommunicationDefinitions } from "@/lib/workflow/communication-definitions";
 import { reconcileScheduledMessages } from "@/lib/workflow/communications";
 
 export type CommunicationData = Pick<AppData, "bookings" | "units" | "payments" | "communicationConfigs" | "guests" | "people" | "consents" | "consentLedger" | "messageTemplates" | "automationRules" | "scheduledMessages">;
@@ -18,7 +19,7 @@ export function isCurrentEmail(data: CommunicationData, queued: {
   // A retry must pass the same approval invalidation checks as a first attempt.
   const scheduledMessages = data.scheduledMessages.map(item => item.id === saved.id
     ? { ...item, status: "Zatwierdzona" as const } : item);
-  const current = reconcileScheduledMessages({ ...data, scheduledMessages }).find(item => item.id === saved.id);
+  const current = reconcileScheduledMessages({ ...data, ...currentCommunicationDefinitions(data), scheduledMessages }).find(item => item.id === saved.id);
   return Boolean(current && new Date(current.dueAt).getTime() <= Date.now() && current.status === "Zatwierdzona" && !current.blockedReason
     && current.bookingFingerprint === saved.bookingFingerprint
     && current.recipient === queued.recipient && current.subject === queued.subject
