@@ -12,48 +12,49 @@ import { todayInPoland } from "../date";
 import { nightsBetween, unitName } from "./rules";
 import { calculateBookingFinance } from "../metrics/finance";
 import { hasActiveConsent } from "../compliance/consent-ledger";
+import { messageDate, paymentMessage, transferDateRange } from "./payment-message";
 import mobileCalendarTemplateSources from "./mobile-calendar-template-sources.json";
 
 const variables = [
   "guest_name", "guest_first_name", "unit_name", "check_in", "check_out",
   "arrival_time", "departure_time", "booking_id", "balance_due", "booking_price",
-  "deposit_amount", "deposit_due", "bank_account", "travel_guide", "route_warning", "sender_name",
+  "deposit_amount", "deposit_to_pay", "deposit_due", "payment_instructions", "transfer_reference", "bank_account", "travel_guide", "route_warning", "sender_name",
 ];
 
 const polishMessageTemplates: MessageTemplate[] = [
-  template("TPL-CONFIRM", "Potwierdzenie rezerwacji i zaliczka", "Potwierdzenie", "E-mail", "Potwierdzenie pobytu w Stawach u Sikory", "Dzień dobry {{guest_first_name}}, potwierdzamy pobyt w {{unit_name}} od {{check_in}} do {{check_out}}. Cena: {{booking_price}}, zaliczka: {{deposit_amount}} do {{deposit_due}}. Konto: {{bank_account}}. Numer rezerwacji: {{booking_id}}. Pozdrawiamy, {{sender_name}}."),
-  template("TPL-DEPOSIT-CONFIRMED", "Potwierdzenie zaliczki i materiały", "Płatność", "E-mail", "Potwierdzenie wpłaty – Stawy u Sikory", "Dzień dobry {{guest_first_name}}, potwierdzamy zaliczkę dla rezerwacji {{booking_id}}. Najważniejsze informacje pobytowe i dojazd prześlemy przed przyjazdem. Pozdrawiamy, {{sender_name}}."),
-  template("TPL-PAYMENT", "Przypomnienie o płatności", "Płatność", "SMS", undefined, "Dzień dobry {{guest_first_name}}, przypominamy o rozliczeniu rezerwacji {{booking_id}}. Pozostało: {{balance_due}}."),
-  template("TPL-PREARRIVAL", "Informacje przed przyjazdem", "Przed przyjazdem", "E-mail", "Przed przyjazdem do Stawów u Sikory", "Dzień dobry {{guest_first_name}},\n\nczekamy na Państwa {{check_in}} od {{arrival_time}} w {{unit_name}}.\n\n{{route_warning}}\n\n{{travel_guide}}\n\nProsimy dać znać, jeśli godzina przyjazdu się zmieni.\n\nPozdrawiamy,\n{{sender_name}}"),
-  template("TPL-ARRIVAL-REMINDER", "Krótkie przypomnienie przed przyjazdem", "Przed przyjazdem", "E-mail", "Jutro widzimy się w Stawach u Sikory", "Dzień dobry {{guest_first_name}},\n\nprzypominamy, że jutro od {{arrival_time}} czeka na Państwa {{unit_name}}. Jeśli godzina przyjazdu się zmieni, prosimy o krótką odpowiedź na tę wiadomość.\n\nPozdrawiamy,\n{{sender_name}}"),
-  template("TPL-WELCOME", "Powitanie", "Powitanie", "OTA", undefined, "Witamy w {{unit_name}}! Mamy nadzieję, że wszystko jest w porządku. W razie pytań prosimy napisać."),
-  template("TPL-CHECK", "Czy wszystko w porządku?", "W trakcie pobytu", "OTA", undefined, "Dzień dobry {{guest_first_name}}, czy wszystko jest w porządku i czy możemy w czymś pomóc?"),
-  template("TPL-CHECKOUT", "Instrukcja wyjazdu", "Wyjazd", "OTA", undefined, "Dzień dobry {{guest_first_name}}, przypominamy, że wyjazd jest jutro do {{departure_time}}. Dziękujemy za pobyt w {{unit_name}}."),
-  template("TPL-THANKS", "Podziękowanie i prywatny feedback", "Prywatny feedback", "E-mail", "Dziękujemy za pobyt w Stawach u Sikory", "Dzień dobry {{guest_first_name}},\n\ndziękujemy za pobyt w {{unit_name}}. Mamy nadzieję, że udało się Państwu odpocząć. Jeśli jest coś, co możemy poprawić, prosimy odpowiedzieć bezpośrednio na tę wiadomość — każdą uwagę czytamy osobiście.\n\nPozdrawiamy,\n{{sender_name}}"),
-  template("TPL-REVIEW", "Prośba o opinię", "Opinia publiczna", "SMS", undefined, "Dziękujemy za pobyt, {{guest_first_name}}. Jeśli mają Państwo chwilę, będziemy wdzięczni za szczerą opinię o Stawach u Sikory."),
-  template("TPL-REVIEW-REMINDER", "Przypomnienie o opinii", "Przypomnienie opinii", "E-mail", "Czy podzielą się Państwo opinią?", "Dzień dobry {{guest_first_name}}, delikatnie przypominamy o możliwości podzielenia się opinią o pobycie. Dziękujemy niezależnie od oceny."),
-  template("TPL-REPAIR", "Informacja po naprawie", "Naprawa", "E-mail", "Dziękujemy za zgłoszenie", "Dziękujemy za zwrócenie uwagi. Zgłoszona przez Państwa sprawa została rozwiązana."),
+  template("TPL-CONFIRM", "Potwierdzenie rezerwacji i zaliczka", "Potwierdzenie", "E-mail", "Twój pobyt w Stawach u Sikory · {{check_in}}", "Dzień dobry,\n\ndziękujemy za rezerwację w Stawach u Sikory.\n\nDomek: {{unit_name}}\nPrzyjazd: {{check_in}} od {{arrival_time}}\nWyjazd: {{check_out}} do {{departure_time}}\nCena pobytu: {{booking_price}}\n\n{{payment_instructions}}\n\nInformacje o dojeździe prześlemy w osobnym mailu przed przyjazdem. Przy rezerwacji na ostatnią chwilę otrzymasz je od razu po potwierdzeniu.\n\nJeśli masz pytania, odpowiedz na tego maila — chętnie pomożemy.\n\nDo zobaczenia,\n{{sender_name}}"),
+  template("TPL-DEPOSIT-CONFIRMED", "Potwierdzenie zaliczki i materiały", "Płatność", "E-mail", "Wpłata dotarła · pobyt od {{check_in}}", "Dzień dobry,\n\nwpłata dotarła — dziękujemy!\n\nDomek: {{unit_name}}\nPobyt: {{check_in}} – {{check_out}}\nPozostało do zapłaty za pobyt: {{balance_due}}\n\nJeśli coś wymaga wyjaśnienia, wystarczy odpowiedzieć na tego maila.\n\nPozdrawiamy,\n{{sender_name}}"),
+  template("TPL-PAYMENT", "Przypomnienie o płatności", "Płatność", "SMS", undefined, "Dzień dobry, za pobyt {{check_in}}–{{check_out}} pozostało do zapłaty {{balance_due}}. Jeśli przelew jest już zlecony, daj nam znać. {{sender_name}}"),
+  template("TPL-PREARRIVAL", "Informacje przed przyjazdem", "Przed przyjazdem", "E-mail", "Dojazd i informacje na przyjazd · {{check_in}}", "Dzień dobry,\n\nprzesyłamy informacje na przyjazd do Stawów u Sikory.\n\nDomek: {{unit_name}}\nPrzyjazd: {{check_in}} od {{arrival_time}}\nWyjazd: {{check_out}} do {{departure_time}}\n\nDojazd\n{{route_warning}}\n\nPrzewodnik i wskazówki na pobyt\n{{travel_guide}}\n\nDaj znać, o której mniej więcej planujesz dotrzeć. Jeśli plan się zmieni, wystarczy krótka odpowiedź na tego maila.\n\nDo zobaczenia,\n{{sender_name}}"),
+  template("TPL-ARRIVAL-REMINDER", "Krótkie przypomnienie przed przyjazdem", "Przed przyjazdem", "E-mail", "Do zobaczenia jutro · {{unit_name}}", "Dzień dobry,\n\njutro czekamy na Ciebie w Stawach u Sikory.\n\nDomek: {{unit_name}}\nPrzyjazd: {{check_in}} od {{arrival_time}}\n\nJeśli orientacyjna godzina przyjazdu się zmieniła, daj nam znać w odpowiedzi. Dojazd i przewodnik są w poprzedniej wiadomości.\n\nDo zobaczenia,\n{{sender_name}}"),
+  template("TPL-WELCOME", "Powitanie", "Powitanie", "OTA", undefined, "Dzień dobry,\n\nmamy nadzieję, że podróż minęła spokojnie i wszystko w domku jest w porządku. Jeśli czegoś brakuje albo masz pytanie, napisz do nas.\n\nMiłego pobytu,\n{{sender_name}}"),
+  template("TPL-CHECK", "Czy wszystko w porządku?", "W trakcie pobytu", "OTA", undefined, "Dzień dobry,\n\njak mija pobyt? Jeśli możemy w czymś pomóc albo coś wymaga naszej uwagi, daj nam znać.\n\n{{sender_name}}"),
+  template("TPL-CHECKOUT", "Instrukcja wyjazdu", "Wyjazd", "OTA", undefined, "Dzień dobry,\n\njutro kończy się pobyt w domku {{unit_name}}. Prosimy o wyjazd do {{departure_time}}, żebyśmy mogli przygotować domek dla kolejnych gości.\n\nJeśli coś wymaga naszej uwagi przed wyjazdem, daj nam znać.\n\nDziękujemy za pobyt i życzymy dobrej drogi,\n{{sender_name}}"),
+  template("TPL-THANKS", "Podziękowanie i prywatny feedback", "Prywatny feedback", "E-mail", "Dziękujemy za pobyt", "Dzień dobry,\n\ndziękujemy za pobyt w Stawach u Sikory. Mamy nadzieję, że był to dobry czas na odpoczynek.\n\nJeśli coś warto poprawić, daj nam znać w odpowiedzi na tego maila. Twoje uwagi pomogą nam lepiej zadbać o kolejne pobyty.\n\nPozdrawiamy,\n{{sender_name}}"),
+  template("TPL-REVIEW", "Prośba o opinię", "Opinia publiczna", "SMS", undefined, "Dziękujemy za pobyt w Stawach u Sikory. Jeśli masz chwilę i ochotę, będzie nam miło przeczytać Twoją opinię. {{sender_name}}"),
+  template("TPL-REVIEW-REMINDER", "Przypomnienie o opinii", "Przypomnienie opinii", "E-mail", "Kilka słów o pobycie w Stawach u Sikory", "Dzień dobry,\n\njeśli masz ochotę podzielić się opinią o pobycie, będzie nam miło. Jeśli opinia jest już dodana — dziękujemy, nic więcej nie trzeba robić.\n\nPozdrawiamy,\n{{sender_name}}"),
+  template("TPL-REPAIR", "Informacja po naprawie", "Naprawa", "E-mail", "Zgłoszona sprawa jest już rozwiązana", "Dzień dobry,\n\nzgłoszona sprawa jest już rozwiązana. Dziękujemy za informację.\n\nJeśli problem wróci albo coś nadal nie działa, daj nam znać.\n\nPozdrawiamy,\n{{sender_name}}"),
 ];
 
 const translatedMessageTemplates: MessageTemplate[] = [
-  template("TPL-CONFIRM-DE", "Buchungsbestätigung", "Potwierdzenie", "E-mail", "Aufenthaltsbestätigung – Stawy u Sikory", "Guten Tag {{guest_first_name}}, wir bestätigen Ihren Aufenthalt im {{unit_name}} vom {{check_in}} bis {{check_out}}. Preis: {{booking_price}}, Anzahlung: {{deposit_amount}} bis {{deposit_due}}. Konto: {{bank_account}}. Buchungsnummer: {{booking_id}}. Viele Grüße, {{sender_name}}", "de", "TPL-CONFIRM"),
-  template("TPL-CONFIRM-EN", "Booking confirmation", "Potwierdzenie", "E-mail", "Your stay at Stawy u Sikory", "Hello {{guest_first_name}}, we confirm your stay at {{unit_name}} from {{check_in}} to {{check_out}}. Price: {{booking_price}}, deposit: {{deposit_amount}} due {{deposit_due}}. Account: {{bank_account}}. Booking: {{booking_id}}. Kind regards, {{sender_name}}", "en", "TPL-CONFIRM"),
-  template("TPL-DEPOSIT-CONFIRMED-DE", "Bestätigung der Anzahlung", "Płatność", "E-mail", "Zahlung bestätigt – Stawy u Sikory", "Guten Tag {{guest_first_name}}, wir bestätigen die Anzahlung für {{booking_id}}. Die wichtigsten Informationen senden wir vor der Anreise. {{sender_name}}", "de", "TPL-DEPOSIT-CONFIRMED"),
-  template("TPL-DEPOSIT-CONFIRMED-EN", "Deposit confirmation", "Płatność", "E-mail", "Payment confirmed – Stawy u Sikory", "Hello {{guest_first_name}}, we confirm the deposit for {{booking_id}}. We will send the key stay information before arrival. {{sender_name}}", "en", "TPL-DEPOSIT-CONFIRMED"),
-  template("TPL-PAYMENT-DE", "Zahlungserinnerung", "Płatność", "SMS", undefined, "Guten Tag {{guest_first_name}}, für die Buchung {{booking_id}} sind noch {{balance_due}} offen. Viele Grüße, {{sender_name}}", "de", "TPL-PAYMENT"),
-  template("TPL-PAYMENT-EN", "Payment reminder", "Płatność", "SMS", undefined, "Hello {{guest_first_name}}, {{balance_due}} remains due for booking {{booking_id}}. Kind regards, {{sender_name}}", "en", "TPL-PAYMENT"),
-  template("TPL-PREARRIVAL-DE", "Informationen vor der Anreise", "Przed przyjazdem", "E-mail", "Vor Ihrer Anreise zu Stawy u Sikory", "Guten Tag {{guest_first_name}},\n\nwir erwarten Sie am {{check_in}} ab {{arrival_time}} im {{unit_name}}.\n\n{{route_warning}}\n\n{{travel_guide}}\n\nViele Grüße,\n{{sender_name}}", "de", "TPL-PREARRIVAL"),
-  template("TPL-PREARRIVAL-EN", "Pre-arrival information", "Przed przyjazdem", "E-mail", "Before your arrival at Stawy u Sikory", "Hello {{guest_first_name}},\n\nwe expect you on {{check_in}} from {{arrival_time}} at {{unit_name}}.\n\n{{route_warning}}\n\n{{travel_guide}}\n\nKind regards,\n{{sender_name}}", "en", "TPL-PREARRIVAL"),
-  template("TPL-ARRIVAL-REMINDER-DE", "Kurze Erinnerung vor der Anreise", "Przed przyjazdem", "E-mail", "Bis morgen bei Stawy u Sikory", "Guten Tag {{guest_first_name}}, morgen ab {{arrival_time}} erwartet Sie {{unit_name}}. Falls sich Ihre Ankunftszeit ändert, antworten Sie bitte kurz auf diese Nachricht. Viele Grüße, {{sender_name}}", "de", "TPL-ARRIVAL-REMINDER"),
-  template("TPL-ARRIVAL-REMINDER-EN", "Short arrival reminder", "Przed przyjazdem", "E-mail", "See you tomorrow at Stawy u Sikory", "Hello {{guest_first_name}}, {{unit_name}} will be ready for you tomorrow from {{arrival_time}}. If your arrival time changes, please reply to this email. Kind regards, {{sender_name}}", "en", "TPL-ARRIVAL-REMINDER"),
-  template("TPL-CHECK-DE", "Ist alles in Ordnung?", "W trakcie pobytu", "OTA", undefined, "Guten Tag {{guest_first_name}}, ist alles in Ordnung oder können wir Ihnen helfen? {{sender_name}}", "de", "TPL-CHECK"),
-  template("TPL-CHECK-EN", "Is everything all right?", "W trakcie pobytu", "OTA", undefined, "Hello {{guest_first_name}}, is everything all right or can we help with anything? {{sender_name}}", "en", "TPL-CHECK"),
-  template("TPL-CHECKOUT-DE", "Abreiseinformation", "Wyjazd", "OTA", undefined, "Guten Tag {{guest_first_name}}, die Abreise ist morgen bis {{departure_time}}. Vielen Dank für Ihren Aufenthalt im {{unit_name}}. {{sender_name}}", "de", "TPL-CHECKOUT"),
-  template("TPL-CHECKOUT-EN", "Departure information", "Wyjazd", "OTA", undefined, "Hello {{guest_first_name}}, check-out is tomorrow by {{departure_time}}. Thank you for staying at {{unit_name}}. {{sender_name}}", "en", "TPL-CHECKOUT"),
+  template("TPL-CONFIRM-DE", "Buchungsbestätigung", "Potwierdzenie", "E-mail", "Ihr Aufenthalt bei Stawy u Sikory · {{check_in}}", "Guten Tag,\n\nvielen Dank für Ihre Buchung bei Stawy u Sikory.\n\nFerienhaus: {{unit_name}}\nAnreise: {{check_in}} ab {{arrival_time}}\nAbreise: {{check_out}} bis {{departure_time}}\nGesamtpreis: {{booking_price}}\n\n{{payment_instructions}}\n\nDie Anfahrtsbeschreibung und weitere Hinweise erhalten Sie vor Ihrer Anreise in einer separaten E-Mail. Bei einer kurzfristigen Buchung folgen diese direkt auf die Bestätigung.\n\nBei Fragen antworten Sie einfach auf diese E-Mail. Wir helfen Ihnen gerne.\n\nBis bald,\n{{sender_name}}", "de", "TPL-CONFIRM"),
+  template("TPL-CONFIRM-EN", "Booking confirmation", "Potwierdzenie", "E-mail", "Your stay at Stawy u Sikory · {{check_in}}", "Hello,\n\nthank you for booking a stay at Stawy u Sikory.\n\nCottage: {{unit_name}}\nArrival: {{check_in}} from {{arrival_time}}\nDeparture: {{check_out}} by {{departure_time}}\nTotal price: {{booking_price}}\n\n{{payment_instructions}}\n\nWe will send directions and arrival details in a separate email before your stay. For a last-minute booking, these will follow the confirmation.\n\nIf you have any questions, just reply to this email. We are happy to help.\n\nSee you soon,\n{{sender_name}}", "en", "TPL-CONFIRM"),
+  template("TPL-DEPOSIT-CONFIRMED-DE", "Bestätigung der Anzahlung", "Płatność", "E-mail", "Zahlung eingegangen · Aufenthalt ab {{check_in}}", "Guten Tag,\n\nIhre Zahlung ist eingegangen. Vielen Dank!\n\nFerienhaus: {{unit_name}}\nAufenthalt: {{check_in}} – {{check_out}}\nRestbetrag für Ihren Aufenthalt: {{balance_due}}\n\nBei Fragen antworten Sie einfach auf diese E-Mail.\n\nViele Grüße,\n{{sender_name}}", "de", "TPL-DEPOSIT-CONFIRMED"),
+  template("TPL-DEPOSIT-CONFIRMED-EN", "Deposit confirmation", "Płatność", "E-mail", "Payment received · stay from {{check_in}}", "Hello,\n\nwe have received your payment. Thank you!\n\nCottage: {{unit_name}}\nStay: {{check_in}} – {{check_out}}\nRemaining balance for your stay: {{balance_due}}\n\nIf you have any questions, just reply to this email.\n\nBest wishes,\n{{sender_name}}", "en", "TPL-DEPOSIT-CONFIRMED"),
+  template("TPL-PAYMENT-DE", "Zahlungserinnerung", "Płatność", "SMS", undefined, "Guten Tag, für Ihren Aufenthalt {{check_in}}–{{check_out}} sind noch {{balance_due}} offen. Falls Sie bereits überwiesen haben, geben Sie uns bitte Bescheid. {{sender_name}}", "de", "TPL-PAYMENT"),
+  template("TPL-PAYMENT-EN", "Payment reminder", "Płatność", "SMS", undefined, "Hello, the remaining balance for your stay {{check_in}}–{{check_out}} is {{balance_due}}. If you have already sent the payment, please let us know. {{sender_name}}", "en", "TPL-PAYMENT"),
+  template("TPL-PREARRIVAL-DE", "Informationen vor der Anreise", "Przed przyjazdem", "E-mail", "Anfahrt und Hinweise zur Anreise · {{check_in}}", "Guten Tag,\n\nhier finden Sie die Hinweise für Ihre Anreise zu Stawy u Sikory.\n\nFerienhaus: {{unit_name}}\nAnreise: {{check_in}} ab {{arrival_time}}\nAbreise: {{check_out}} bis {{departure_time}}\n\nAnfahrt\n{{route_warning}}\n\nHinweise für Ihren Aufenthalt\n{{travel_guide}}\n\nBitte teilen Sie uns Ihre ungefähre Ankunftszeit mit. Falls sich Ihre Pläne ändern, genügt eine kurze Antwort auf diese E-Mail.\n\nBis bald,\n{{sender_name}}", "de", "TPL-PREARRIVAL"),
+  template("TPL-PREARRIVAL-EN", "Pre-arrival information", "Przed przyjazdem", "E-mail", "Directions and arrival details · {{check_in}}", "Hello,\n\nhere are the details for your arrival at Stawy u Sikory.\n\nCottage: {{unit_name}}\nArrival: {{check_in}} from {{arrival_time}}\nDeparture: {{check_out}} by {{departure_time}}\n\nDirections\n{{route_warning}}\n\nYour stay guide\n{{travel_guide}}\n\nPlease let us know roughly when you expect to arrive. If your plans change, a quick reply to this email is enough.\n\nSee you soon,\n{{sender_name}}", "en", "TPL-PREARRIVAL"),
+  template("TPL-ARRIVAL-REMINDER-DE", "Kurze Erinnerung vor der Anreise", "Przed przyjazdem", "E-mail", "Bis morgen · {{unit_name}}", "Guten Tag,\n\nwir freuen uns auf Ihre Anreise morgen.\n\nFerienhaus: {{unit_name}}\nAnreise: {{check_in}} ab {{arrival_time}}\n\nFalls sich Ihre Ankunftszeit geändert hat, geben Sie uns bitte kurz Bescheid. Die Anfahrtsbeschreibung finden Sie in unserer vorherigen E-Mail.\n\nBis morgen,\n{{sender_name}}", "de", "TPL-ARRIVAL-REMINDER"),
+  template("TPL-ARRIVAL-REMINDER-EN", "Short arrival reminder", "Przed przyjazdem", "E-mail", "See you tomorrow · {{unit_name}}", "Hello,\n\nwe look forward to welcoming you tomorrow.\n\nCottage: {{unit_name}}\nArrival: {{check_in}} from {{arrival_time}}\n\nIf your arrival time has changed, please let us know. Directions and the stay guide are in our earlier email.\n\nSee you soon,\n{{sender_name}}", "en", "TPL-ARRIVAL-REMINDER"),
+  template("TPL-CHECK-DE", "Ist alles in Ordnung?", "W trakcie pobytu", "OTA", undefined, "Guten Tag,\n\nwie gefällt Ihnen Ihr Aufenthalt? Wenn wir helfen können oder etwas unsere Aufmerksamkeit braucht, geben Sie uns gerne Bescheid.\n\n{{sender_name}}", "de", "TPL-CHECK"),
+  template("TPL-CHECK-EN", "Is everything all right?", "W trakcie pobytu", "OTA", undefined, "Hello,\n\nhow is your stay going? If we can help with anything or something needs our attention, please let us know.\n\n{{sender_name}}", "en", "TPL-CHECK"),
+  template("TPL-CHECKOUT-DE", "Abreiseinformation", "Wyjazd", "OTA", undefined, "Guten Tag,\n\nIhr Aufenthalt im {{unit_name}} endet morgen. Bitte reisen Sie bis {{departure_time}} ab, damit wir das Ferienhaus für die nächsten Gäste vorbereiten können.\n\nWenn vor Ihrer Abreise noch etwas zu klären ist, geben Sie uns bitte Bescheid.\n\nVielen Dank für Ihren Besuch und eine gute Heimreise,\n{{sender_name}}", "de", "TPL-CHECKOUT"),
+  template("TPL-CHECKOUT-EN", "Departure information", "Wyjazd", "OTA", undefined, "Hello,\n\nyour stay at {{unit_name}} ends tomorrow. Please check out by {{departure_time}} so we can prepare the cottage for the next guests.\n\nIf anything needs our attention before you leave, please let us know.\n\nThank you for staying with us, and have a safe journey,\n{{sender_name}}", "en", "TPL-CHECKOUT"),
   template("TPL-REVIEW-DE", "Bitte um eine Bewertung", "Opinia publiczna", "SMS", undefined, "Vielen Dank für Ihren Aufenthalt, {{guest_first_name}}. Wir freuen uns über Ihre ehrliche Bewertung. {{sender_name}}", "de", "TPL-REVIEW"),
   template("TPL-REVIEW-EN", "Review request", "Opinia publiczna", "SMS", undefined, "Thank you for staying with us, {{guest_first_name}}. We would appreciate your honest review. {{sender_name}}", "en", "TPL-REVIEW"),
-  template("TPL-THANKS-DE", "Danke für Ihren Aufenthalt", "Prywatny feedback", "E-mail", "Vielen Dank für Ihren Aufenthalt", "Guten Tag {{guest_first_name}}, vielen Dank für Ihren Aufenthalt im {{unit_name}}. Wenn wir etwas verbessern können, antworten Sie bitte direkt auf diese Nachricht. Viele Grüße, {{sender_name}}", "de", "TPL-THANKS"),
-  template("TPL-THANKS-EN", "Thank you for your stay", "Prywatny feedback", "E-mail", "Thank you for staying at Stawy u Sikory", "Hello {{guest_first_name}}, thank you for staying at {{unit_name}}. If there is anything we can improve, please reply directly to this email. Kind regards, {{sender_name}}", "en", "TPL-THANKS"),
+  template("TPL-THANKS-DE", "Danke für Ihren Aufenthalt", "Prywatny feedback", "E-mail", "Vielen Dank für Ihren Besuch", "Guten Tag,\n\nvielen Dank für Ihren Aufenthalt bei Stawy u Sikory. Wir hoffen, Sie konnten sich gut erholen.\n\nWenn wir etwas verbessern können, antworten Sie gerne auf diese E-Mail. Ihre Rückmeldung hilft uns, künftige Aufenthalte noch angenehmer zu machen.\n\nViele Grüße,\n{{sender_name}}", "de", "TPL-THANKS"),
+  template("TPL-THANKS-EN", "Thank you for your stay", "Prywatny feedback", "E-mail", "Thank you for staying with us", "Hello,\n\nthank you for staying at Stawy u Sikory. We hope you had time to relax.\n\nIf there is anything we could improve, please reply to this email. Your feedback helps us take better care of future stays.\n\nBest wishes,\n{{sender_name}}", "en", "TPL-THANKS"),
 ];
 
 export const defaultMessageTemplates: MessageTemplate[] = [
@@ -96,7 +97,7 @@ function template(id: string, name: string, purpose: MessageTemplate["purpose"],
 }
 
 function markCurrentEmailTemplate(template: MessageTemplate): MessageTemplate {
-  return template.channel === "E-mail" ? { ...template, version: 2 } : template;
+  return { ...template, version: template.channel === "E-mail" ? 3 : 2 };
 }
 
 function rule(id: string, name: string, templateId: string, trigger: AutomationRule["trigger"], offsetDays: number, sendTime: string): AutomationRule {
@@ -161,24 +162,26 @@ export function renderTemplate(template: MessageTemplate, booking: Booking, data
     guest_name: booking.guestLabel,
     guest_first_name: booking.guestLabel.trim().split(/\s+/)[0] || "Gościu",
     unit_name: unitName(data.units, booking.unitId),
-    check_in: booking.checkIn,
-    check_out: booking.checkOut,
+    check_in: messageDate(booking.checkIn),
+    check_out: messageDate(booking.checkOut),
+    transfer_reference: `${booking.guestLabel.trim()} ${transferDateRange(booking.checkIn, booking.checkOut)}`,
     arrival_time: booking.arrivalTime || "16:00",
     departure_time: booking.departureTime || "11:00",
     booking_id: booking.platformReservationNo || booking.id,
     balance_due: finance.balanceStatus === "overpaid"
       ? `0 ${finance.currency ?? ""} (nadpłata ${(finance.overpayment ?? 0).toLocaleString("pl-PL")} ${finance.currency ?? ""})`.replaceAll(/\s+/g, " ").trim()
       : balanceDue,
-    booking_price: booking.grossPrice == null ? "do ustalenia" : `${booking.grossPrice.toLocaleString("pl-PL")} ${booking.currency ?? "PLN"}`,
-    deposit_amount: booking.depositAmount == null ? "do ustalenia" : `${booking.depositAmount.toLocaleString("pl-PL")} ${booking.currency ?? "PLN"}`,
-    deposit_due: booking.depositDueDate ? (booking.depositDueDate < booking.bookingDate ? booking.bookingDate : booking.depositDueDate) : "do ustalenia",
+    booking_price: booking.grossPrice == null ? "{{booking_price}}" : `${booking.grossPrice.toLocaleString("pl-PL")} ${booking.currency ?? "PLN"}`,
+    deposit_amount: booking.depositAmount == null ? "{{deposit_amount}}" : `${booking.depositAmount.toLocaleString("pl-PL")} ${booking.currency ?? "PLN"}`,
+    deposit_to_pay: booking.depositAmount == null ? "{{deposit_amount}}" : `${Math.min(finance.amountDue ?? booking.depositAmount, Math.max(0, booking.depositAmount - finance.guestPaidNet)).toLocaleString("pl-PL")} ${booking.currency ?? "PLN"}`,
+    deposit_due: booking.depositDueDate ? messageDate(booking.depositDueDate < booking.bookingDate ? booking.bookingDate : booking.depositDueDate) : "{{deposit_due}}",
     bank_account: config?.bankAccountNumber ? `${config.bankAccountNumber}${config.bankAccountRecipient ? ` (${config.bankAccountRecipient})` : ""}` : "{{bank_account}}",
     travel_guide: guide?.body || "{{travel_guide}}",
     route_warning: guide?.routeWarning || "{{route_warning}}",
     sender_name: config?.senderName || "Stawy u Sikory",
   };
   const replace = (value?: string) => value?.replace(/{{\s*([a-z_]+)\s*}}/g, (_, key: string) => values[key] ?? `{{${key}}}`);
-  const body = replace(template.body) || "";
+  const body = replace(template.body.replaceAll("{{payment_instructions}}", paymentMessage(booking, finance, template.language))) || "";
   const subject = replace(template.subject);
   const unresolved = Array.from(new Set([...`${subject ?? ""}\n${body}`.matchAll(/{{\s*([^}]+)\s*}}/g)].map((match) => match[1])));
   return { body, subject, unresolved };
@@ -236,6 +239,11 @@ export function reconcileScheduledMessages(data: CommunicationData, now = new Da
           ? "Termin wiadomości przed wyjazdem minął" : undefined,
         afterDeparture && today > addLocalDays(booking.checkOut, rule.offsetDays + 2)
           ? "Termin wiadomości po pobycie minął" : undefined,
+        rule.id === "RULE-ARRIVAL-REMINDER" && booking.bookingDate >= addLocalDays(booking.checkIn, -1)
+          ? "Przy późnej rezerwacji wystarczy wiadomość z informacjami na przyjazd" : undefined,
+        rule.id === "RULE-DEPOSIT-CONFIRMED" && (calculateBookingFinance(booking, data.payments).guestPaidNet <= 0
+          || calculateBookingFinance(booking, data.payments).perspectives.receivables.completeness !== "complete")
+          ? "Brak potwierdzonej wpłaty od gościa" : undefined,
         !language ? "Brak jawnie wybranego języka gościa" : undefined,
         language && template.language !== language ? `Brak szablonu w języku ${language.toUpperCase()}` : undefined,
         rendered.unresolved.length ? `Brakujące zmienne: ${rendered.unresolved.join(", ")}` : undefined,

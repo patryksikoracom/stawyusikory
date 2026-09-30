@@ -9,6 +9,15 @@ describe("Resend email adapter", () => {
     expect(html).not.toContain("<Anna>");
   });
 
+  it("preserves single line breaks without relying on email-client CSS", () => {
+    const html = renderEmailHtml("Hello,\r\n\r\nAccount: <test>\r\nReference: Test 12-19.06/26", { language: "en", subject: "Stay <confirmation>" });
+    expect(html).toContain("Account: &lt;test&gt;<br>Reference:");
+    expect(html).toContain('<html lang="en" dir="ltr">');
+    expect(html).toContain('<table lang="en" dir="ltr" role="presentation"');
+    expect(html).toContain("<title>Stay &lt;confirmation&gt;</title>");
+    expect(html).not.toContain("white-space:pre-line");
+  });
+
   it("creates stable provider-safe idempotency keys", () => {
     const first = resendIdempotencyKey("scheduled/RULE/BOOKING/1");
     expect(first).toBe(resendIdempotencyKey("scheduled/RULE/BOOKING/1"));
