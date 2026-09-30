@@ -21,6 +21,7 @@ const primaryNav: { href: string; label: string; icon: IconName }[] = [
   { href: "/dashboard", label: "Dzisiaj", icon: "today" },
   { href: "/calendar", label: "Kalendarz", icon: "calendar" },
   { href: "/bookings", label: "Rezerwacje", icon: "booking" },
+  { href: "/messages", label: "Wiadomości", icon: "message" },
   { href: "/guests", label: "Goście i marketing", icon: "guest" },
   { href: "/finances", label: "Finanse", icon: "wallet" },
 ];
@@ -36,6 +37,7 @@ const pageMeta: Record<string, { eyebrow: string; title: string; body: string }>
   "/calendar/year": { eyebrow: "Sprzedaż i dostępność", title: "Przegląd roku", body: "Miesiące, domki, stan sprzedaży na dziś i deterministyczne luki." },
   "/calendar": { eyebrow: "Obłożenie i dostępność", title: "Kalendarz pobytów", body: "Wspólny widok obu domków z jawnym statusem źródła i synchronizacji." },
   "/bookings": { eyebrow: "Sprzedaż i pobyty", title: "Rezerwacje", body: "Każdy pobyt, płatność i następna akcja w jednym miejscu." },
+  "/messages": { eyebrow: "Komunikacja z gośćmi", title: "Wiadomości", body: "Historia wysyłki, zaplanowane wiadomości i szablony." },
   "/guests": { eyebrow: "Relacje i wzrost", title: "Goście i marketing", body: "Wiedza, która pomaga zdobywać lepsze rezerwacje bez zwiększania prowizji." },
   "/finances": { eyebrow: "Przychody i rozliczenia", title: "Finanse", body: "Wpłaty, prowizje, wypłaty i faktyczna marża." },
   "/tasks": { eyebrow: "Operacje obiektu", title: "Sprzątanie i zadania", body: "Kto, co i do kiedy — z potwierdzeniem wykonania." },

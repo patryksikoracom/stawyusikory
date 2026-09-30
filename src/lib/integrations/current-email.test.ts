@@ -43,6 +43,14 @@ describe("email preflight against current records", () => {
       expect(isCurrentEmail(data, queued)).toBe(false);
     }
   });
+  it("rechecks saved template edits before sending approved content", () => {
+    const { data, queued } = fixture();
+    const original = data.messageTemplates.find(item => item.id === "TPL-CONFIRM")!;
+    data.communicationConfigs[0].templateOverrides = [{
+      id: original.id, name: original.name, subject: "Nowe potwierdzenie", body: "Witaj {{guest_first_name}}, nowa treść.", active: true, version: original.version + 1,
+    }];
+    expect(isCurrentEmail(data, queued)).toBe(false);
+  });
   it("blocks a disabled rule and an expired confirmation", () => {
     const { data, queued } = fixture();
     data.automationRules = data.automationRules.map(rule => ({ ...rule, active: false }));

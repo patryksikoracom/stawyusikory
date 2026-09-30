@@ -104,6 +104,11 @@ const schemas: Record<BatchEntityType, z.ZodType<Record<string, unknown>>> = {
   communicationConfigs: z.object({
     id,
     bankAccountNumber: optionalText(100),
+    bankAccountRecipient: optionalText(200),
+    templateOverrides: z.array(z.object({
+      id, name: z.string().trim().min(1).max(200), subject: optionalText(500),
+      body: z.string().trim().min(1).max(20_000), active: z.boolean(), version: z.number().int().positive(),
+    })).max(50).optional(),
     senderName: z.string().trim().min(1).max(200),
     copyUserIds: z.array(id).max(50),
     travelGuides: z.array(z.object({

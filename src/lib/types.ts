@@ -547,6 +547,8 @@ export type ScheduledMessage = {
 export type CommunicationConfig = {
   id: string;
   bankAccountNumber?: string;
+  bankAccountRecipient?: string;
+  templateOverrides?: Array<Pick<MessageTemplate, "id" | "name" | "subject" | "body" | "active" | "version">>;
   senderName: string;
   copyUserIds: string[];
   travelGuides: Array<{

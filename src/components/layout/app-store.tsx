@@ -310,6 +310,7 @@ function normalizeData(parsed?: Partial<AppData> | null, fallback: AppData = ini
   const { messageTemplates, automationRules } = currentCommunicationDefinitions({
     messageTemplates: parsed?.messageTemplates?.length ? parsed.messageTemplates : fallback.messageTemplates,
     automationRules: parsed?.automationRules?.length ? parsed.automationRules : fallback.automationRules,
+    communicationConfigs: parsed?.communicationConfigs ?? fallback.communicationConfigs,
   });
   const normalized = ensureGuestPeople({
     ...base,
@@ -2608,13 +2609,18 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         : [review, ...current.reviewRequests],
       auditLog: [audit("review_request", review.id, "updated", review.status), ...current.auditLog],
     })),
-    upsertCommunicationConfig: (config) => batchMutate((current) => ({
-      ...current,
-      communicationConfigs: current.communicationConfigs.some((item) => item.id === config.id)
-        ? current.communicationConfigs.map((item) => item.id === config.id ? config : item)
-        : [config, ...current.communicationConfigs],
-      auditLog: [audit("communication_config", config.id, "updated", "Zmieniono wersjonowaną konfigurację komunikacji"), ...current.auditLog],
-    })),
+    upsertCommunicationConfig: (config) => batchMutate((current) => {
+      const next = {
+        ...current,
+        communicationConfigs: current.communicationConfigs.some((item) => item.id === config.id)
+          ? current.communicationConfigs.map((item) => item.id === config.id ? config : item)
+          : [config, ...current.communicationConfigs],
+        auditLog: [audit("communication_config", config.id, "updated", "Zmieniono wersjonowaną konfigurację komunikacji"), ...current.auditLog],
+      };
+      Object.assign(next, currentCommunicationDefinitions(next));
+      next.scheduledMessages = reconcileScheduledMessages(next);
+      return next;
+    }),
     importAdSpend: (records) => batchMutate((current) => {
       const incomingIds = new Set(records.map((record) => record.id));
       return {
