@@ -172,7 +172,7 @@ export function renderTemplate(template: MessageTemplate, booking: Booking, data
     booking_price: booking.grossPrice == null ? "do ustalenia" : `${booking.grossPrice.toLocaleString("pl-PL")} ${booking.currency ?? "PLN"}`,
     deposit_amount: booking.depositAmount == null ? "do ustalenia" : `${booking.depositAmount.toLocaleString("pl-PL")} ${booking.currency ?? "PLN"}`,
     deposit_due: booking.depositDueDate ? (booking.depositDueDate < booking.bookingDate ? booking.bookingDate : booking.depositDueDate) : "do ustalenia",
-    bank_account: config?.bankAccountNumber || "{{bank_account}}",
+    bank_account: config?.bankAccountNumber ? `${config.bankAccountNumber}${config.bankAccountRecipient ? ` (${config.bankAccountRecipient})` : ""}` : "{{bank_account}}",
     travel_guide: guide?.body || "{{travel_guide}}",
     route_warning: guide?.routeWarning || "{{route_warning}}",
     sender_name: config?.senderName || "Stawy u Sikory",

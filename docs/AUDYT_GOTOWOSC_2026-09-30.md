@@ -88,3 +88,12 @@ Niepewna wysyłka po upływie 23 godzin przechodzi do błędu wymagającego spra
 - Numer konta potwierdzono w danych konta Mobile Calendar i faktycznie wysłanym potwierdzeniu; suma kontrolna NRB poprawna. Zapis konfiguracji produkcyjnej: wersja 8. Numeru rachunku nie publikujemy w raporcie.
 - Test przez endpoint aplikacji zwrócił ID `01a0f2f0-5127-76f7-af17-c4df2af78f51`; Resend potwierdza delivered, właściwego nadawcę, odbiorcę oraz CC i Reply-To do Marcina. Endpoint deduplikuje test w obrębie dnia; jest to potwierdzenie integracji, nadal nie pełnego przebiegu kolejki rezerwacji.
 - Dodatkowe zabezpieczenia kodu: historia nie tworzy zadań, nie zgłasza braków danych, nie podnosi alertów, nie trafia do listy finansów do działania i jest odrzucana bezpośrednio przed wysyłką.
+
+## Widok wiadomości i uruchomienie harmonogramu
+
+- PR #45 wdrożony: dodatkowe zabezpieczenie historii w serwerze i interfejsie.
+- Nowy ekran `/messages`: lista rozmów z wyszukiwaniem, filtr kanału, historia i kolejka, zatwierdzanie i anulowanie niewysłanych wiadomości. Historia jest domyślnie ukryta, a odpowiedzi kierowane na dotychczasową skrzynkę Marcina.
+- Osobny widok szablonów, wzorowany na Mobile Calendar: tabela, język i status, panel zmiennych, temat, treść, podgląd dla rezerwacji. Edycje korzystają z wersjonowanej konfiguracji i są jednakowo odczytywane przez klienta i serwer. Oryginały MC pozostają wyłączonym materiałem źródłowym.
+- Testy chronią błąd zapisu, nieznane zmienne, odczyt bez prawa edycji, wersję konfiguracji i blokadę nieaktualnej treści kolejki. 116 plików / 581 testów PASS. Podgląd przeglądarkowy listy, wyszukiwania i szablonu: PASS.
+- Test rezerwacji na 30.09.2026 utworzony przez UI; kolejka zawiera potwierdzenie i instrukcję przyjazdu na zatwierdzony adres. Spóźnione przypomnienie o jutrzejszym przyjeździe jest zablokowane.
+- GitHub krok e-mail włączony; ręczny run 36738740560 przeszedł synchronizację iCal, lecz wysyłka zwróciła 423. Po otwarciu edytora przez właściciela zapisano `STAWY_OS_EMAIL_ENABLED=true` w Production Vercel. Nowe wdrożenie musi pobrać tę wartość; nadal wymagane potwierdzenie rzeczywistego wysłania i dostarczenia kolejki.

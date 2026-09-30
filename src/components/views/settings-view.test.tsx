@@ -118,8 +118,7 @@ describe("SettingsView po twardym odświeżeniu", () => {
     mocks.store.current = store;
 
     expect(() => render(<SettingsView currentRole="owner" />)).not.toThrow();
-    expect(screen.getByText("Stary szablon")).toBeInTheDocument();
-    expect(screen.getByText("0 dozwolonych zmiennych · PL")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Otwórz szablony wiadomości →" })).toHaveAttribute("href", "/messages?view=templates");
   });
 
   it("pozwala właścicielowi wysłać izolowany test e-mail", async () => {
