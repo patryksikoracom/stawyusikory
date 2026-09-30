@@ -6,7 +6,7 @@ import { defaultAutomationRules, defaultMessageTemplates, reconcileScheduledMess
 const booking: Booking = {
   id: "COMM-1", bookingDate: "2026-07-01", source: "test", platform: "Bezpośrednio", unitId: "domek-rybaka",
   checkIn: "2026-08-10", checkOut: "2026-08-13", adults: 2, children: 0, guestLabel: "Anna Kowalska",
-  grossPrice: 1200, currency: "PLN", paymentStatus: "Do dopłaty", workflowStatus: "Potwierdzona", createdBy: "test",
+  grossPrice: 1200, depositAmount: 400, depositDueDate: "2026-07-08", currency: "PLN", paymentStatus: "Do dopłaty", workflowStatus: "Potwierdzona", createdBy: "test",
 };
 
 function fixture(overrides: Partial<AppData> = {}): AppData {
@@ -69,7 +69,7 @@ describe("draft-first communication", () => {
         travelGuides: [],
       }],
     }));
-    expect(rendered.body).toContain("Anna");
+    expect(rendered.body).toContain("Anna Kowalska 10-13.08/26");
     expect(rendered.body).toContain("Domek Rybaka");
     expect(rendered.unresolved).toEqual([]);
   });
@@ -123,7 +123,7 @@ describe("draft-first communication", () => {
       }),
     }).find((item) => item.ruleId === "RULE-PREARRIVAL");
     expect(changed).toMatchObject({ status: "Zatwierdzona", deliveryPolicy: "auto_send", dueAt: "2026-08-07T08:00:00.000Z" });
-    expect(changed?.renderedBody).toContain("2026-08-12");
+    expect(changed?.renderedBody).toContain("12.08.2026");
   });
 
   it("schedules the deposit confirmation on the recorded payment date", () => {

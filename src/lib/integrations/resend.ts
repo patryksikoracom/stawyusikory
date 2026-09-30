@@ -22,13 +22,18 @@ function escapeHtml(value: string) {
     .replaceAll("'", "&#039;");
 }
 
-export function renderEmailHtml(body: string) {
-  const paragraphs = body
-    .trim()
-    .split(/\n{2,}/)
-    .map((paragraph) => `<p style="margin:0 0 16px;white-space:pre-line">${escapeHtml(paragraph)}</p>`)
-    .join("");
-  return `<!doctype html><html lang="pl"><head><meta charset="utf-8"></head><body style="margin:0;background:#f4f1e9;color:#243c32;font-family:Arial,sans-serif"><div style="display:none;max-height:0;overflow:hidden">Wiadomość dotycząca pobytu w Stawach u Sikory</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f1e9"><tr><td align="center" style="padding:24px 12px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#fffdf8;border:1px solid #ded7ca;border-radius:18px"><tr><td style="padding:28px 28px 12px"><div style="font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#74854a">Stawy u Sikory</div></td></tr><tr><td style="padding:8px 28px 20px;font-size:16px;line-height:1.65">${paragraphs}</td></tr><tr><td style="padding:18px 28px;border-top:1px solid #e7e0d4;font-size:12px;line-height:1.5;color:#68756f">Ta wiadomość dotyczy rezerwacji lub pobytu w Stawach u Sikory.</td></tr></table></td></tr></table></body></html>`;
+export function renderEmailHtml(body: string, options: { language?: "pl" | "en" | "de"; subject?: string } = {}) {
+  const language = options.language ?? "pl";
+  const footer = { pl: "Wiadomość dotycząca Twojego pobytu w Stawach u Sikory. Możesz na nią odpowiedzieć.", en: "A message about your stay at Stawy u Sikory. You can reply to this email.", de: "Eine Nachricht zu Ihrem Aufenthalt bei Stawy u Sikory. Sie können auf diese E-Mail antworten." }[language];
+  const guideLabel = { pl: "Przewodnik pobytu", en: "Your stay guide", de: "Hinweise für Ihren Aufenthalt" }[language];
+  const guideUrl = "https://stawyusikory.pl/przewodnik/";
+  const paragraphs = body.replace(/\r\n?/g, "\n").trim().split(/\n\s*\n/)
+    .filter(Boolean)
+    .map(paragraph => `<p style="margin:0 0 20px">${escapeHtml(paragraph)
+      .replaceAll(guideUrl, `<a href="${guideUrl}" style="color:#174d3b;text-decoration:underline">${guideLabel}</a>`)
+      .replaceAll("\n", "<br>")}</p>`).join("");
+  const subject = escapeHtml(options.subject ?? "Stawy u Sikory");
+  return `<!doctype html><html lang="${language}" dir="ltr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${subject}</title></head><body style="margin:0;background:#f4f1e9;color:#243c32;font-family:Arial,sans-serif;-webkit-text-size-adjust:100%"><table lang="${language}" dir="ltr" role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f1e9"><tr><td align="center" style="padding:20px 12px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#fffdf8;border:1px solid #ded7ca;border-radius:14px"><tr><td style="padding:24px 22px 12px"><div style="font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#49633d">Stawy u Sikory</div>${options.subject ? `<h1 style="font-size:22px;line-height:1.35;margin:16px 0 0;font-weight:600">${subject}</h1>` : ""}</td></tr><tr><td style="padding:8px 22px 12px;font-size:16px;line-height:1.65;overflow-wrap:anywhere;word-break:break-word">${paragraphs}</td></tr><tr><td style="padding:16px 22px;border-top:1px solid #e7e0d4;font-size:12px;line-height:1.5;color:#53635b">${footer}</td></tr></table></td></tr></table></body></html>`;
 }
 
 type ResendEmailClient = Pick<Resend["emails"], "send">;
@@ -40,6 +45,7 @@ export type SendResendEmailInput = {
   idempotencyKey: string;
   bookingId: string;
   category: string;
+  language?: "pl" | "en" | "de";
 };
 
 export async function sendResendEmail(input: SendResendEmailInput, client?: ResendEmailClient) {
@@ -59,7 +65,7 @@ export async function sendResendEmail(input: SendResendEmailInput, client?: Rese
       replyTo,
       subject: input.subject,
       text: input.text,
-      html: renderEmailHtml(input.text),
+      html: renderEmailHtml(input.text, { language: input.language, subject: input.subject }),
       tags: [
         { name: "category", value: input.category.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 256) || "transactional" },
         { name: "booking_id", value: input.bookingId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 256) || "unknown" },

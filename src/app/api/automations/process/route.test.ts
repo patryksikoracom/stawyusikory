@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ send: vi.fn(), read: vi.fn(), current: vi.fn(), rpc: vi.fn(), from: vi.fn(), existing: null as unknown, claim: null as unknown }));
+vi.mock("@/lib/crm/guest-identity", () => ({ bookingLanguage: () => "pl" }));
 vi.mock("@/lib/supabase/server", () => ({ createServiceClient: () => ({ from: mocks.from, rpc: mocks.rpc }) }));
 vi.mock("@/lib/integrations/read-email-queue", () => ({ readEmailQueue: mocks.read }));
 vi.mock("@/lib/integrations/current-email", () => ({ readCommunicationData: vi.fn().mockResolvedValue({}), isCurrentEmail: mocks.current }));

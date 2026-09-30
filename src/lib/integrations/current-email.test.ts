@@ -6,7 +6,7 @@ import { isCurrentEmail } from "./current-email";
 function fixture() {
   const data: CommunicationData = {
     ...initialData,
-    bookings: [{ ...initialData.bookings[0], id: "test-stay", bookingDate: "2026-09-30", checkIn: "2026-10-01", checkOut: "2026-10-04", workflowStatus: "Potwierdzona", historicalImport: false, importRef: undefined }],
+    bookings: [{ ...initialData.bookings[0], id: "test-stay", platform: "Bezpośrednio", grossPrice: 1200, currency: "PLN", depositAmount: 400, depositDueDate: "2026-09-30", paymentStatus: "Do dopłaty", openingPaidAmount: undefined, bookingDate: "2026-09-30", checkIn: "2026-10-01", checkOut: "2026-10-04", workflowStatus: "Potwierdzona", historicalImport: false, importRef: undefined }],
     guests: [], people: [], payments: [], consentLedger: [],
     consents: [{ bookingId: "test-stay", preferredLanguage: "pl", email: "guest@example.com", marketingConsent: "Nie", photoFbConsent: "Nie", photoSiteAdsConsent: "Nie" }],
     communicationConfigs: [{ id: "communication", senderName: "Stawy u Sikory", bankAccountNumber: "TEST", copyUserIds: [], travelGuides: [] }],

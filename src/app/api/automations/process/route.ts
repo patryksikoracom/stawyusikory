@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { bookingLanguage } from "@/lib/crm/guest-identity";
 import { createServiceClient } from "@/lib/supabase/server";
 import { deliveryRetry, isOutboundClaimable, normalizeDeliveryEmail } from "@/lib/integrations/delivery-queue";
 import { readEmailQueue } from "@/lib/integrations/read-email-queue";
@@ -167,11 +168,14 @@ export async function POST(request: Request) {
     const important = !/review|opini/i.test(message.rule_id);
     // Re-read the authoritative booking and consent before every attempt.
     // Cancellation, edits and expired arrival messages invalidate old queue rows.
+    let language: "pl" | "en" | "de" | undefined;
     try {
-      if (!isCurrentEmail(await readCommunicationData(service, message.organization_id), message)) {
+      const currentData = await readCommunicationData(service, message.organization_id);
+      if (!isCurrentEmail(currentData, message)) {
         skipped += 1;
         continue;
       }
+      language = bookingLanguage(currentData, message.booking_id);
     } catch {
       failed += 1;
       continue;
@@ -193,6 +197,7 @@ export async function POST(request: Request) {
       idempotencyKey: message.idempotency_key,
       bookingId: message.booking_id,
       category: message.rule_id,
+      language,
     });
     const attempts = claim.row.attempts + 1;
     if (result.ok) {
