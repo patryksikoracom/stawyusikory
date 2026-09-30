@@ -1485,6 +1485,7 @@ describe("AppStoreProvider w trybie chmurowym", () => {
       booking.paymentStatus,
       booking.workflowStatus,
       booking.unitId,
+      undefined, undefined, undefined, undefined,
     ].join("|");
     const approvedMessage = {
       id: `SCH-RULE-CONFIRM-${booking.id}`,

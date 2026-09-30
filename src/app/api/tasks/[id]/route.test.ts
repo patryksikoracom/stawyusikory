@@ -93,6 +93,23 @@ describe("PATCH /api/tasks/:id", () => {
     });
   });
 
+  it("daje operatorowi wyłącznie wąską komendę sprzątania", async () => {
+    mocks.context.role = "manager";
+    const response = await PATCH(request({ task: { ...task, title: "Nie wolno nadpisać", cleaningSettlement: { amount: 150, currency: "PLN" } } }), routeContext);
+    expect(response.status).toBe(200);
+    expect(mocks.context.supabase.rpc).toHaveBeenCalledWith("update_operator_cleaning", {
+      p_organization_id: "org-test", p_task_id: task.id, p_expected_record_version: 3,
+      p_complete: true, p_settlement: { amount: 150, currency: "PLN" }, p_request_id: "request-task-123",
+    });
+  });
+
+  it("nie daje operatorowi ogólnej edycji zadań ani ujemnej kwoty", async () => {
+    mocks.context.role = "manager";
+    expect((await PATCH(request({ task: { ...task, type: "Płatność" } }), routeContext)).status).toBe(403);
+    expect((await PATCH(request({ task: { ...task, cleaningSettlement: { amount: -1, currency: "PLN" } } }), routeContext)).status).toBe(400);
+    expect(mocks.context.supabase.rpc).not.toHaveBeenCalled();
+  });
+
   it("zwraca 409 z wersją wyłącznie konfliktowego rekordu", async () => {
     mocks.context.supabase.rpc.mockResolvedValue({
       data: { status: "conflict", recordVersion: 7 },

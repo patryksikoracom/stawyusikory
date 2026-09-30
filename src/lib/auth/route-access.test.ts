@@ -5,6 +5,7 @@ describe("canAccessAppPath", () => {
   it("ogranicza profil operatora do kalendarza i rezerwacji", () => {
     expect(canAccessAppPath("manager", "/calendar")).toBe(true);
     expect(canAccessAppPath("manager", "/bookings")).toBe(true);
+    expect(canAccessAppPath("manager", "/tasks")).toBe(true);
     expect(canAccessAppPath("manager", "/bookings/RES-1")).toBe(true);
     expect(canAccessAppPath("manager", "/dashboard")).toBe(false);
     expect(canAccessAppPath("manager", "/calendar/year")).toBe(false);

@@ -25,8 +25,8 @@ export async function POST(request: Request) {
     subject: "[TEST] Stawy OS — sprawdzenie wysyłki e-mail",
     text: [
       "To jest testowa wiadomość ze Stawy OS.",
-      `Czas wysłania: ${sentAt.toLocaleString("pl-PL", { timeZone: "Europe/Warsaw" })}.`,
-      "Jeśli ją widzisz, połączenie z Resend, nadawca i adres odpowiedzi działają.",
+      `Dzień testu: ${sentAt.toISOString().slice(0, 10)}.`,
+      "Jeśli ją widzisz, wiadomość dotarła. Sprawdź również nadawcę oraz adres wyświetlany po wybraniu Odpowiedz.",
     ].join("\n\n"),
     idempotencyKey: `email-test:${context.organizationId}:${parsed.data.email}:${sentAt.toISOString().slice(0, 10)}`,
     bookingId: "EMAIL-TEST",

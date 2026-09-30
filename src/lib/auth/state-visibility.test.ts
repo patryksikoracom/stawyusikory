@@ -98,6 +98,16 @@ describe("widoczność rekordów według roli", () => {
     });
   });
 
+  it("manager sees Jadzia settlement while unrelated task finances stay hidden", () => {
+    const task = { entity_type: "tasks", entity_id: "C-1", payload: {
+      id: "C-1", type: "Sprzątanie", status: "Zrobione", internalCost: 900,
+      cleaningSettlement: { amount: 150, currency: "PLN", paidAt: "2026-09-30T10:00:00Z" },
+    } };
+    const visible = visibleOperationalRecord(task, "manager")?.payload;
+    expect(visible).toHaveProperty("cleaningSettlement", task.payload.cleaningSettlement);
+    expect(visible).not.toHaveProperty("internalCost");
+  });
+
   it("accounting widzi finanse, ale nie dane marketingowe", () => {
     expect(visibleOperationalRecord(booking, "accounting")).toEqual(booking);
     expect(visibleOperationalRecord({ ...booking, entity_type: "media" }, "accounting")).toBeNull();

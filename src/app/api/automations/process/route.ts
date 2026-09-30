@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { deliveryRetry, isOutboundClaimable, normalizeDeliveryEmail } from "@/lib/integrations/delivery-queue";
+import { readEmailQueue } from "@/lib/integrations/read-email-queue";
+import { isCurrentEmail, readCommunicationData } from "@/lib/integrations/current-email";
 import {
   defaultResendFromEmail,
   emailDeliveryDisabledMessage,
@@ -28,6 +30,7 @@ type OutboundMessage = {
   attempts: number;
   next_attempt_at: string | null;
   provider_message_id: string | null;
+  created_at: string;
 };
 
 function configuredDailyLimit(value = process.env.STAWY_OS_EMAIL_DAILY_LIMIT) {
@@ -59,21 +62,36 @@ async function claimOutbound(
 ) {
   const table = service.from("outbound_messages");
   const { data: existing, error: existingError } = await table
-    .select("id,status,attempts,next_attempt_at,provider_message_id")
+    .select("id,status,attempts,next_attempt_at,provider_message_id,created_at")
     .eq("organization_id", message.organization_id)
     .eq("idempotency_key", message.idempotency_key)
     .maybeSingle<OutboundMessage>();
   if (existingError) return { error: existingError.message };
   if (existing?.status === "sent" || existing?.status === "delivered") return { duplicate: true };
+  // null means a terminal failure, not an immediate retry.
+  if (existing?.status === "error" && (!existing.next_attempt_at || existing.attempts >= (important ? 5 : 3))) return { deferred: true };
   if (!isOutboundClaimable(existing, now)) return { deferred: true };
+  // Resend deduplicates for 24h. Stop uncertain retries before that window expires.
+  if (existing && now.getTime() - new Date(existing.created_at).getTime() >= 23 * 60 * 60_000) {
+    await service.from("outbound_messages").update({ status: "error", next_attempt_at: null,
+      last_error: "retry_window_expired: sprawdź dostarczenie w Resend przed ponowną wysyłką" })
+      .eq("id", existing.id).eq("status", existing.status);
+    await recordDelivery(service, message, "Błąd", "Wygasło bezpieczne okno ponowień. Sprawdź dostarczenie w Resend.", "email_retry_window_expired");
+    return { error: "email_retry_window_expired" };
+  }
+
 
   if (existing) {
     const leaseUntil = new Date(now.getTime() + 10 * 60_000).toISOString();
-    const { data: claimed, error } = await service.from("outbound_messages")
+    let update = service.from("outbound_messages")
       .update({ status: "processing", next_attempt_at: leaseUntil, updated_at: now.toISOString() })
       .eq("id", existing.id)
       .eq("status", existing.status)
-      .select("id,status,attempts,next_attempt_at,provider_message_id")
+      .eq("attempts", existing.attempts);
+    update = existing.next_attempt_at === null ? update.is("next_attempt_at", null)
+      : update.eq("next_attempt_at", existing.next_attempt_at);
+    const { data: claimed, error } = await update
+      .select("id,status,attempts,next_attempt_at,provider_message_id,created_at")
       .maybeSingle<OutboundMessage>();
     if (error) return { error: error.message };
     return claimed ? { row: claimed } : { deferred: true };
@@ -96,7 +114,7 @@ async function claimOutbound(
       next_attempt_at: new Date(now.getTime() + 10 * 60_000).toISOString(),
       important,
     })
-    .select("id,status,attempts,next_attempt_at,provider_message_id")
+    .select("id,status,attempts,next_attempt_at,provider_message_id,created_at")
     .single<OutboundMessage>();
   if (error?.code === "23505") return { deferred: true };
   if (error || !created) return { error: error?.message ?? "Nie udało się utworzyć kolejki e-mail." };
@@ -132,43 +150,32 @@ export async function POST(request: Request) {
   }
 
   const remaining = Math.min(20, dailyLimit - (sentInWindow ?? 0));
-  const { data, error } = await service
-    .from("scheduled_messages")
-    .select("id,organization_id,booking_id,rule_id,due_at,recipient,subject,rendered_body,status,blocked_reason,idempotency_key")
-    .eq("channel", "E-mail")
-    .in("status", ["Zatwierdzona", "Błąd"])
-    .is("blocked_reason", null)
-    .lte("due_at", now.toISOString())
-    .order("due_at", { ascending: true })
-    .limit(remaining)
-    .returns<DueMessage[]>();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  const due = data ?? [];
-  const ids = due.map((message) => message.id);
-  const { data: records, error: recordsError } = ids.length
-    ? await service.from("operational_records")
-      .select("organization_id,entity_id,payload")
-      .eq("entity_type", "scheduledMessages")
-      .in("entity_id", ids)
-    : { data: [], error: null };
-  if (recordsError) return NextResponse.json({ error: recordsError.message }, { status: 500 });
-  const policyByMessage = new Map((records ?? []).map((record) => [
-    `${record.organization_id}:${record.entity_id}`,
-    (record.payload as { deliveryPolicy?: string }).deliveryPolicy,
-  ]));
+  let due: DueMessage[];
+  try { due = await readEmailQueue(service, now); }
+  catch { return NextResponse.json({ error: "Nie udało się odczytać kompletnej kolejki." }, { status: 503 }); }
 
   let sent = 0;
   let failed = 0;
   let skipped = 0;
   for (const message of due) {
-    const policy = policyByMessage.get(`${message.organization_id}:${message.id}`);
+    if (sent + failed >= remaining) break;
     const recipient = normalizeDeliveryEmail(message.recipient ?? undefined);
-    if (!recipient || !message.subject?.trim() || !["manual_send", "auto_send"].includes(policy ?? "")) {
+    if (!recipient || !message.subject?.trim()) {
       skipped += 1;
       continue;
     }
     const important = !/review|opini/i.test(message.rule_id);
+    // Re-read the authoritative booking and consent before every attempt.
+    // Cancellation, edits and expired arrival messages invalidate old queue rows.
+    try {
+      if (!isCurrentEmail(await readCommunicationData(service, message.organization_id), message)) {
+        skipped += 1;
+        continue;
+      }
+    } catch {
+      failed += 1;
+      continue;
+    }
     const claim = await claimOutbound(service, message, important, now);
     if (claim.error) {
       failed += 1;
@@ -189,16 +196,12 @@ export async function POST(request: Request) {
     });
     const attempts = claim.row.attempts + 1;
     if (result.ok) {
-      await service.from("outbound_messages").update({
-        status: "sent",
-        provider_message_id: result.providerMessageId,
-        provider_response: { provider: "resend", id: result.providerMessageId },
-        attempts,
-        next_attempt_at: null,
-        last_error: null,
-        updated_at: new Date().toISOString(),
-      }).eq("id", claim.row.id);
-      await recordDelivery(service, message, "Wysłana", result.providerMessageId, "email_sent");
+      const saved = await service.rpc("complete_email_send", {
+        p_outbound_id: claim.row.id,
+        p_provider_message_id: result.providerMessageId,
+        p_attempts: attempts,
+      });
+      if (saved.error) { failed += 1; continue; }
       sent += 1;
       continue;
     }
@@ -213,7 +216,7 @@ export async function POST(request: Request) {
       status: "error",
       provider_response: result,
       attempts,
-      next_attempt_at: result.retryable ? quotaDelay ?? retry.nextAttemptAt ?? null : null,
+      next_attempt_at: result.retryable && !retry.exhausted ? quotaDelay ?? retry.nextAttemptAt ?? null : null,
       last_error: result.error,
       updated_at: new Date().toISOString(),
     }).eq("id", claim.row.id);
@@ -221,5 +224,5 @@ export async function POST(request: Request) {
     failed += 1;
   }
 
-  return NextResponse.json({ ok: failed === 0, processed: due.length, sent, failed, skipped, dailyLimit });
+  return NextResponse.json({ ok: failed === 0, processed: sent + failed + skipped, sent, failed, skipped, dailyLimit }, { status: failed ? 503 : 200 });
 }

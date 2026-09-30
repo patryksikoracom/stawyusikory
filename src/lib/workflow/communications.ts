@@ -7,7 +7,7 @@ import type {
   MessageTemplate,
   ScheduledMessage,
 } from "../types";
-import { addLocalDays } from "../date";
+import { addLocalDays, polishDateTime } from "../date";
 import { todayInPoland } from "../date";
 import { nightsBetween, unitName } from "./rules";
 import { calculateBookingFinance } from "../metrics/finance";
@@ -108,11 +108,12 @@ function automaticRule(id: string, name: string, templateId: string, trigger: Au
 }
 
 export function bookingFingerprint(booking: Booking) {
-  return [booking.checkIn, booking.checkOut, booking.arrivalTime, booking.departureTime, booking.guestLabel, booking.paymentStatus, booking.workflowStatus, booking.unitId].join("|");
+  return [booking.checkIn, booking.checkOut, booking.arrivalTime, booking.departureTime, booking.guestLabel, booking.paymentStatus, booking.workflowStatus, booking.unitId,
+    booking.grossPrice, booking.currency, booking.depositAmount, booking.depositDueDate].join("|");
 }
 
-function communicationFingerprint(booking: Booking, language?: string, recipient?: string, templateVersion?: number) {
-  return [bookingFingerprint(booking), language, recipient, templateVersion].join("|");
+function communicationFingerprint(booking: Booking, language?: string, recipient?: string, templateVersion?: number, renderedContent?: string) {
+  return [bookingFingerprint(booking), language, recipient, templateVersion, renderedContent].join("|");
 }
 
 function dueDate(rule: AutomationRule, booking: Booking, data: Pick<AppData, "payments">) {
@@ -128,7 +129,13 @@ function dueDate(rule: AutomationRule, booking: Booking, data: Pick<AppData, "pa
     : rule.trigger === "Termin płatności" ? (booking.depositDueDate || addLocalDays(booking.checkIn, -3))
       : ["Przed przyjazdem", "Po przyjeździe"].includes(rule.trigger) ? booking.checkIn
         : booking.checkOut;
-  return `${addLocalDays(base, rule.offsetDays)}T${rule.sendTime}:00`;
+  const eventTriggered = ["Po utworzeniu rezerwacji", "Po zarejestrowaniu płatności"].includes(rule.trigger);
+  // Date-only events are immediately eligible; a booking made after noon must
+  // not wait until the following day's scheduler window.
+  const plannedDay = addLocalDays(base.slice(0, 10), rule.offsetDays);
+  const lateArrivalInfo = rule.id === "RULE-PREARRIVAL" && plannedDay < booking.bookingDate;
+  return polishDateTime(lateArrivalInfo ? booking.bookingDate : plannedDay,
+    eventTriggered || lateArrivalInfo ? "00:00" : rule.sendTime);
 }
 
 function contactFor(template: MessageTemplate, consent?: ContactConsent) {
@@ -164,7 +171,7 @@ export function renderTemplate(template: MessageTemplate, booking: Booking, data
       : balanceDue,
     booking_price: booking.grossPrice == null ? "do ustalenia" : `${booking.grossPrice.toLocaleString("pl-PL")} ${booking.currency ?? "PLN"}`,
     deposit_amount: booking.depositAmount == null ? "do ustalenia" : `${booking.depositAmount.toLocaleString("pl-PL")} ${booking.currency ?? "PLN"}`,
-    deposit_due: booking.depositDueDate || "do ustalenia",
+    deposit_due: booking.depositDueDate ? (booking.depositDueDate < booking.bookingDate ? booking.bookingDate : booking.depositDueDate) : "do ustalenia",
     bank_account: config?.bankAccountNumber || "{{bank_account}}",
     travel_guide: guide?.body || "{{travel_guide}}",
     route_warning: guide?.routeWarning || "{{route_warning}}",
@@ -173,19 +180,28 @@ export function renderTemplate(template: MessageTemplate, booking: Booking, data
   const replace = (value?: string) => value?.replace(/{{\s*([a-z_]+)\s*}}/g, (_, key: string) => values[key] ?? `{{${key}}}`);
   const body = replace(template.body) || "";
   const subject = replace(template.subject);
-  const unresolved = Array.from(new Set([...body.matchAll(/{{\s*([^}]+)\s*}}/g)].map((match) => match[1])));
+  const unresolved = Array.from(new Set([...`${subject ?? ""}\n${body}`.matchAll(/{{\s*([^}]+)\s*}}/g)].map((match) => match[1])));
   return { body, subject, unresolved };
 }
 
-export function reconcileScheduledMessages(data: AppData): ScheduledMessage[] {
+export type CommunicationData = Pick<AppData, "bookings" | "units" | "payments" | "communicationConfigs" | "guests" | "people" | "consents" | "consentLedger" | "messageTemplates" | "automationRules" | "scheduledMessages">;
+
+export function reconcileScheduledMessages(data: CommunicationData, now = new Date()): ScheduledMessage[] {
   const current = new Map(data.scheduledMessages.map((item) => [item.id, item]));
   const output: ScheduledMessage[] = [];
-  const today = todayInPoland();
+  const today = todayInPoland(now);
   for (const booking of data.bookings) {
-    if (booking.historicalImport || booking.checkOut <= today) continue;
+    if (booking.historicalImport) continue;
     for (const rule of data.automationRules.filter((item) => item.active)) {
       const messageId = `SCH-${rule.id}-${booking.id}`;
       const existing = current.get(messageId);
+      if (existing && ["Wysłana", "Dostarczona", "Anulowana"].includes(existing.status)) {
+        output.push(existing);
+        continue;
+      }
+      const afterDeparture = rule.trigger === "Po wyjeździe";
+      if (!existing && booking.checkOut <= today && !afterDeparture) continue;
+      if (!existing && afterDeparture && today > addLocalDays(booking.checkOut, rule.offsetDays + 2)) continue;
       const baseTemplate = data.messageTemplates.find((item) => item.id === rule.templateId && item.active);
       if (!baseTemplate) continue;
       const profile = data.guests.find((item) => item.bookingId === booking.id);
@@ -201,14 +217,25 @@ export function reconcileScheduledMessages(data: AppData): ScheduledMessage[] {
       if (rule.paymentStatuses?.length && !rule.paymentStatuses.includes(booking.paymentStatus)) continue;
       if (rule.minimumNights && nightsBetween(booking.checkIn, booking.checkOut) < rule.minimumNights) continue;
       const candidateDueAt = dueDate(rule, booking, data);
-      if (!existing && booking.importRef?.source === "mobile-calendar" && candidateDueAt.slice(0, 10) < today) continue;
+      if (!existing && booking.importRef?.source === "mobile-calendar" && todayInPoland(new Date(candidateDueAt)) < today) continue;
       const rendered = renderTemplate(template, booking, data);
       const consent = data.consents.find((item) => item.bookingId === booking.id);
       const recipient = contactFor(template, consent);
       const fingerprint = language
-        ? communicationFingerprint(booking, language, recipient, template.version)
+        ? communicationFingerprint(booking, language, recipient, template.version, `${rendered.subject ?? ""}\n${rendered.body}`)
         : bookingFingerprint(booking);
       const blockingReasons = [
+        booking.deletedAt ? "Rezerwacja została usunięta" : undefined,
+        rule.trigger === "Po utworzeniu rezerwacji" && today > booking.checkIn
+          ? "Termin potwierdzenia nowej rezerwacji minął" : undefined,
+        rule.id === "RULE-ARRIVAL-REMINDER" && today >= booking.checkIn
+          ? "Termin przypomnienia o jutrzejszym przyjeździe minął" : undefined,
+        rule.trigger === "Przed przyjazdem" && today > booking.checkIn
+          ? "Termin wiadomości przed przyjazdem minął" : undefined,
+        rule.trigger === "Przed wyjazdem" && today >= booking.checkOut
+          ? "Termin wiadomości przed wyjazdem minął" : undefined,
+        afterDeparture && today > addLocalDays(booking.checkOut, rule.offsetDays + 2)
+          ? "Termin wiadomości po pobycie minął" : undefined,
         !language ? "Brak jawnie wybranego języka gościa" : undefined,
         language && template.language !== language ? `Brak szablonu w języku ${language.toUpperCase()}` : undefined,
         rendered.unresolved.length ? `Brakujące zmienne: ${rendered.unresolved.join(", ")}` : undefined,
@@ -268,6 +295,13 @@ export function reconcileScheduledMessages(data: AppData): ScheduledMessage[] {
         updatedAt: existing?.updatedAt,
       });
     }
+  }
+  // Keep delivery history and cancel pending messages whose rule or booking
+  // disappeared. Never silently erase evidence of an attempted delivery.
+  const retained = new Set(output.map(item => item.id));
+  for (const saved of data.scheduledMessages) {
+    if (!retained.has(saved.id)) output.push(["Wysłana", "Dostarczona", "Anulowana"].includes(saved.status)
+      ? saved : { ...saved, status: "Anulowana", blockedReason: "Rezerwacja lub reguła nie jest już aktywna" });
   }
   return output.sort((a, b) => a.dueAt.localeCompare(b.dueAt));
 }

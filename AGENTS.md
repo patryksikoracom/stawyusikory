@@ -27,3 +27,13 @@ Rejestr przyjmuje również rzeczywiste problemy operacyjne, usterki procesu i z
 3. Wskaż prostą procedurę lub checklistę, właściciela, moment kontroli i sposób walidacji.
 4. Automatyzację opisz jako późniejszą możliwość, jeżeli naprawdę daje wartość. Nie zakładaj, że każdy problem wymaga funkcji Stawy OS.
 5. Jeżeli problem jest duplikatem, dopisz nowe zdarzenie i kontekst do istniejącej karty zamiast tworzyć nowy identyfikator.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

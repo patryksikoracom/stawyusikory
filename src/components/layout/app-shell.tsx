@@ -123,7 +123,7 @@ function ShellInner({ children, identity }: { children: React.ReactNode; identit
   const alerts = useMemo(() => dataReady ? deriveShellAlerts(data) : [], [data, dataReady]);
   const operatorMode = identity.role === "manager";
   const homeHref = operatorMode ? "/calendar" : "/dashboard";
-  const visiblePrimaryNav = primaryNav.filter((item) => canAccessAppPath(identity.role, item.href));
+  const visiblePrimaryNav = (operatorMode ? [...primaryNav, { href: "/tasks", label: "Sprzątanie", icon: "cleaning" as const }] : primaryNav).filter((item) => canAccessAppPath(identity.role, item.href));
   const visibleSecondaryNav = secondaryNav.filter((item) => canAccessAppPath(identity.role, item.href));
 
   function openNewBooking(event: MouseEvent<HTMLButtonElement>) {
@@ -224,7 +224,7 @@ function ShellInner({ children, identity }: { children: React.ReactNode; identit
         </main>
       </div>
 
-      <nav className={`app-mobile-nav fixed inset-x-0 bottom-0 z-40 grid ${operatorMode ? "grid-cols-2" : "grid-cols-5"} border-t border-[#d4ccbd] bg-[#fffdf8]/95 px-1 pb-[max(.4rem,env(safe-area-inset-bottom))] pt-1.5 shadow-[0_-8px_30px_rgba(29,47,40,.08)] backdrop-blur lg:hidden`}>
+      <nav className={`app-mobile-nav fixed inset-x-0 bottom-0 z-40 grid ${operatorMode ? "grid-cols-3" : "grid-cols-5"} border-t border-[#d4ccbd] bg-[#fffdf8]/95 px-1 pb-[max(.4rem,env(safe-area-inset-bottom))] pt-1.5 shadow-[0_-8px_30px_rgba(29,47,40,.08)] backdrop-blur lg:hidden`}>
         {(operatorMode ? visiblePrimaryNav : [primaryNav[0], primaryNav[1], primaryNav[2], secondaryNav[0]]).map((item) => { const active = isActive(pathname, item.href); return <Link className={`flex min-w-0 flex-col items-center gap-1 rounded-xl px-1 py-1.5 text-[9px] font-black ${active ? "text-[#174d3b]" : "text-[#768079]"}`} href={item.href} key={item.href}><span className={`grid size-8 place-items-center rounded-xl ${active ? "bg-[#e5ead7]" : ""}`}><Icon className="size-[18px]" name={item.icon} /></span><span className="max-w-full truncate">{item.label.replace("Sprzątanie i ", "")}</span></Link>; })}
         {!operatorMode ? <button className={`flex min-w-0 flex-col items-center gap-1 rounded-xl px-1 py-1.5 text-[9px] font-black ${showMore ? "text-[#174d3b]" : "text-[#768079]"}`} onClick={() => setShowMore(true)}><span className={`grid size-8 place-items-center rounded-xl ${showMore ? "bg-[#e5ead7]" : ""}`}><Icon className="size-[18px]" name="more" /></span>Więcej</button> : null}
       </nav>

@@ -23,6 +23,32 @@ afterAll(() => {
 });
 
 describe("draft-first communication", () => {
+  it("sends arrival information immediately for a same-day booking and blocks the tomorrow reminder", () => {
+    const sameDay = { ...booking, bookingDate: "2026-07-02", checkIn: "2026-07-02", checkOut: "2026-07-05" };
+    const messages = reconcileScheduledMessages(fixture({ bookings: [sameDay] }));
+    expect(Date.parse(messages.find(item => item.ruleId === "RULE-PREARRIVAL")!.dueAt)).toBeLessThan(Date.now());
+    expect(messages.find(item => item.ruleId === "RULE-ARRIVAL-REMINDER")?.blockedReason).toContain("Termin przypomnienia");
+    expect(Date.parse(messages.find(item => item.ruleId === "RULE-CONFIRM")!.dueAt)).toBeLessThan(Date.now());
+  });
+
+  it("keeps the thanks message eligible on the day after checkout", () => {
+    const departed = { ...booking, checkIn: "2026-06-28", checkOut: "2026-07-01" };
+    const messages = reconcileScheduledMessages(fixture({ bookings: [departed] }));
+    expect(messages.find(item => item.ruleId === "RULE-THANKS")?.dueAt).toBe("2026-07-02T09:00:00.000Z");
+    expect(messages.some(item => item.ruleId === "RULE-CONFIRM")).toBe(false);
+  });
+
+  it("retains sent history and cancels pending messages when the booking disappears", () => {
+    const original = reconcileScheduledMessages(fixture());
+    original[0] = { ...original[0], status: "Dostarczona", providerResult: "provider-receipt" };
+    const messages = reconcileScheduledMessages(fixture({ bookings: [], scheduledMessages: original }));
+    expect(messages.find(item => item.id === original[0].id)).toEqual(original[0]);
+    expect(messages.filter(item => item.id !== original[0].id).every(item => item.status === "Anulowana")).toBe(true);
+  });
+
+  it("does not regenerate a backlog of thanks messages for old stays", () => {
+    expect(reconcileScheduledMessages(fixture({ bookings: [{ ...booking, checkOut: "2026-06-01" }] }))).toEqual([]);
+  });
   it("uses the language saved with the booking contact without a CRM profile", () => {
     const data = fixture({ guests: [], people: [] });
     data.consents[0] = { ...data.consents[0], preferredLanguage: "de" };
@@ -62,7 +88,7 @@ describe("draft-first communication", () => {
     const first = reconcileScheduledMessages(fixture());
     const changed = { ...booking, checkIn: "2026-08-12", checkOut: "2026-08-15" };
     const second = reconcileScheduledMessages({ ...fixture(), bookings: [changed], scheduledMessages: first });
-    expect(second.find((item) => item.ruleId === "RULE-PREARRIVAL")?.dueAt).toBe("2026-08-07T10:00:00");
+    expect(second.find((item) => item.ruleId === "RULE-PREARRIVAL")?.dueAt).toBe("2026-08-07T08:00:00.000Z");
   });
 
   it("freezes a manually approved draft and invalidates approval on a material change", () => {
@@ -96,7 +122,7 @@ describe("draft-first communication", () => {
         communicationConfigs: [{ id: "communication", bankAccountNumber: "PL00", senderName: "Stawy u Sikory", copyUserIds: [], travelGuides: [{ id: "G-1", language: "pl", unitIds: [booking.unitId], version: 1, body: "Dojazd", routeWarning: "Uwaga", approvedAt: "2026-07-01T00:00:00.000Z" }] }],
       }),
     }).find((item) => item.ruleId === "RULE-PREARRIVAL");
-    expect(changed).toMatchObject({ status: "Zatwierdzona", deliveryPolicy: "auto_send", dueAt: "2026-08-07T10:00:00" });
+    expect(changed).toMatchObject({ status: "Zatwierdzona", deliveryPolicy: "auto_send", dueAt: "2026-08-07T08:00:00.000Z" });
     expect(changed?.renderedBody).toContain("2026-08-12");
   });
 
@@ -106,7 +132,7 @@ describe("draft-first communication", () => {
       bookings: [paidBooking],
       payments: [{ id: "PAY-1", bookingId: booking.id, occurredAt: "2026-07-05", type: "Zaliczka", amount: 400, currency: "PLN", status: "Zaksięgowana" }],
     })).find((item) => item.ruleId === "RULE-DEPOSIT-CONFIRMED");
-    expect(message?.dueAt).toBe("2026-07-05T12:00:00");
+    expect(message?.dueAt).toBe("2026-07-04T22:00:00.000Z");
   });
 
   it("cancels every pending message when the reservation is cancelled", () => {

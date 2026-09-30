@@ -4,6 +4,10 @@
   "requiredMigration": "20260826182629_restore_manager_booking_permissions.sql",
   "compatibleMigrations": [
     "20260909123001_manager_booking_commit_receipts.sql",
-    "20260909133907_secure_manager_booking_contract.sql"
+    "20260909133907_secure_manager_booking_contract.sql",
+    "20260914115605_atomic_resend_webhook.sql",
+    "20260914140134_fix_calendar_block_date_pattern.sql",
+    "20260930134304_operator_cleaning_settlement.sql",
+    "20260930140415_atomic_email_send_completion.sql"
   ]
 }
