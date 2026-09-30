@@ -10,7 +10,7 @@ describe("Resend email adapter", () => {
   });
 
   it("preserves single line breaks without relying on email-client CSS", () => {
-    const html = renderEmailHtml("Hello,\r\n\r\nAccount: <test>\r\nReference: Test 12-19.06/26", { language: "en", subject: "Stay <confirmation>" });
+    const html = renderEmailHtml("Hello,\r\n\r\nAccount: <test>\r\nReference: Test 12-19.06.26", { language: "en", subject: "Stay <confirmation>" });
     expect(html).toContain("Account: &lt;test&gt;<br>Reference:");
     expect(html).toContain('<html lang="en" dir="ltr">');
     expect(html).toContain('<table lang="en" dir="ltr" role="presentation"');

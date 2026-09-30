@@ -69,7 +69,7 @@ describe("draft-first communication", () => {
         travelGuides: [],
       }],
     }));
-    expect(rendered.body).toContain("Anna Kowalska 10-13.08/26");
+    expect(rendered.body).toContain("Anna Kowalska 10-13.08.26");
     expect(rendered.body).toContain("Domek Rybaka");
     expect(rendered.unresolved).toEqual([]);
   });

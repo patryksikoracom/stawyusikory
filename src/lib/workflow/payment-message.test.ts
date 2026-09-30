@@ -10,13 +10,13 @@ const template = defaultMessageTemplates.find(t => t.id === "TPL-CONFIRM")!;
 
 describe("payment copy follows the actual stay and payment state", () => {
   it.each([
-    ["2026-06-12", "2026-06-19", "12-19.06/26"],
-    ["2026-06-30", "2026-07-02", "30.06-02.07/26"],
-    ["2026-12-30", "2027-01-02", "30.12/26-02.01/27"],
+    ["2026-06-12", "2026-06-19", "12-19.06.26"],
+    ["2026-06-30", "2026-07-02", "30.06-02.07.26"],
+    ["2026-12-30", "2027-01-02", "30.12.26-02.01.27"],
   ])("uses unambiguous short transfer dates", (from, to, expected) => expect(transferDateRange(from, to)).toBe(expected));
   it("uses booking identity and compact dates, never the booking ID, in the transfer title", () => {
     const rendered = renderTemplate(template, booking, data);
-    expect(rendered.body).toContain("Tytuł przelewu:\nJan Kowalski 12-19.06/26");
+    expect(rendered.body).toContain("Tytuł przelewu:\nJan Kowalski 12-19.06.26");
     expect(rendered.body).not.toContain("EXAMPLE");
     expect(rendered.body).toContain("Termin wpłaty: 08.05.2026");
     expect(rendered.unresolved).toEqual([]);

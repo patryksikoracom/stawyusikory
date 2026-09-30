@@ -3,7 +3,7 @@ import { currentCommunicationDefinitions } from "./communication-definitions";
 import { defaultMessageTemplates, defaultAutomationRules } from "./communications";
 import { recordBatchCommandSchema } from "@/lib/domain/record-batch-command";
 
-const override = { id: "TPL-CONFIRM", name: "Moje potwierdzenie", subject: "Pobyt", body: "Witaj {{guest_first_name}}", active: false, version: 3 };
+const override = { id: "TPL-CONFIRM", name: "Moje potwierdzenie", subject: "Pobyt", body: "Witaj {{guest_first_name}}", active: false, version: 9 };
 const config = { id: "communication", senderName: "Stawy", copyUserIds: [], travelGuides: [], templateOverrides: [override] };
 
 describe("saved template edits", () => {

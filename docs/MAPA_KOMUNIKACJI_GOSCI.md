@@ -1,4 +1,4 @@
-# Komunikacja z gościem — etapy i treści
+# Komunikacja z gościem - etapy i treści
 
 Cel: jedna konkretna sprawa w każdej wiadomości, krótka treść, czytelne akapity. Ton uprzejmy i swobodny, bez urzędowych zwrotów i przesadnego entuzjazmu. PL używa „Ty”, DE „Sie”; EN naturalnego „you”.
 
@@ -22,11 +22,11 @@ Cel: jedna konkretna sprawa w każdej wiadomości, krótka treść, czytelne aka
 
 Dane osoby rezerwującej oraz krótki zakres dat, bez numeru rezerwacji:
 
-- `Jan Kowalski 12-19.06/26`
-- Przy zmianie miesiąca: `Jan Kowalski 30.06-02.07/26`
-- Przy zmianie roku: `Jan Kowalski 30.12/26-02.01/27`
+- `Jan Kowalski 12-19.06.26`
+- Przy zmianie miesiąca: `Jan Kowalski 30.06-02.07.26`
+- Przy zmianie roku: `Jan Kowalski 30.12.26-02.01.27`
 
-Nie prosimy o osobne zgłaszanie danych płacącego — są widoczne w przelewie. W tytule pozostaje osoba z rezerwacji.
+Nie prosimy o osobne zgłaszanie danych płacącego - są widoczne w przelewie. W tytule pozostaje osoba z rezerwacji.
 
 ## Instrukcja płatności zależy od danych
 
