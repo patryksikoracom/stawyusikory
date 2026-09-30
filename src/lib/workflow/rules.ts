@@ -108,6 +108,7 @@ function isPaymentSettled(data: AppData, booking: Booking) {
 }
 
 export function createTasksForBooking(booking: Booking): OpsTask[] {
+  if (booking.historicalImport) return [];
   const base = `${booking.id}-${Date.now()}`;
   const tasks: OpsTask[] = [
     {
@@ -306,6 +307,7 @@ export function getChecks(data: AppData): CheckItem[] {
 }
 
 export function getBookingDataIssues(data: AppData, booking: Booking) {
+  if (booking.historicalImport) return [];
   const consent = data.consents.find((item) => item.bookingId === booking.id);
   const importMatch = data.imports.find((item) => item.matchedBookingId === booking.id);
   const media = data.media.filter((asset) => asset.bookingId === booking.id);
@@ -340,6 +342,7 @@ export function leadTimeDays(booking: Booking) {
 }
 
 export function getNextAction(data: AppData, booking: Booking) {
+  if (booking.historicalImport) return "Historia — bez działań";
   const conflicts = getBookingConflicts(data.bookings, data.blocks, booking);
   if (conflicts.length) return "Sprawdzić konflikt kalendarza";
 
@@ -382,7 +385,7 @@ export function dashboardMetrics(data: AppData) {
   const reviewsToAsk = data.tasks.filter(
     (task) => task.type === "Opinia" && !["Zrobione", "Nie dotyczy"].includes(task.status),
   ).length;
-  const qualityScores = data.bookings.map((booking) => bookingQualityScore(data, booking).score);
+  const qualityScores = data.bookings.filter((booking) => !booking.historicalImport).map((booking) => bookingQualityScore(data, booking).score);
   const leadTimes = data.bookings
     .map(leadTimeDays)
     .filter((value): value is number => value !== null);
