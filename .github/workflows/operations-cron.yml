@@ -41,7 +41,8 @@ jobs:
             "$APP_URL/api/messages/sms/process"
 
       - name: Process queued e-mails
-        if: ${{ always() && env.EMAIL_ENABLED == 'true' }}
+        # Regular email processing runs in Supabase Cron; this is manual recovery only.
+        if: ${{ always() && github.event_name == 'workflow_dispatch' && env.EMAIL_ENABLED == 'true' }}
         env:
           APP_URL: ${{ secrets.STAWY_OS_APP_URL }}
           CRON_SECRET: ${{ secrets.STAWY_OS_CRON_SECRET }}

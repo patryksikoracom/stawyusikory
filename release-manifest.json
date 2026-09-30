@@ -9,6 +9,7 @@
     "20260914140134_fix_calendar_block_date_pattern.sql",
     "20260930142414_operator_cleaning_settlement.sql",
     "20260930142421_atomic_email_send_completion.sql",
-    "20260930145818_extend_supported_operational_collections.sql"
+    "20260930145818_extend_supported_operational_collections.sql",
+    "20260930161419_database_email_scheduler.sql"
   ]
 }
