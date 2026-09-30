@@ -24,7 +24,7 @@ jobs:
         run: |
           test -n "$APP_URL"
           test -n "$CRON_SECRET"
-          curl --fail --silent --show-error --retry 2 \
+          curl --fail --silent --show-error --max-time 30 --retry 1 \
             -X POST \
             -H "Authorization: Bearer $CRON_SECRET" \
             "$APP_URL/api/integrations/ical/sync"
@@ -35,18 +35,18 @@ jobs:
           APP_URL: ${{ secrets.STAWY_OS_APP_URL }}
           CRON_SECRET: ${{ secrets.STAWY_OS_CRON_SECRET }}
         run: |
-          curl --fail --silent --show-error --retry 2 \
+          curl --fail --silent --show-error --max-time 30 --retry 1 \
             -X POST \
             -H "Authorization: Bearer $CRON_SECRET" \
             "$APP_URL/api/messages/sms/process"
 
       - name: Process queued e-mails
-        if: env.EMAIL_ENABLED == 'true'
+        if: ${{ always() && env.EMAIL_ENABLED == 'true' }}
         env:
           APP_URL: ${{ secrets.STAWY_OS_APP_URL }}
           CRON_SECRET: ${{ secrets.STAWY_OS_CRON_SECRET }}
         run: |
-          curl --fail --silent --show-error --retry 2 \
+          curl --fail --silent --show-error --max-time 60 --retry 1 \
             -X POST \
             -H "Authorization: Bearer $CRON_SECRET" \
             "$APP_URL/api/automations/process"

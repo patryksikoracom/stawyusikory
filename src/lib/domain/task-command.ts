@@ -3,6 +3,11 @@ import { z } from "zod";
 const optionalText = z.string().trim().max(2_000).optional();
 
 export const operationalTaskSchema = z.object({
+  cleaningSettlement: z.object({
+    amount: z.number().finite().min(0).max(100_000).multipleOf(0.01),
+    currency: z.literal("PLN"),
+    paidAt: z.iso.datetime({ offset: true }).optional(),
+  }).optional(),
   id: z.string().trim().min(1).max(128),
   bookingId: z.string().trim().min(1).max(128),
   type: z.enum([
@@ -31,7 +36,7 @@ export const operationalTaskSchema = z.object({
   startedAt: z.iso.datetime().optional(),
   readyAt: z.iso.datetime().optional(),
   readinessEvidence: z.object({
-    source: z.enum(["checklist", "owner-override"]),
+    source: z.enum(["checklist", "owner-override", "operator-confirmation"]),
     completedItems: z.number().int().nonnegative(),
     totalItems: z.number().int().nonnegative(),
     reason: z.string().trim().min(2).max(500).optional(),

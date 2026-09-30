@@ -1,6 +1,6 @@
 import type { UserRole } from "@/lib/types";
 
-const operatorRootPaths = new Set(["/calendar", "/bookings"]);
+const operatorRootPaths = new Set(["/calendar", "/bookings", "/tasks"]);
 
 export function canAccessAppPath(role: UserRole | null | undefined, pathname: string) {
   if (role !== "manager") return true;

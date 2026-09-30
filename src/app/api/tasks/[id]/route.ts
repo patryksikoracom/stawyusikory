@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { visibleOperationalRecord } from "@/lib/auth/state-visibility";
 import { updateTaskCommandSchema, type UpdateTaskCommandResult } from "@/lib/domain/task-command";
 import { isOrganizationEditor, requireOrganization } from "@/lib/supabase/auth-context";
 
@@ -9,7 +10,7 @@ type RouteContext = {
 export async function PATCH(request: Request, { params }: RouteContext) {
   const context = await requireOrganization(request);
   if (context.error) return context.error;
-  if (!isOrganizationEditor(context.role)) {
+  if (!isOrganizationEditor(context.role) && context.role !== "manager") {
     return NextResponse.json({ error: "Konto nie ma dostępu do zapisu zadań." }, { status: 403 });
   }
 
@@ -35,7 +36,18 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     updatedAt: parsed.data.clientSentAt,
   };
 
-  const { data, error } = await context.supabase.rpc("update_operational_task", {
+  if (context.role === "manager" && parsed.data.task.type !== "Sprzątanie") {
+    return NextResponse.json({ error: "Operator może rozliczać wyłącznie sprzątanie." }, { status: 403 });
+  }
+  const { data, error } = context.role === "manager"
+    ? await context.supabase.rpc("update_operator_cleaning", {
+      p_organization_id: context.organizationId,
+      p_task_id: id,
+      p_expected_record_version: parsed.data.expectedRecordVersion,
+      p_complete: parsed.data.task.status === "Zrobione",
+      p_settlement: parsed.data.task.cleaningSettlement ?? null,
+      p_request_id: parsed.data.requestId,
+    }) : await context.supabase.rpc("update_operational_task", {
     p_organization_id: context.organizationId,
     p_task_id: id,
     p_expected_record_version: parsed.data.expectedRecordVersion,
@@ -75,7 +87,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   return NextResponse.json({
     ok: true,
     requestId: parsed.data.requestId,
-    task: result.task,
+    task: visibleOperationalRecord({ entity_type: "tasks", entity_id: id, payload: result.task }, context.role)?.payload,
     recordVersion: result.recordVersion,
     stateVersion: result.stateVersion,
     savedAt: result.savedAt,

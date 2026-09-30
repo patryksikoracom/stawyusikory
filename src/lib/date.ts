@@ -1,5 +1,21 @@
 const datePattern = /^(\d{4})-(\d{2})-(\d{2})$/;
 
+/** Interpret a wall-clock time in Poland, independently of the server timezone. */
+export function polishDateTime(date: string, time: string) {
+  const wall = Date.parse(`${date}T${time}:00Z`);
+  let instant = wall;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/Warsaw", year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+    }).formatToParts(new Date(instant));
+    const get = (key: string) => parts.find(part => part.type === key)!.value;
+    const represented = Date.parse(`${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}:${get("second")}Z`);
+    instant += wall - represented;
+  }
+  return new Date(instant).toISOString();
+}
+
 export function todayInPoland(now = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Warsaw",

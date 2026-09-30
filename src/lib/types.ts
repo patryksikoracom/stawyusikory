@@ -322,6 +322,11 @@ export type ReviewRequest = {
 };
 
 export type OpsTask = {
+  cleaningSettlement?: {
+    amount: number;
+    currency: "PLN";
+    paidAt?: string;
+  };
   id: string;
   bookingId: string;
   type: TaskType;
@@ -339,7 +344,7 @@ export type OpsTask = {
   startedAt?: string;
   readyAt?: string;
   readinessEvidence?: {
-    source: "checklist" | "owner-override";
+    source: "checklist" | "owner-override" | "operator-confirmation";
     completedItems: number;
     totalItems: number;
     reason?: string;

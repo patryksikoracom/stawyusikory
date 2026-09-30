@@ -87,9 +87,13 @@ describe("GET /api/state wersje rekordów", () => {
     ];
     const recordsQuery = {
       select: vi.fn(),
-      eq: vi.fn().mockResolvedValue({ data: records, error: null }),
+      eq: vi.fn(),
+      order: vi.fn(),
+      range: vi.fn().mockResolvedValue({ data: records, count: records.length, error: null }),
     };
     recordsQuery.select.mockReturnValue(recordsQuery);
+    recordsQuery.eq.mockReturnValue(recordsQuery);
+    recordsQuery.order.mockReturnValue(recordsQuery);
     const revisionQuery = {
       select: vi.fn(),
       eq: vi.fn(),

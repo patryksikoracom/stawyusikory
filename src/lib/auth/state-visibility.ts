@@ -56,7 +56,8 @@ function managerOperationalPayload(
       ? ["pricePerNight"]
       : record.entity_type === "bookings"
         ? ["grossPrice", "pricePerNight", "pricingMode", "depositAmount", "depositDueDate", "paymentMethod", "currency", "paymentStatus"]
-        : [];
+        : record.entity_type === "tasks" && source.type === "Sprzątanie"
+          ? ["cleaningSettlement"] : [];
   const result = { ...redacted as Record<string, unknown> };
   for (const key of [
     "commission",
